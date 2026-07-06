@@ -1,0 +1,1721 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Inventaire Équipements</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Inventaire">
+<meta name="theme-color" content="#232221">
+
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap');
+
+:root{
+  --asphalt: #232221;
+  --asphalt-2: #2f2d2b;
+  --paper: #f3efe6;
+  --paper-dim: #d9d2c2;
+  --safety-orange: #e8600f;
+  --safety-yellow: #f2b705;
+  --danger-red: #c23b22;
+  --ok-green: #4c7a3f;
+  --line: #46433f;
+}
+
+*{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-family:'Barlow',sans-serif;height:100%;overflow-x:hidden;}
+#app{min-height:100vh; display:flex; flex-direction:column; max-width:560px; margin:0 auto; background:var(--asphalt);}
+
+.hdr{
+  padding:16px 16px 10px;
+  background:linear-gradient(180deg, var(--asphalt-2), var(--asphalt));
+  border-bottom:3px solid var(--safety-orange);
+  position:sticky; top:0; z-index:20;
+}
+.hdr-title{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:800;
+  font-size:24px;
+  letter-spacing:0.5px;
+  text-transform:uppercase;
+  color:var(--paper);
+  display:flex; align-items:center; gap:10px;
+  margin:0 0 10px 0;
+}
+.hdr-title .chip{
+  background:var(--safety-orange);
+  color:var(--asphalt);
+  font-size:12px;
+  font-weight:800;
+  padding:3px 8px;
+  border-radius:3px;
+  letter-spacing:0.5px;
+}
+.search-row{display:flex; gap:8px;}
+.search-input{
+  flex:1;
+  background:var(--asphalt);
+  border:2px solid var(--line);
+  color:var(--paper);
+  padding:10px 12px;
+  border-radius:6px;
+  font-size:15px;
+  font-family:'Barlow',sans-serif;
+}
+.search-input:focus{outline:none; border-color:var(--safety-orange);}
+.suggestions{
+  display:none;
+  margin-top:8px;
+  background:var(--asphalt-2);
+  border:1.5px solid var(--safety-orange);
+  border-radius:8px;
+  overflow:hidden;
+  max-height:300px;
+  overflow-y:auto;
+}
+.suggestions.show{display:block;}
+.suggestion{
+  padding:10px 12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  cursor:pointer;
+  border-bottom:1px solid var(--line);
+}
+.suggestion:last-child{border-bottom:none;}
+.suggestion:active{background:var(--asphalt);}
+.suggestion-name{font-size:15px; font-weight:600; color:var(--paper); line-height:1.2;}
+.suggestion-name mark{background:transparent; color:var(--safety-yellow); font-weight:700;}
+.suggestion-cat{
+  flex:0 0 auto;
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  color:var(--asphalt);
+  background:var(--paper-dim);
+  padding:3px 8px;
+  border-radius:10px;
+}
+.suggestion-empty{padding:12px; text-align:center; color:var(--paper-dim); font-size:14px;}
+.save-status{
+  font-size:11px;
+  color:var(--paper-dim);
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  min-width:70px;
+  text-align:right;
+  align-self:center;
+  transition:opacity 0.3s;
+}
+
+/* Team bar */
+.team-bar{
+  display:flex;
+  overflow-x:auto;
+  gap:8px;
+  padding:10px 16px;
+  background:var(--asphalt-2);
+  border-bottom:1px solid var(--line);
+  scrollbar-width:none;
+  align-items:center;
+}
+.team-bar::-webkit-scrollbar{display:none;}
+.team-info{
+  display:none;
+  padding:12px 16px;
+  background:var(--asphalt);
+  border-bottom:1px solid var(--line);
+  gap:10px;
+  flex-direction:column;
+}
+.team-info.show{display:flex;}
+.team-info-title{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:12px;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  color:var(--safety-orange);
+  margin-bottom:2px;
+}
+.ti-row{display:flex; gap:10px;}
+.ti-field{flex:1;}
+.ti-field.full{flex:1 1 100%;}
+.ti-field label{
+  display:block;
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  color:var(--paper-dim);
+  margin-bottom:4px;
+  font-weight:600;
+}
+.ti-field input{
+  width:100%;
+  background:var(--asphalt-2);
+  border:1.5px solid var(--line);
+  color:var(--paper);
+  padding:9px 10px;
+  border-radius:6px;
+  font-size:15px;
+  font-family:'Barlow',sans-serif;
+}
+.ti-field input:focus{outline:none; border-color:var(--safety-orange);}
+.team-info-readonly{
+  background:var(--asphalt-2);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:10px 12px;
+  margin-bottom:10px;
+  font-size:13px;
+  line-height:1.5;
+}
+.team-info-readonly .tir-team{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  text-transform:uppercase;
+  color:var(--safety-yellow);
+  font-size:14px;
+}
+.team-info-readonly .tir-line{color:var(--paper-dim);}
+.team-info-readonly .tir-line b{color:var(--paper); font-weight:600;}
+.team-chip{
+  flex:0 0 auto;
+  padding:7px 13px;
+  border-radius:16px;
+  border:2px solid var(--line);
+  background:var(--asphalt);
+  color:var(--paper-dim);
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:14px;
+  text-transform:uppercase;
+  letter-spacing:0.3px;
+  white-space:nowrap;
+  cursor:pointer;
+}
+.team-chip.active{
+  background:var(--paper);
+  border-color:var(--paper);
+  color:var(--asphalt);
+}
+.team-chip.total{
+  border-color:var(--safety-yellow);
+  color:var(--safety-yellow);
+  font-weight:800;
+}
+.team-chip.total.active{
+  background:var(--safety-yellow);
+  border-color:var(--safety-yellow);
+  color:var(--asphalt);
+}
+.team-edit-btn{
+  flex:0 0 auto;
+  width:30px; height:30px;
+  border-radius:50%;
+  border:1.5px solid var(--line);
+  background:transparent;
+  color:var(--paper-dim);
+  font-size:14px;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer;
+  margin-left:2px;
+}
+
+/* Category Tabs */
+.tabs{
+  display:flex;
+  overflow-x:auto;
+  gap:8px;
+  padding:12px 16px;
+  background:var(--asphalt);
+  border-bottom:1px solid var(--line);
+  scrollbar-width:none;
+}
+.tabs::-webkit-scrollbar{display:none;}
+.tab{
+  flex:0 0 auto;
+  padding:8px 14px;
+  border-radius:20px;
+  border:2px solid var(--line);
+  background:var(--asphalt-2);
+  color:var(--paper-dim);
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:15px;
+  text-transform:uppercase;
+  letter-spacing:0.3px;
+  white-space:nowrap;
+  display:flex; align-items:center; gap:6px;
+  cursor:pointer;
+}
+.tab.active{
+  background:var(--safety-orange);
+  border-color:var(--safety-orange);
+  color:var(--asphalt);
+}
+/* Onglet Santé & Sécurité — toujours rouge */
+.tab-sst{
+  border-color:var(--danger-red);
+  color:#ff9d8c;
+  background:rgba(194,59,34,0.12);
+}
+.tab-sst.active{
+  background:var(--danger-red);
+  border-color:var(--danger-red);
+  color:#fff;
+}
+.tab .count{
+  font-size:11px;
+  opacity:0.8;
+  font-family:'Barlow',sans-serif;
+  font-weight:600;
+}
+.tab-add{
+  flex:0 0 auto;
+  width:36px; height:36px;
+  border-radius:50%;
+  border:2px dashed var(--safety-yellow);
+  background:transparent;
+  color:var(--safety-yellow);
+  font-size:18px;
+  font-weight:800;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer;
+}
+
+.list{flex:1; padding:10px 12px 90px; overflow-y:auto;}
+.section-label{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:14px;
+  letter-spacing:2px;
+  text-transform:uppercase;
+  color:var(--safety-yellow);
+  margin:18px 4px 8px;
+  padding-bottom:4px;
+  border-bottom:1px solid var(--line);
+}
+.section-label:first-child{margin-top:4px;}
+
+.total-banner{
+  background:rgba(242,183,5,0.12);
+  border:1px solid var(--safety-yellow);
+  border-radius:8px;
+  padding:10px 12px;
+  font-size:12.5px;
+  color:var(--safety-yellow);
+  margin-bottom:12px;
+  line-height:1.4;
+}
+/* Bannière Santé & Sécurité (onglet S.S.T.) */
+.sst-banner{
+  background:linear-gradient(135deg, rgba(194,59,34,0.22), rgba(194,59,34,0.10));
+  border:1.5px solid var(--danger-red);
+  border-left:6px solid var(--danger-red);
+  border-radius:8px;
+  padding:12px 14px;
+  margin-bottom:12px;
+  display:flex; align-items:center; gap:12px;
+}
+.sst-banner .sst-icon{ font-size:26px; line-height:1; flex:0 0 auto; }
+.sst-banner .sst-text{ line-height:1.35; }
+.sst-banner .sst-title{
+  font-family:'Barlow Condensed',sans-serif; font-weight:800;
+  text-transform:uppercase; letter-spacing:1px; font-size:16px; color:#ff9d8c;
+}
+.sst-banner .sst-sub{ font-size:12.5px; color:var(--paper-dim); margin-top:2px; }
+.sst-stripe{
+  height:10px; border-radius:4px; margin-bottom:12px;
+  background:repeating-linear-gradient(45deg, var(--danger-red) 0 14px, #1a1918 14px 28px);
+}
+
+.card{
+  background:var(--asphalt-2);
+  border:1px solid var(--line);
+  border-left:4px solid var(--line);
+  border-radius:8px;
+  margin-bottom:8px;
+  overflow:hidden;
+  transition:border-color 0.2s;
+}
+.card.filled{border-left-color: var(--ok-green);}
+.card.missing{border-left-color: var(--danger-red);}
+.card-row{
+  padding:12px 14px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  cursor:pointer;
+  gap:8px;
+}
+.card-name{
+  font-size:16px;
+  font-weight:600;
+  color:var(--paper);
+  line-height:1.25;
+}
+.card-sub{
+  font-size:12px;
+  color:var(--paper-dim);
+  margin-top:2px;
+}
+.card-meta{
+  display:flex; align-items:center; gap:8px; flex-shrink:0;
+}
+.qty-badge{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:14px;
+  background:var(--asphalt);
+  border:1px solid var(--line);
+  border-radius:4px;
+  padding:2px 8px;
+  color:var(--paper-dim);
+  min-width:26px;
+  text-align:center;
+}
+.qty-badge.total-badge{
+  background:var(--safety-yellow);
+  color:var(--asphalt);
+  border-color:var(--safety-yellow);
+}
+.chevron{
+  color:var(--paper-dim);
+  font-size:14px;
+  transition:transform 0.2s;
+}
+.card.open .chevron{transform:rotate(180deg);}
+
+.card-body{
+  padding:0 14px 16px;
+  display:none;
+  border-top:1px solid var(--line);
+}
+.card.open .card-body{display:block; padding-top:14px;}
+
+.field-row{display:flex; gap:10px; margin-bottom:12px;}
+.field{flex:1;}
+.field label{
+  display:block;
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  color:var(--paper-dim);
+  margin-bottom:4px;
+  font-weight:600;
+}
+.field input[type=number], .field input[type=text]{
+  width:100%;
+  background:var(--asphalt);
+  border:1.5px solid var(--line);
+  color:var(--paper);
+  padding:9px 10px;
+  border-radius:6px;
+  font-size:15px;
+  font-family:'Barlow',sans-serif;
+}
+.field input:focus{outline:none; border-color:var(--safety-orange);}
+/* Statut de vérification annuelle */
+.field input.verif-red{ border-color:var(--danger-red); background:rgba(194,59,34,0.14); color:#ffd9d1; }
+.field input.verif-orange{ border-color:var(--safety-yellow); background:rgba(242,183,5,0.14); color:#ffe9a8; }
+.field input.verif-green{ border-color:var(--ok-green); background:rgba(76,122,63,0.14); }
+.verif-hint{ font-size:11px; margin-top:4px; font-weight:600; }
+.verif-hint.red{ color:var(--danger-red); }
+.verif-hint.orange{ color:var(--safety-yellow); }
+.verif-hint.green{ color:var(--ok-green); }
+.verif-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+.verif-dot.red{ background:var(--danger-red); }
+.verif-dot.orange{ background:var(--safety-yellow); }
+.verif-dot.green{ background:var(--ok-green); }
+
+.etat-chips{display:flex; gap:6px; flex-wrap:wrap;}
+.etat-chip{
+  padding:6px 12px;
+  border-radius:16px;
+  border:1.5px solid var(--line);
+  background:var(--asphalt);
+  color:var(--paper-dim);
+  font-size:13px;
+  font-weight:600;
+  cursor:pointer;
+}
+.etat-chip.sel-bon{background:var(--ok-green); border-color:var(--ok-green); color:#fff;}
+.etat-chip.sel-moyen{background:var(--safety-yellow); border-color:var(--safety-yellow); color:var(--asphalt);}
+.etat-chip.sel-mauvais{background:var(--danger-red); border-color:var(--danger-red); color:#fff;}
+.etat-chip.readonly{cursor:default;}
+/* Compteurs par état */
+.etat-counters{display:flex; gap:8px;}
+.etat-counter{flex:1; text-align:center;}
+.etat-counter label{
+  display:block; font-size:11px; font-weight:700; text-transform:uppercase;
+  letter-spacing:0.5px; margin-bottom:4px;
+}
+.etat-counter.bon label{color:var(--ok-green);}
+.etat-counter.moyen label{color:var(--safety-yellow);}
+.etat-counter.mauvais label{color:var(--danger-red);}
+.etat-counter input{
+  width:100%; text-align:center; background:var(--asphalt);
+  border:1.5px solid var(--line); color:var(--paper);
+  padding:9px 4px; border-radius:6px; font-size:16px; font-weight:700;
+  font-family:'Barlow',sans-serif;
+}
+.etat-counter.bon input:focus{outline:none; border-color:var(--ok-green);}
+.etat-counter.moyen input:focus{outline:none; border-color:var(--safety-yellow);}
+.etat-counter.mauvais input:focus{outline:none; border-color:var(--danger-red);}
+.etat-total-hint{font-size:11px; margin-top:6px; font-weight:600; color:var(--paper-dim);}
+.etat-total-hint.mismatch{color:var(--safety-yellow);}
+.etat-pill{
+  display:inline-block; font-size:11px; font-weight:700; padding:2px 8px;
+  border-radius:10px; margin-left:4px;
+}
+.etat-pill.green{background:var(--ok-green); color:#fff;}
+.etat-pill.orange{background:var(--safety-yellow); color:var(--asphalt);}
+.etat-pill.red{background:var(--danger-red); color:#fff;}
+
+
+.delete-link{
+  color:var(--danger-red);
+  font-size:12px;
+  font-weight:600;
+  text-decoration:underline;
+  cursor:pointer;
+  margin-top:6px;
+  display:inline-block;
+}
+
+.add-item-btn{
+  width:100%;
+  margin-top:6px;
+  padding:14px;
+  border-radius:8px;
+  border:2px dashed var(--line);
+  background:transparent;
+  color:var(--paper-dim);
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:15px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  cursor:pointer;
+}
+.add-item-btn:active{border-color:var(--safety-orange); color:var(--safety-orange);}
+
+.empty-msg{
+  text-align:center;
+  color:var(--paper-dim);
+  padding:40px 20px;
+  font-size:15px;
+}
+
+.team-detail-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:8px 0;
+  border-bottom:1px solid var(--line);
+  font-size:14px;
+}
+.team-detail-row:last-child{border-bottom:none;}
+.team-detail-name{color:var(--paper); font-weight:600;}
+.team-detail-meta{color:var(--paper-dim); font-size:12px;}
+.team-detail-vals{display:flex; align-items:center; gap:8px;}
+
+.footer{
+  padding:10px 16px;
+  text-align:center;
+  font-size:11px;
+  color:var(--paper-dim);
+  background:var(--asphalt-2);
+  border-top:1px solid var(--line);
+}
+.reset-link{
+  color:var(--danger-red);
+  text-decoration:underline;
+  cursor:pointer;
+  font-weight:600;
+}
+
+/* Modal */
+.overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,0.6);
+  display:none; align-items:flex-end; justify-content:center;
+  z-index:100;
+}
+.overlay.show{display:flex;}
+.modal{
+  background:var(--asphalt-2);
+  width:100%; max-width:560px;
+  border-radius:16px 16px 0 0;
+  border-top:3px solid var(--safety-orange);
+  padding:20px 18px 26px;
+  max-height:85vh;
+  overflow-y:auto;
+  animation:slideup 0.2s ease-out;
+}
+@keyframes slideup{ from{transform:translateY(30px); opacity:0;} to{transform:translateY(0); opacity:1;} }
+.modal h3{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  font-size:20px;
+  margin:0 0 14px 0;
+  color:var(--safety-yellow);
+}
+.modal .field{margin-bottom:12px;}
+.modal-actions{display:flex; gap:10px; margin-top:6px;}
+.btn{
+  flex:1;
+  padding:12px;
+  border-radius:8px;
+  border:none;
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:16px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  cursor:pointer;
+}
+.btn-cancel{background:var(--asphalt); color:var(--paper-dim); border:1.5px solid var(--line);}
+.btn-confirm{background:var(--safety-orange); color:var(--asphalt);}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="hdr">
+    <div class="hdr-title"><span class="chip">Inv.</span> Inventaire Équipements</div>
+    <div class="search-row">
+      <input id="search" class="search-input" type="text" placeholder="Rechercher dans tous les onglets..." autocomplete="off" />
+      <div class="save-status" id="saveStatus">&nbsp;</div>
+    </div>
+    <div id="suggestions" class="suggestions"></div>
+  </div>
+  <div class="team-bar" id="teamBar"></div>
+  <div id="teamInfo" class="team-info"></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="list" id="list"></div>
+  <div class="footer" id="footer"></div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" id="modalBox"></div>
+</div>
+
+<script>
+const RAW_DATA = {"BASE": {"label": "Base", "items": [{"name": "PAREMENT", "header": true, "ident": "", "comment": ""}, {"name": "Pelle", "header": false, "ident": "", "comment": ""}, {"name": "Balais 18-24po", "header": false, "ident": "", "comment": ""}, {"name": "Chaudières", "header": false, "ident": "", "comment": ""}, {"name": "Panne métal sur roues", "header": false, "ident": "", "comment": ""}, {"name": "Panne plast. sur roues", "header": false, "ident": "", "comment": ""}, {"name": "Panne métal sans roues", "header": false, "ident": "", "comment": ""}, {"name": "Panne plastique mince", "header": false, "ident": "", "comment": ""}, {"name": "Hose a jardin 50pi", "header": false, "ident": "", "comment": ""}, {"name": "Hose a jardin 100pi", "header": false, "ident": "", "comment": ""}, {"name": "Gun hose a jardin", "header": false, "ident": "", "comment": ""}, {"name": "Baril d’eau", "header": false, "ident": "", "comment": ""}, {"name": "Cube tank d’eau", "header": false, "ident": "", "comment": ""}, {"name": "Déverseur pour cube", "header": false, "ident": "", "comment": "Adapteur L vanne"}, {"name": "Rallonge électrique 25pi", "header": false, "ident": "", "comment": ""}, {"name": "Rallonge électrique 50pi", "header": false, "ident": "", "comment": ""}, {"name": "Rallonge électrique 100pi", "header": false, "ident": "", "comment": ""}, {"name": "Pince a brique", "header": false, "ident": "", "comment": ""}, {"name": "Petite tranche orange", "header": false, "ident": "", "comment": ""}, {"name": "Grosse tranche orange", "header": false, "ident": "", "comment": ""}, {"name": "Jack tranche", "header": false, "ident": "", "comment": ""}, {"name": "Table a mortier", "header": false, "ident": "", "comment": ""}, {"name": "Barabolt (poteau)", "header": false, "ident": "", "comment": ""}, {"name": "Barabolt (plate)", "header": false, "ident": "", "comment": ""}, {"name": "Clous 3-6po", "header": false, "ident": "", "comment": ""}, {"name": "Clou 10po", "header": false, "ident": "", "comment": ""}, {"name": "Serre", "header": false, "ident": "", "comment": ""}, {"name": "Clam de linteau /\ndouille-rallonge 6pi", "header": false, "ident": "rouge", "comment": "Ligne sur linteau structural"}, {"name": "Équerre", "header": false, "ident": "", "comment": ""}, {"name": "Grattoir", "header": false, "ident": "", "comment": ""}, {"name": "Masse", "header": false, "ident": "", "comment": "petite   /   grosse"}, {"name": "Talkie Walkie", "header": false, "ident": "", "comment": ""}, {"name": "Crowbar", "header": false, "ident": "", "comment": ""}, {"name": "Clé 1 ½", "header": false, "ident": "", "comment": ""}, {"name": "Clé 1 5/8", "header": false, "ident": "", "comment": ""}, {"name": "Clé a molette", "header": false, "ident": "", "comment": ""}, {"name": "Coffre a ratchet", "header": false, "ident": "", "comment": ""}, {"name": "BLOCS", "header": true, "ident": "", "comment": ""}, {"name": "Serre de ligne", "header": false, "ident": "", "comment": ""}, {"name": "Serre de porte", "header": false, "ident": "", "comment": ""}, {"name": "Cutter (gros)", "header": false, "ident": "", "comment": ""}, {"name": "Cutter (moyen)", "header": false, "ident": "", "comment": ""}, {"name": "Déverseur a coulis", "header": false, "ident": "", "comment": ""}, {"name": "Racloir a eau", "header": false, "ident": "", "comment": ""}, {"name": "Dépoussiéreur", "header": false, "ident": "", "comment": ""}, {"name": "Préfiltre sur frame", "header": false, "ident": "", "comment": ""}, {"name": "Préfiltre mousse", "header": false, "ident": "", "comment": ""}, {"name": "Laser ligneur", "header": false, "ident": "", "comment": ""}, {"name": "broche", "header": false, "ident": "", "comment": ""}, {"name": "Soufflette manuel", "header": false, "ident": "", "comment": ""}, {"name": "Gun a colle", "header": false, "ident": "", "comment": ""}, {"name": "Gun a caulking", "header": false, "ident": "", "comment": ""}, {"name": "Équerre de soutien mur", "header": false, "ident": "", "comment": ""}, {"name": "Vis 3/8 x 1 ¾", "header": false, "ident": "", "comment": ""}, {"name": "Douille 9/16", "header": false, "ident": "", "comment": ""}, {"name": "Chalk line", "header": false, "ident": "", "comment": ""}]}, "S.S.T.": {"label": "S.S.T.", "items": [{"name": "ÉQUIPEMENT", "header": true, "ident": "", "comment": ""}, {"name": "Cartable de prévention", "header": false, "ident": "", "comment": ""}, {"name": "Séparateur S.S.T.", "header": false, "ident": "", "comment": "voir inventaire"}, {"name": "Dossard signaleur", "header": false, "ident": "JAUNE", "comment": ""}, {"name": "Ruban danger JAUNE", "header": false, "ident": "", "comment": "acces a la zone permis"}, {"name": "Ruban danger ROUGE", "header": false, "ident": "", "comment": "acces a la zone interdit"}, {"name": "Collant DMD périmetre", "header": false, "ident": "", "comment": ""}, {"name": "Harnais", "header": false, "ident": "", "comment": ""}, {"name": "Enrouleur", "header": false, "ident": "", "comment": ""}, {"name": "Cable pour enrouleur", "header": false, "ident": "", "comment": ""}, {"name": "Sangle absorbeur de choc", "header": false, "ident": "", "comment": ""}, {"name": "Cônes routier", "header": false, "ident": "", "comment": ""}, {"name": "Poteau délimiteur", "header": false, "ident": "", "comment": ""}, {"name": "Cadenas noir", "header": false, "ident": "", "comment": ""}, {"name": "Cadenas or", "header": false, "ident": "", "comment": ""}, {"name": "Anémomètre", "header": false, "ident": "", "comment": ""}, {"name": "Sarot pour coupe", "header": false, "ident": "", "comment": ""}, {"name": "Gants pour coupe", "header": false, "ident": "", "comment": ""}, {"name": "Habit tyvek silice", "header": false, "ident": "", "comment": ""}, {"name": "Vérif. extincteur", "header": false, "ident": "", "comment": "équipements lourd"}, {"name": "Balayeuse pour vêtements", "header": false, "ident": "", "comment": ""}, {"name": "SÉPARATEUR S.S.T.", "header": true, "ident": "", "comment": ""}, {"name": "Insp. Quoti lift", "header": false, "ident": "", "comment": ""}, {"name": "Insp. Quoti. Fraco", "header": false, "ident": "", "comment": ""}, {"name": "Insp. Ann. Lift", "header": false, "ident": "", "comment": ""}, {"name": "Inps. Ann. Fraco", "header": false, "ident": "", "comment": ""}, {"name": "Plan de sauvetage", "header": false, "ident": "", "comment": ""}, {"name": "Insp. Échafaudage", "header": false, "ident": "", "comment": ""}, {"name": "Inps. madrier", "header": false, "ident": "", "comment": ""}, {"name": "Insp. Scie a gaz", "header": false, "ident": "", "comment": ""}, {"name": "Insp. Scie a chaine", "header": false, "ident": "", "comment": ""}, {"name": "Identification SILICE", "header": false, "ident": "", "comment": ""}, {"name": "EXTINCTEURS", "header": true, "ident": "", "comment": ""}, {"name": "EXTINCTEUR — 1 par moteur", "header": true, "ident": "", "comment": ""}, {"name": "Nb. de moteur : ___", "header": true, "ident": "", "comment": ""}, {"name": "Extincteur 1", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 2", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 3", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 4", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 5", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 6", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 7", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 8", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 9", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 10", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 11", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 12", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 13", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 14", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 15", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 16", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 17", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 18", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 19", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 20", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}]}, "OUTILS": {"label": "Outils", "items": [{"name": "ÉLECTRIQUE", "header": true, "ident": "", "comment": ""}, {"name": "Batterie 4/5/6 amp.", "header": false, "ident": "", "comment": ""}, {"name": "Batterie 9 amp.", "header": false, "ident": "", "comment": ""}, {"name": "Chargeur simple", "header": false, "ident": "", "comment": ""}, {"name": "Chargeur simple fast", "header": false, "ident": "", "comment": ""}, {"name": "Chargeur multi", "header": false, "ident": "", "comment": ""}, {"name": "Visseuse impac 1/4", "header": false, "ident": "", "comment": "Avec embout 2 grosseurs"}, {"name": "Visseuse drill", "header": false, "ident": "", "comment": ""}, {"name": "Visseuse impac ½", "header": false, "ident": "", "comment": ""}, {"name": "Douille 1 ½", "header": false, "ident": "", "comment": ""}, {"name": "Douille 1 5/8", "header": false, "ident": "", "comment": ""}, {"name": "Skillsaw", "header": false, "ident": "", "comment": "Fil    /     batterie"}, {"name": "SDS plus ( petit )", "header": false, "ident": "", "comment": "Fil    /     batterie"}, {"name": "SDS max ( gros )", "header": false, "ident": "", "comment": "Fil    /    batterie"}, {"name": "Laser pointeur", "header": false, "ident": "", "comment": ""}, {"name": "Grindeur", "header": false, "ident": "", "comment": ""}, {"name": "Sawzal ( passe-partout )", "header": false, "ident": "", "comment": ""}, {"name": "Fusil a clou", "header": false, "ident": "", "comment": ""}, {"name": "Radio ( non fm )", "header": false, "ident": "", "comment": "FM     /     non FM"}, {"name": "Mixette", "header": false, "ident": "", "comment": "Fil    /     batterie"}, {"name": "Extracteur de poussiere", "header": false, "ident": "", "comment": ""}, {"name": "Arbotech", "header": false, "ident": "", "comment": ""}, {"name": "Fusil à graisse", "header": false, "ident": "", "comment": "Manuel     /     batterie"}, {"name": "Fusil à caulking", "header": false, "ident": "", "comment": "Manuel     /     batterie"}, {"name": "Lumières", "header": false, "ident": "", "comment": "Fil    /     batterie"}, {"name": "Quick cut 9po.", "header": false, "ident": "", "comment": ""}, {"name": "Blower", "header": false, "ident": "", "comment": "Petit     /     Gros"}, {"name": "Balayeuse", "header": false, "ident": "", "comment": ""}, {"name": "MOTEUR", "header": true, "ident": "", "comment": ""}, {"name": "Génératrice", "header": false, "ident": "", "comment": ""}, {"name": "Quick cut STIHL", "header": false, "ident": "", "comment": ""}, {"name": "Quick cut rouge", "header": false, "ident": "", "comment": ""}, {"name": "Chainsaw HUSQVARNA", "header": false, "ident": "", "comment": ""}, {"name": "Machine à pression", "header": false, "ident": "", "comment": ""}, {"name": "Balais brosse STIHL", "header": false, "ident": "", "comment": ""}, {"name": "ÉCHELLE", "header": true, "ident": "", "comment": ""}, {"name": "16pi", "header": false, "ident": "", "comment": ""}, {"name": "20pi", "header": false, "ident": "", "comment": ""}, {"name": "24pi", "header": false, "ident": "", "comment": ""}, {"name": "28pi", "header": false, "ident": "", "comment": ""}, {"name": "32pi", "header": false, "ident": "", "comment": ""}, {"name": "Escabeau 4pi", "header": false, "ident": "", "comment": ""}, {"name": "Escabeau 6pi", "header": false, "ident": "", "comment": ""}, {"name": "Escabeau 8pi", "header": false, "ident": "", "comment": ""}]}, "HIVER": {"label": "Hiver", "items": [{"name": "Équipements", "header": true, "ident": "", "comment": ""}, {"name": "Pelle a neige", "header": false, "ident": "", "comment": ""}, {"name": "Torche", "header": false, "ident": "", "comment": ""}, {"name": "Lighter", "header": false, "ident": "", "comment": ""}, {"name": "Pierre-a-feux", "header": false, "ident": "", "comment": ""}, {"name": "Wescott", "header": false, "ident": "", "comment": ""}, {"name": "Bruleur diesel (cochon)", "header": false, "ident": "", "comment": ""}, {"name": "Détecteur Co2", "header": false, "ident": "", "comment": ""}, {"name": "Rouleau de broche", "header": false, "ident": "", "comment": ""}, {"name": "Wiss/Snip/cutter", "header": false, "ident": "", "comment": ""}, {"name": "Bache 10x12", "header": false, "ident": "", "comment": ""}, {"name": "Bache 20x30", "header": false, "ident": "", "comment": ""}, {"name": "Bache 30x50", "header": false, "ident": "", "comment": ""}, {"name": "Toile Fraco", "header": false, "ident": "", "comment": ""}, {"name": "Bois 1x3 / 1x4", "header": false, "ident": "", "comment": ""}, {"name": "Bois 2x3 / 2x4", "header": false, "ident": "", "comment": ""}, {"name": "Baril en métal", "header": false, "ident": "", "comment": ""}, {"name": "Bache orange", "header": false, "ident": "", "comment": ""}]}, "SHACK": {"label": "Shack", "items": [{"name": "Équipements", "header": true, "ident": "", "comment": ""}, {"name": "Chaises", "header": false, "ident": "", "comment": ""}, {"name": "Tables", "header": false, "ident": "", "comment": ""}, {"name": "Micro-ondes", "header": false, "ident": "", "comment": ""}, {"name": "Petit-réfrigérateur", "header": false, "ident": "", "comment": ""}, {"name": "Machine a café", "header": false, "ident": "", "comment": ""}, {"name": "Machine a eau", "header": false, "ident": "", "comment": ""}, {"name": "Bouteille d’eau", "header": false, "ident": "", "comment": ""}]}, "NÉCÉSSAIRE": {"label": "Nécessaire", "items": [{"name": "ROULEAU", "header": true, "ident": "", "comment": ""}, {"name": "Rouleau de ligne", "header": false, "ident": "", "comment": ""}, {"name": "Membrane 3m noir", "header": false, "ident": "", "comment": ""}, {"name": "Membrane 3m blanche", "header": false, "ident": "", "comment": ""}, {"name": "Tucktape", "header": false, "ident": "", "comment": ""}, {"name": "Tape a peinture", "header": false, "ident": "", "comment": ""}, {"name": "Polythène 102po", "header": false, "ident": "", "comment": ""}, {"name": "Polythène 12po", "header": false, "ident": "", "comment": ""}, {"name": "Néoprène", "header": false, "ident": "", "comment": ""}, {"name": "Boudin pour scellant", "header": false, "ident": "", "comment": ""}, {"name": "CARBURANT / LIQUIDE", "header": true, "ident": "", "comment": ""}, {"name": "Diesel", "header": false, "ident": "", "comment": ""}, {"name": "Gaz pure", "header": false, "ident": "", "comment": ""}, {"name": "Gaz mix", "header": false, "ident": "", "comment": ""}, {"name": "Huile STIHL 2t mix", "header": false, "ident": "", "comment": ""}, {"name": "Propane BBQ 20lb.", "header": false, "ident": "", "comment": ""}, {"name": "Propane lift 30llb.", "header": false, "ident": "", "comment": ""}, {"name": "Ralentisseur", "header": false, "ident": "", "comment": ""}, {"name": "Accélérateur", "header": false, "ident": "", "comment": ""}, {"name": "Huile hydrau. AW ISO 32", "header": false, "ident": "", "comment": "Skytrak et mixeur mud hog"}, {"name": "Huile hydrau.  AW ISO 46", "header": false, "ident": "", "comment": "Skytrak et mixeur mud hog"}, {"name": "Huile 10w-40 DIESEL", "header": false, "ident": "", "comment": "Moteur skytrak été"}, {"name": "Huile 10w-30 DIESEL", "header": false, "ident": "", "comment": "Moteur skytrak hiver"}, {"name": "Huile 15w-40 CK DIESEL", "header": false, "ident": "", "comment": "Moteur skytrak annuel"}, {"name": "Huile 10w-30 4temps", "header": false, "ident": "", "comment": "Moteur scie/mixeurs"}, {"name": "Lave-glace", "header": false, "ident": "", "comment": ""}]}, "LOURD_LIFT": {"label": "Lift", "items": [{"name": "Skytrak 6036 2008", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Skytrak 6042 2006", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Skytrak 10054 2008", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Skytrak 10054 2021", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Skytrak 10054 2025", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "JLG 2018", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Lift shop 1998", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Lift shop 2017", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Jigger élec.", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Jigger man.", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}]}, "LOURD_FRACO": {"label": "Fraco", "items": [{"name": "FRACO", "header": true, "ident": "", "comment": ""}, {"name": "20K 2003", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "20K 2005", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "20K 2014", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "20K 2016", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "20K 2017 sur essieu", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "20k 2025", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "ACCESSOIRES FRACO", "header": true, "ident": "", "comment": ""}, {"name": "Clé pour patte", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Poignée pour mont./desc.", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Grue FRK 2025", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Boite d’ancrage Fraco", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Élingue avec crochet", "header": false, "ident": "", "comment": "Pour panne", "loc": true, "vf": true}, {"name": "Poteau avec chaine", "header": false, "ident": "", "comment": "Pour brique", "loc": true, "vf": true}, {"name": "Élingue rouge", "header": false, "ident": "", "comment": "Homologué · Straps", "loc": true, "vf": true}, {"name": "Chaine avec crochets", "header": false, "ident": "", "comment": "Homologué", "loc": true, "vf": true}, {"name": "Hook rouge", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "blocage", "header": false, "ident": "", "comment": "MIN. 4xFraco", "loc": true}, {"name": "Rack gris", "header": false, "ident": "", "comment": "Inventaire plus bas", "loc": true}, {"name": "Pont 10pi angle peint.", "header": false, "ident": "", "comment": "3gates", "loc": true, "vf": true}, {"name": "Pont 10pi droit peint.", "header": false, "ident": "", "comment": "3gates", "loc": true, "vf": true}, {"name": "Pont 10pi angle galv.", "header": false, "ident": "", "comment": "3gates", "loc": true, "vf": true}, {"name": "Pont 10pi droit galv.", "header": false, "ident": "", "comment": "3gates", "loc": true, "vf": true}, {"name": "Pont 7pi peint.", "header": false, "ident": "", "comment": "2gates", "loc": true, "vf": true}, {"name": "Pont 7pi galv.", "header": false, "ident": "", "comment": "2gates", "loc": true, "vf": true}, {"name": "Pont 3pi galv.", "header": false, "ident": "", "comment": "1gates", "loc": true, "vf": true}, {"name": "Bolt de pont", "header": false, "ident": "", "comment": "MIN 2xpont", "loc": true}, {"name": "Gates", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Gate 12po", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Gate échelle de Fraco", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Lisse de gates extrémité", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Garde-corps de run 1.", "header": false, "ident": "", "comment": "MIN 2xmachine", "loc": true}, {"name": "Garde-corps de rigger", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Tours", "header": false, "ident": "", "comment": "5pi", "loc": true, "vf": true}, {"name": "Barrure rouge", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Bolt", "header": false, "ident": "", "comment": "MIN. 4xtour", "loc": true}, {"name": "Clams", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Front pine rigger", "header": false, "ident": "", "comment": "Empêche les madriers de glisser", "loc": true}, {"name": "Gros n braquet (hockey)", "header": false, "ident": "", "comment": "Vien de Loiselle", "loc": true}, {"name": "Side-rigger braquet", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Rigger 6pi-", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Rigger 8pi", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Rigger 10pi", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Rigger 12+", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "RACK GRIS", "header": true, "ident": "", "comment": ""}, {"name": "Gates", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Gates 12po", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Lisse de gates extremité", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Garde-corps de run", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Tours", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Barrure de tour rouge", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Riggers 8pi", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Riggers 5pi", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Bolts/pines/clams", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "blocages", "header": false, "ident": "", "comment": "", "loc": true}]}, "LOURD_MIXEUR": {"label": "Mixeur", "items": [{"name": "Mud hog élec.", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mud hog gaz", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mud hog gaz", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mud hog gaz", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mud hog gaz", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mathieu élec.", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Gros Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Petit Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Vieu gros mixeur rouge", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}]}, "LOURD_SCIE": {"label": "Scie", "items": [{"name": "Scie dépoussiéreur A.B.L.", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie dépoussiéreur Mathieu élec.", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie dépoussiéreur Mathieu gaz", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie clipper 20po sur pied", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie clipper 20po sur pied", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie clipper 20po", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie clipper 14po", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie IQ", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie IQ", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Cut Quick STIHL", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Cut Quick STIHL", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Cut Quick STIHL", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Cut Quick STIHL", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie 9po DEWALT", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Chainsaw HUSQVARNA", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Chainsaw HUSQVARNA", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}]}, "LOURD_ECHAFAUDAGE": {"label": "Échafaudage", "items": [{"name": "Rack pour pattes", "header": false, "ident": "", "comment": ""}, {"name": "Pattes 6pi", "header": false, "ident": "", "comment": ""}, {"name": "Pattes 5pi", "header": false, "ident": "", "comment": ""}, {"name": "Pattes 30po", "header": false, "ident": "", "comment": ""}, {"name": "Patte stabilisatrice triangle", "header": false, "ident": "", "comment": ""}, {"name": "Patte 2pi de haut", "header": false, "ident": "", "comment": ""}, {"name": "Rack pour croisillons", "header": false, "ident": "", "comment": ""}, {"name": "Croisillons 7pi", "header": false, "ident": "", "comment": ""}, {"name": "Croisillons 10pi", "header": false, "ident": "", "comment": ""}, {"name": "Rack a madriers", "header": false, "ident": "", "comment": "Vrai rack"}, {"name": "Madriers 12pi", "header": false, "ident": "", "comment": ""}, {"name": "Madriers 8pi", "header": false, "ident": "", "comment": ""}, {"name": "Madriers 6pi-", "header": false, "ident": "", "comment": ""}, {"name": "Vérins", "header": false, "ident": "", "comment": ""}, {"name": "Blocages", "header": false, "ident": "", "comment": ""}, {"name": "Braquets", "header": false, "ident": "", "comment": ""}, {"name": "Sides braquets", "header": false, "ident": "", "comment": ""}, {"name": "Braquets 4pi", "header": false, "ident": "", "comment": ""}, {"name": "Braquets 1pi", "header": false, "ident": "", "comment": ""}, {"name": "Braquets toit orange", "header": false, "ident": "", "comment": ""}, {"name": "Crinqueux hydrauliques", "header": false, "ident": "", "comment": "Manuel    /    À Drill"}, {"name": "Poteaux d’ancrage", "header": false, "ident": "", "comment": ""}, {"name": "Piece de poteau d’anc.", "header": false, "ident": "", "comment": ""}, {"name": "Wescott", "header": false, "ident": "", "comment": ""}, {"name": "Garde-corps de run 2.", "header": false, "ident": "", "comment": ""}, {"name": "Garde-corps bouteille", "header": false, "ident": "", "comment": ""}, {"name": "Porte pour patte", "header": false, "ident": "", "comment": ""}, {"name": "Verrous banane 5-5", "header": false, "ident": "", "comment": ""}, {"name": "Verrous banane 5-6", "header": false, "ident": "", "comment": ""}, {"name": "Verrous banane 6-6", "header": false, "ident": "", "comment": ""}, {"name": "Palan", "header": false, "ident": "", "comment": ""}, {"name": "Roues", "header": false, "ident": "", "comment": ""}]}, "LOURD_DIVERS": {"label": "Divers", "items": [{"name": "Benne 4pi large", "header": false, "ident": "", "comment": ""}, {"name": "Benne 5pi large", "header": false, "ident": "", "comment": ""}, {"name": "Slabgrab", "header": false, "ident": "", "comment": ""}, {"name": "Jack pole", "header": false, "ident": "", "comment": ""}, {"name": "Cage a bidons/tank", "header": false, "ident": "", "comment": "Cadena"}, {"name": "Coffre jaune", "header": false, "ident": "", "comment": "Cadena"}, {"name": "Coffre bleu", "header": false, "ident": "", "comment": "Cadena"}, {"name": "Container outils 10x8pi", "header": false, "ident": "", "comment": "Cadena"}, {"name": "Coffre outils noir", "header": false, "ident": "", "comment": "Cadena"}, {"name": "Coffre outils brun", "header": false, "ident": "", "comment": "Cadena"}]}};
+
+/* ============================================================
+   STOCKAGE LOCAL (hors ligne, propre a cet appareil)
+   Remplace window.storage par le localStorage du navigateur.
+   Les donnees NE sont PAS partagees entre les telephones.
+   ============================================================ */
+(function(){
+  const PREFIX = 'invapp:';
+  function keyOf(k){ return PREFIX + k; }
+  window.storage = {
+    async get(k){
+      try{
+        const v = localStorage.getItem(keyOf(k));
+        return v === null ? null : { key:k, value:v };
+      }catch(e){ return null; }
+    },
+    async set(k, value){
+      try{
+        localStorage.setItem(keyOf(k), value);
+        return { key:k, value };
+      }catch(e){ return null; }
+    },
+    async delete(k){
+      try{
+        localStorage.removeItem(keyOf(k));
+        return { key:k, deleted:true };
+      }catch(e){ return null; }
+    },
+    async list(prefix){
+      try{
+        const out = [];
+        const full = PREFIX + (prefix || '');
+        for(let i=0;i<localStorage.length;i++){
+          const kk = localStorage.key(i);
+          if(kk && kk.startsWith(full)) out.push(kk.slice(PREFIX.length));
+        }
+        return { keys: out };
+      }catch(e){ return { keys: [] }; }
+    }
+  };
+})();
+
+const BASE_CAT_KEYS = Object.keys(RAW_DATA);
+const DEFAULT_TEAMS = [1,2,3,4,5,6].map(n => ({id: 'team_' + n, label: 'Équipe ' + n}))
+  .concat([{id:'entrepot', label:'Entrepôt'}]);
+const ETATS = ['bon','moyen','mauvais'];
+
+let teams = DEFAULT_TEAMS.slice();
+let customCats = []; // [{key,label}]
+let extraItems = {}; // cat -> [{name, ident, comment, header:false, custom:true}]
+let perTeamState = {}; // teamId -> { cat -> [ {qte,qteReel,etat,ident,comment} ] }
+let currentTeam = teams[0].id; // or 'TOTAL'
+let currentCat = BASE_CAT_KEYS[0];
+let openIndex = null;
+let saveTimer = null;
+
+function allCatKeys(){ return BASE_CAT_KEYS.concat(customCats.map(c => c.key)); }
+function catLabel(cat){
+  if(RAW_DATA[cat]) return RAW_DATA[cat].label;
+  const c = customCats.find(c => c.key === cat);
+  return c ? c.label : cat;
+}
+function teamLabel(id){
+  const t = teams.find(t => t.id === id);
+  return t ? t.label : id;
+}
+function baseItemsFor(cat){ return (RAW_DATA[cat] && RAW_DATA[cat].items) || []; }
+function itemsFor(cat){ return baseItemsFor(cat).concat(extraItems[cat] || []); }
+
+function defaultItemState(catItem){
+  return { qte:"", qteReel:"", etat:"", etatBon:"", etatMoyen:"", etatMauvais:"", ident: (catItem && catItem.ident) || "", comment: (catItem && catItem.comment) || "", localisation:"", verif:"", pression:"", huile:"", tuneup:"" };
+}
+
+/* Statut d'une date de vérif. annuelle au format AAAA-MM.
+   - red    : vide, invalide, ou >= 12 mois écoulés (expiré)
+   - orange : entre 9 et 12 mois écoulés (approche)
+   - green  : < 9 mois écoulés (à jour) */
+function verifStatus(val){
+  const s = (val || '').trim();
+  const m = s.match(/^(\d{4})-(\d{1,2})$/);
+  if(!m) return { level:'red', label: s ? 'Format AAAA-MM attendu' : 'Aucune date — vérif. requise' };
+  const y = parseInt(m[1],10), mo = parseInt(m[2],10);
+  if(mo < 1 || mo > 12) return { level:'red', label:'Mois invalide (01–12)' };
+  const now = new Date();
+  // mois écoulés depuis la date de vérif
+  const months = (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - mo);
+  if(months < 0) return { level:'green', label:'Date future' };
+  if(months >= 12) return { level:'red', label:'Expirée (' + months + ' mois) — à revérifier' };
+  if(months >= 9)  return { level:'orange', label:'Bientôt due (' + months + ' mois)' };
+  return { level:'green', label:'À jour (' + months + ' mois)' };
+}
+
+/* Statut de quantité : compare prévue vs réelle.
+   - null   : comparaison impossible (une des deux vide)
+   - red    : réelle < prévue (manque)
+   - green  : réelle >= prévue (compte bon ou surplus) */
+function qtyStatus(qte, qteReel){
+  if(qte === "" || qteReel === "" || qte == null || qteReel == null) return null;
+  const p = parseFloat(qte), r = parseFloat(qteReel);
+  if(isNaN(p) || isNaN(r)) return null;
+  if(r < p) return { level:'red', label:'Manque ' + (p - r) + ' (prévu ' + p + ', réel ' + r + ')' };
+  if(r > p) return { level:'green', label:'Surplus ' + (r - p) + ' (prévu ' + p + ', réel ' + r + ')' };
+  return { level:'green', label:'Compte exact (' + p + ')' };
+}
+
+/* Synthèse des compteurs d'état d'un article.
+   Retourne null si aucun compteur rempli, sinon { bon, moyen, mauvais, total, level, label }.
+   - level red    : au moins 1 en mauvais
+   - level orange : des moyens mais aucun mauvais
+   - level green  : uniquement des bons */
+function etatSummary(s){
+  const b = parseInt(s.etatBon,10)   || 0;
+  const m = parseInt(s.etatMoyen,10) || 0;
+  const x = parseInt(s.etatMauvais,10)|| 0;
+  if(s.etatBon==="" && s.etatMoyen==="" && s.etatMauvais==="") return null;
+  const total = b + m + x;
+  let level = 'green';
+  if(x > 0) level = 'red';
+  else if(m > 0) level = 'orange';
+  const parts = [];
+  if(b) parts.push(b + ' bon' + (b>1?'s':''));
+  if(m) parts.push(m + ' moyen' + (m>1?'s':''));
+  if(x) parts.push(x + ' mauvais');
+  return { b, m, x, total, level, label: parts.length ? parts.join(' · ') : 'aucun' };
+}
+
+/* Texte d'aide sous les compteurs : total compté, et alerte si ≠ quantité réelle */
+function etatHintText(est, s){
+  if(!est) return '';
+  let txt = 'Total évalué : ' + est.total;
+  const r = parseFloat(s.qteReel);
+  if(!isNaN(r) && s.qteReel !== "" && est.total !== r){
+    txt += ' — ⚠ ne correspond pas à la qté réelle (' + r + ')';
+  }
+  return txt;
+}
+
+/* Priorité d'un article : 0 = rouge (urgent), 1 = orange, 2 = normal.
+   Prend le pire des trois indicateurs (état, quantité, vérif). */
+function levelRank(level){ return level === 'red' ? 0 : (level === 'orange' ? 1 : 2); }
+function itemPriority(it, s){
+  let best = 2;
+  const est = etatSummary(s);
+  if(est) best = Math.min(best, levelRank(est.level));
+  const qst = qtyStatus(s.qte, s.qteReel);
+  if(qst) best = Math.min(best, levelRank(qst.level));
+  if(it.vf || it.ext){ const vst = verifStatus(s.verif); if(vst) best = Math.min(best, levelRank(vst.level)); }
+  return best;
+}
+
+/* Réordonne les articles en gardant les sections (en-têtes) :
+   dans chaque bloc délimité par un en-tête, tri stable par priorité (rouge, orange, reste).
+   Renvoie une liste de {it, i} où i est l'index d'origine (pour l'état). */
+function orderedItemsWithPriority(items, st){
+  const out = [];
+  let block = [];
+  const flush = () => {
+    // tri stable : priorité (rouge, orange, reste) PUIS alphabétique
+    block.map((e, idx) => ({ e, idx }))
+      .sort((a, b) =>
+        (a.e.prio - b.e.prio) ||
+        a.e.name.localeCompare(b.e.name, 'fr', { sensitivity:'base', numeric:true }) ||
+        (a.idx - b.idx))
+      .forEach(x => out.push(x.e));
+    block = [];
+  };
+  items.forEach((it, i) => {
+    if(it.header){
+      flush();
+      out.push({ it, i, header:true });
+    } else {
+      const s = (st && st[i]) || defaultItemState(it);
+      block.push({ it, i, header:false, prio: itemPriority(it, s), name: (it.name||'').replace(/\n/g,' ') });
+    }
+  });
+  flush();
+  return out;
+}
+
+/* ---- Storage (all SHARED across every team member) ---- */
+async function loadTeams(){
+  try{
+    const res = await window.storage.get('inv:teams', true);
+    teams = res && res.value ? JSON.parse(res.value) : DEFAULT_TEAMS.slice();
+  }catch(e){ teams = DEFAULT_TEAMS.slice(); }
+  // S'assure que l'emplacement Entrepôt existe (ajouté après une 1re utilisation)
+  if(!teams.some(t => t.id === 'entrepot')){
+    teams.push({id:'entrepot', label:'Entrepôt'});
+    try{ await saveTeams(); }catch(e){}
+  }
+}
+async function saveTeams(){
+  try{ await window.storage.set('inv:teams', JSON.stringify(teams), true); }catch(e){}
+}
+
+/* ---- Infos par équipe (n° projet, adresse, contremaître) ---- */
+let teamInfo = {}; // teamId -> { projet, adresse, contremaitre }
+let teamInfoSaveTimer = null;
+async function loadTeamInfo(teamId){
+  if(teamInfo[teamId]) return teamInfo[teamId];
+  let info = { projet:"", adresse:"", contremaitre:"" };
+  try{
+    const res = await window.storage.get('inv:info:' + teamId, true);
+    if(res && res.value) info = { ...info, ...JSON.parse(res.value) };
+  }catch(e){}
+  teamInfo[teamId] = info;
+  return info;
+}
+function scheduleSaveTeamInfo(teamId){
+  const statusEl = document.getElementById('saveStatus');
+  if(statusEl) statusEl.textContent = 'Modif...';
+  clearTimeout(teamInfoSaveTimer);
+  teamInfoSaveTimer = setTimeout(async () => {
+    try{
+      await window.storage.set('inv:info:' + teamId, JSON.stringify(teamInfo[teamId]), true);
+      if(statusEl){ statusEl.textContent = 'Enregistré ✓';
+        setTimeout(() => { if(statusEl.textContent === 'Enregistré ✓') statusEl.textContent = '\u00A0'; }, 1500); }
+    }catch(e){ if(statusEl) statusEl.textContent = 'Erreur'; }
+  }, 500);
+}
+function renderTeamInfo(){
+  const box = document.getElementById('teamInfo');
+  if(!box) return;
+  if(currentTeam === 'TOTAL'){ box.classList.remove('show'); box.innerHTML=''; return; }
+  const info = teamInfo[currentTeam] || { projet:"", adresse:"", contremaitre:"" };
+  box.innerHTML = `
+    <div class="team-info-title">Infos du chantier — ${escapeHtml(teamLabel(currentTeam))}</div>
+    <div class="ti-row">
+      <div class="ti-field">
+        <label>N° de projet</label>
+        <input type="text" data-ti="projet" value="${escapeAttr(info.projet)}" placeholder="ex: 2026-142">
+      </div>
+      <div class="ti-field">
+        <label>Contremaître</label>
+        <input type="text" data-ti="contremaitre" value="${escapeAttr(info.contremaitre)}" placeholder="Nom">
+      </div>
+    </div>
+    <div class="ti-row">
+      <div class="ti-field full">
+        <label>Adresse</label>
+        <input type="text" data-ti="adresse" value="${escapeAttr(info.adresse)}" placeholder="Adresse du chantier">
+      </div>
+    </div>
+  `;
+  box.classList.add('show');
+  box.querySelectorAll('input[data-ti]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      if(!teamInfo[currentTeam]) teamInfo[currentTeam] = { projet:"", adresse:"", contremaitre:"" };
+      teamInfo[currentTeam][inp.dataset.ti] = inp.value;
+      scheduleSaveTeamInfo(currentTeam);
+    });
+  });
+}
+
+async function loadCustomCats(){
+  try{
+    const res = await window.storage.get('inv:customCats', true);
+    customCats = res && res.value ? JSON.parse(res.value) : [];
+  }catch(e){ customCats = []; }
+}
+async function saveCustomCats(){
+  try{ await window.storage.set('inv:customCats', JSON.stringify(customCats), true); }catch(e){}
+}
+
+async function loadExtraItems(cat){
+  try{
+    const res = await window.storage.get('inv:extra:' + cat, true);
+    extraItems[cat] = res && res.value ? JSON.parse(res.value) : [];
+  }catch(e){ extraItems[cat] = []; }
+}
+async function saveExtraItems(cat){
+  try{ await window.storage.set('inv:extra:' + cat, JSON.stringify(extraItems[cat] || []), true); }catch(e){}
+}
+
+async function ensureTeamCatLoaded(teamId, cat){
+  if(perTeamState[teamId] && perTeamState[teamId][cat]) return perTeamState[teamId][cat];
+  const items = itemsFor(cat);
+  let arr;
+  try{
+    const res = await window.storage.get('inv:' + teamId + ':' + cat, true);
+    if(res && res.value){
+      const parsed = JSON.parse(res.value);
+      arr = items.map((it, i) => parsed[i] ? {...defaultItemState(it), ...parsed[i]} : defaultItemState(it));
+    } else {
+      arr = items.map(it => defaultItemState(it));
+    }
+  }catch(e){
+    arr = items.map(it => defaultItemState(it));
+  }
+  if(!perTeamState[teamId]) perTeamState[teamId] = {};
+  perTeamState[teamId][cat] = arr;
+  return arr;
+}
+
+function scheduleSaveTeamCat(teamId, cat){
+  const statusEl = document.getElementById('saveStatus');
+  statusEl.textContent = 'Modif...';
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try{
+      await window.storage.set('inv:' + teamId + ':' + cat, JSON.stringify(perTeamState[teamId][cat]), true);
+      statusEl.textContent = 'Enregistré ✓';
+      setTimeout(() => { if(statusEl.textContent === 'Enregistré ✓') statusEl.textContent = '\u00A0'; }, 1500);
+    }catch(e){
+      statusEl.textContent = 'Erreur';
+    }
+  }, 500);
+}
+
+/* ---- Aggregation ---- */
+function countFilledForTeam(teamId, cat){
+  const items = itemsFor(cat);
+  const st = (perTeamState[teamId] && perTeamState[teamId][cat]) || [];
+  let filled = 0, total = 0;
+  items.forEach((it, i) => {
+    if(it.header) return;
+    total++;
+    const s = st[i];
+    if(s && (s.qte !== "" || s.qteReel !== "" || s.etatBon !== "" || s.etatMoyen !== "" || s.etatMauvais !== "")) filled++;
+  });
+  return {filled, total};
+}
+
+/* ---- Rendering: Team bar ---- */
+function renderTeamBar(){
+  const bar = document.getElementById('teamBar');
+  bar.innerHTML = '';
+  teams.forEach(t => {
+    const chip = document.createElement('div');
+    chip.className = 'team-chip' + (currentTeam === t.id ? ' active' : '');
+    chip.textContent = t.label;
+    chip.onclick = async () => {
+      currentTeam = t.id;
+      openIndex = null;
+      await ensureTeamCatLoaded(currentTeam, currentCat);
+      renderTeamBar(); renderTabs(); renderList();
+    };
+    bar.appendChild(chip);
+  });
+  const totalChip = document.createElement('div');
+  totalChip.className = 'team-chip total' + (currentTeam === 'TOTAL' ? ' active' : '');
+  totalChip.textContent = 'Total';
+  totalChip.onclick = async () => {
+    currentTeam = 'TOTAL';
+    openIndex = null;
+    for(const t of teams){ await ensureTeamCatLoaded(t.id, currentCat); }
+    renderTeamBar(); renderTabs(); renderList();
+  };
+  bar.appendChild(totalChip);
+
+  const editBtn = document.createElement('div');
+  editBtn.className = 'team-edit-btn';
+  editBtn.textContent = '✎';
+  editBtn.onclick = openEditTeamsModal;
+  bar.appendChild(editBtn);
+}
+
+/* ---- Rendering: Category tabs ---- */
+function renderTabs(){
+  const tabsEl = document.getElementById('tabs');
+  tabsEl.innerHTML = '';
+  allCatKeys().forEach(cat => {
+    const tab = document.createElement('div');
+    const isSST = cat === 'S.S.T.';
+    tab.className = 'tab' + (cat === currentCat ? ' active' : '') + (isSST ? ' tab-sst' : '');
+    let countHtml = '';
+    if(currentTeam !== 'TOTAL'){
+      const {filled, total} = countFilledForTeam(currentTeam, cat);
+      countHtml = `<span class="count">${filled}/${total}</span>`;
+    }
+    tab.innerHTML = `${isSST ? '🦺 ' : ''}${escapeHtml(catLabel(cat))} ${countHtml}`;
+    tab.onclick = async () => {
+      currentCat = cat; openIndex = null;
+      if(currentTeam === 'TOTAL'){
+        for(const t of teams){ await ensureTeamCatLoaded(t.id, currentCat); }
+      } else {
+        await ensureTeamCatLoaded(currentTeam, currentCat);
+      }
+      renderTabs(); renderList();
+    };
+    tabsEl.appendChild(tab);
+  });
+  const addTab = document.createElement('div');
+  addTab.className = 'tab-add';
+  addTab.textContent = '+';
+  addTab.onclick = openAddCategoryModal;
+  tabsEl.appendChild(addTab);
+}
+
+function matchesSearch(name, query){
+  if(!query) return true;
+  return name.toLowerCase().includes(query.toLowerCase());
+}
+
+/* ---- Rendering: List (team mode vs total mode) ---- */
+function sstBannerHTML(){
+  if(currentCat !== 'S.S.T.') return '';
+  return `
+    <div class="sst-stripe"></div>
+    <div class="sst-banner">
+      <div class="sst-icon">🦺</div>
+      <div class="sst-text">
+        <div class="sst-title">Santé &amp; Sécurité</div>
+        <div class="sst-sub">Section prioritaire — vérifier les équipements de protection, inspections et extincteurs. Tout article en mauvais état doit être signalé.</div>
+      </div>
+    </div>
+  `;
+}
+function renderList(){
+  renderTeamInfo();
+  if(currentTeam === 'TOTAL') renderTotalList();
+  else renderTeamList();
+  renderFooter();
+}
+
+function renderTeamList(){
+  const listEl = document.getElementById('list');
+  const query = document.getElementById('search').value.trim();
+  listEl.innerHTML = '';
+  if(!query){ const b = sstBannerHTML(); if(b){ const d = document.createElement('div'); d.innerHTML = b; listEl.appendChild(d); } }
+  const items = itemsFor(currentCat);
+  const st = (perTeamState[currentTeam] && perTeamState[currentTeam][currentCat]) || [];
+  const baseLen = baseItemsFor(currentCat).length;
+  let anyVisible = false;
+
+  orderedItemsWithPriority(items, st).forEach(({ it, i }) => {
+    if(it.header){
+      if(query) return;
+      const label = document.createElement('div');
+      label.className = 'section-label';
+      label.textContent = it.name;
+      listEl.appendChild(label);
+      return;
+    }
+    if(!matchesSearch(it.name, query)) return;
+    anyVisible = true;
+    const s = st[i] || defaultItemState(it);
+    const est = etatSummary(s);
+    const hasData = s.qte !== "" || s.qteReel !== "" || !!est;
+    const isExtra = i >= baseLen;
+    const hasVerif = !!(it.vf || it.ext);
+    const vst = hasVerif ? verifStatus(s.verif) : null;
+    const qst = qtyStatus(s.qte, s.qteReel);
+    const card = document.createElement('div');
+    const etatBorder = est ? (est.level === 'red' ? ' missing' : (est.level === 'green' ? ' filled' : '')) : (hasData ? ' filled' : '');
+    card.className = 'card' + (openIndex === i ? ' open' : '') + etatBorder;
+
+    const subParts = [];
+    if(s.ident) subParts.push(s.ident);
+    if(s.localisation) subParts.push('📍 ' + s.localisation);
+    if(est) subParts.push('🔧 ' + est.label);
+    if(s.comment) subParts.push(s.comment);
+
+    const row = document.createElement('div');
+    row.className = 'card-row';
+    row.innerHTML = `
+      <div>
+        <div class="card-name">${escapeHtml(it.name.replace(/\n/g,' '))}</div>
+        ${subParts.length ? `<div class="card-sub">${escapeHtml(subParts.join(' · '))}</div>` : ''}
+      </div>
+      <div class="card-meta">
+        ${est ? `<span class="verif-dot ${est.level}" data-dot="etat" title="${escapeAttr('État — ' + est.label)}"></span>` : ''}
+        ${qst ? `<span class="verif-dot ${qst.level}" data-dot="qty" title="${escapeAttr('Quantité — ' + qst.label)}"></span>` : ''}
+        ${vst ? `<span class="verif-dot ${vst.level}" data-dot="verif" title="${escapeAttr('Vérif — ' + vst.label)}"></span>` : ''}
+        ${s.qte !== "" ? `<span class="qty-badge">${escapeHtml(s.qte)}</span>` : ''}
+        <span class="chevron">▾</span>
+      </div>
+    `;
+    row.onclick = () => { openIndex = (openIndex === i ? null : i); renderList(); };
+    card.appendChild(row);
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+    body.innerHTML = `
+      <div class="field-row">
+        <div class="field">
+          <label>Qté prévue</label>
+          <input type="number" inputmode="numeric" data-field="qte" value="${escapeAttr(s.qte)}" placeholder="0">
+        </div>
+        <div class="field">
+          <label>Qté réelle</label>
+          <input type="number" inputmode="numeric" data-field="qteReel" class="${qst ? 'verif-'+qst.level : ''}" value="${escapeAttr(s.qteReel)}" placeholder="0">
+        </div>
+      </div>
+      <div class="qty-hint-wrap" style="${qst ? '' : 'display:none;'} margin-top:-6px; margin-bottom:12px;">
+        <div class="verif-hint ${qst ? qst.level : ''}">${qst ? escapeHtml(qst.label) : ''}</div>
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>État ${est ? `<span class="etat-pill ${est.level}">${escapeHtml(est.label)}</span>` : ''}</label>
+        <div class="etat-counters">
+          <div class="etat-counter bon">
+            <label>Bon</label>
+            <input type="number" inputmode="numeric" min="0" data-field="etatBon" value="${escapeAttr(s.etatBon)}" placeholder="0">
+          </div>
+          <div class="etat-counter moyen">
+            <label>Moyen</label>
+            <input type="number" inputmode="numeric" min="0" data-field="etatMoyen" value="${escapeAttr(s.etatMoyen)}" placeholder="0">
+          </div>
+          <div class="etat-counter mauvais">
+            <label>Mauvais</label>
+            <input type="number" inputmode="numeric" min="0" data-field="etatMauvais" value="${escapeAttr(s.etatMauvais)}" placeholder="0">
+          </div>
+        </div>
+        <div class="etat-total-hint" data-etat-hint>${est ? etatHintText(est, s) : ''}</div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Identification</label>
+          <input type="text" data-field="ident" value="${escapeAttr(s.ident)}" placeholder="ex: rouge, JAUNE...">
+        </div>
+      </div>
+      ${it.loc ? `
+      <div class="field-row">
+        <div class="field">
+          <label>📍 Localisation</label>
+          <input type="text" data-field="localisation" value="${escapeAttr(s.localisation)}" placeholder="ex: Machine 3, camion, cour...">
+        </div>
+      </div>` : ''}
+      ${it.vf ? `
+      <div class="field-row">
+        <div class="field">
+          <label>Vérif. annuelle (année-mois)</label>
+          <input type="text" inputmode="numeric" data-field="verif" class="verif-${vst.level}" value="${escapeAttr(s.verif)}" placeholder="9999-00">
+          <div class="verif-hint ${vst.level}">${escapeHtml(vst.label)}</div>
+        </div>
+      </div>` : ''}
+      ${it.ext ? `
+      <div class="field-row">
+        <div class="field">
+          <label>Vérif. annuelle (année-mois)</label>
+          <input type="text" inputmode="numeric" data-field="verif" class="verif-${vst.level}" value="${escapeAttr(s.verif)}" placeholder="9999-00">
+          <div class="verif-hint ${vst.level}">${escapeHtml(vst.label)}</div>
+        </div>
+        <div class="field">
+          <label>Pression (vert)</label>
+          <input type="text" data-field="pression" value="${escapeAttr(s.pression)}" placeholder="ex: OK / vert">
+        </div>
+      </div>` : ''}
+      ${it.gas ? `
+      <div class="field-row">
+        <div class="field">
+          <label>🛢️ Changement d'huile</label>
+          <input type="text" data-field="huile" value="${escapeAttr(s.huile)}" placeholder="ex: fait 2026-03, ou date">
+        </div>
+        <div class="field">
+          <label>🔧 Tune up</label>
+          <input type="text" data-field="tuneup" value="${escapeAttr(s.tuneup)}" placeholder="ex: fait 2026-03, ou date">
+        </div>
+      </div>` : ''}
+      <div class="field">
+        <label>Commentaire</label>
+        <input type="text" data-field="comment" value="${escapeAttr(s.comment)}" placeholder="Note libre...">
+      </div>
+      ${isExtra ? '<div class="delete-link" data-del-item="1">Supprimer cet article</div>' : ''}
+    `;
+    card.appendChild(body);
+    listEl.appendChild(card);
+
+    if(openIndex === i){
+      body.querySelectorAll('input[data-field]').forEach(inp => {
+        inp.addEventListener('input', () => {
+          st[i][inp.dataset.field] = inp.value;
+          scheduleSaveTeamCat(currentTeam, currentCat);
+          renderTabs();
+          // Recolore le champ vérif. en direct sans perdre le focus
+          if(inp.dataset.field === 'verif'){
+            const vs = verifStatus(inp.value);
+            inp.classList.remove('verif-red','verif-orange','verif-green');
+            inp.classList.add('verif-' + vs.level);
+            const hint = inp.parentElement.querySelector('.verif-hint');
+            if(hint){ hint.className = 'verif-hint ' + vs.level; hint.textContent = vs.label; }
+            const dot = card.querySelector('.verif-dot[data-dot="verif"]');
+            if(dot){ dot.className = 'verif-dot ' + vs.level; dot.title = 'Vérif — ' + vs.label; }
+          }
+          // Recolore l'indicateur de quantité en direct
+          if(inp.dataset.field === 'qte' || inp.dataset.field === 'qteReel'){
+            const qs = qtyStatus(st[i].qte, st[i].qteReel);
+            const reelInp = body.querySelector('input[data-field="qteReel"]');
+            if(reelInp){
+              reelInp.classList.remove('verif-red','verif-orange','verif-green');
+              if(qs) reelInp.classList.add('verif-' + qs.level);
+            }
+            const wrap = body.querySelector('.qty-hint-wrap');
+            const qhint = wrap ? wrap.querySelector('.verif-hint') : null;
+            if(wrap && qhint){
+              if(qs){ wrap.style.display=''; qhint.className='verif-hint '+qs.level; qhint.textContent=qs.label; }
+              else { wrap.style.display='none'; qhint.textContent=''; }
+            }
+            // pastille d'en-tête quantité
+            let qdot = card.querySelector('.verif-dot[data-dot="qty"]');
+            const meta = card.querySelector('.card-meta');
+            if(qs){
+              if(!qdot && meta){
+                qdot = document.createElement('span');
+                qdot.setAttribute('data-dot','qty');
+                meta.insertBefore(qdot, meta.firstChild);
+              }
+              if(qdot){ qdot.className = 'verif-dot ' + qs.level; qdot.title = 'Quantité — ' + qs.label; }
+            } else if(qdot){ qdot.remove(); }
+          }
+          // Recolore l'indicateur d'état (compteurs Bon/Moyen/Mauvais)
+          if(inp.dataset.field === 'etatBon' || inp.dataset.field === 'etatMoyen' || inp.dataset.field === 'etatMauvais'){
+            const es = etatSummary(st[i]);
+            // pastille dans le label
+            const lbl = body.querySelector('.etat-counters').parentElement.querySelector('label');
+            if(lbl){
+              const existing = lbl.querySelector('.etat-pill');
+              if(existing) existing.remove();
+              if(es){ lbl.insertAdjacentHTML('beforeend', ' <span class="etat-pill ' + es.level + '">' + escapeHtml(es.label) + '</span>'); }
+            }
+            // texte d'aide (total + alerte)
+            const eh = body.querySelector('[data-etat-hint]');
+            if(eh){ eh.textContent = es ? etatHintText(es, st[i]) : ''; eh.className = 'etat-total-hint' + (es && !isNaN(parseFloat(st[i].qteReel)) && st[i].qteReel!=="" && es.total !== parseFloat(st[i].qteReel) ? ' mismatch' : ''); }
+            // pastille d'en-tête état + bordure de carte
+            let edot = card.querySelector('.verif-dot[data-dot="etat"]');
+            const meta2 = card.querySelector('.card-meta');
+            if(es){
+              if(!edot && meta2){ edot = document.createElement('span'); edot.setAttribute('data-dot','etat'); meta2.insertBefore(edot, meta2.firstChild); }
+              if(edot){ edot.className = 'verif-dot ' + es.level; edot.title = 'État — ' + es.label; }
+            } else if(edot){ edot.remove(); }
+            card.classList.remove('filled','missing');
+            if(es){ if(es.level==='red') card.classList.add('missing'); else if(es.level==='green') card.classList.add('filled'); }
+          }
+        });
+        inp.addEventListener('click', e => e.stopPropagation());
+      });
+      const delLink = body.querySelector('[data-del-item]');
+      if(delLink){
+        delLink.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if(!confirm('Supprimer "' + it.name + '" ? (pour toutes les équipes)')) return;
+          const extraIdx = i - baseLen;
+          extraItems[currentCat].splice(extraIdx, 1);
+          await saveExtraItems(currentCat);
+          for(const t of teams){
+            if(perTeamState[t.id] && perTeamState[t.id][currentCat]){
+              perTeamState[t.id][currentCat].splice(i, 1);
+              await window.storage.set('inv:' + t.id + ':' + currentCat, JSON.stringify(perTeamState[t.id][currentCat]), true);
+            }
+          }
+          openIndex = null;
+          renderTabs();
+          renderList();
+        });
+      }
+    }
+  });
+
+  if(!anyVisible){
+    const empty = document.createElement('div');
+    empty.className = 'empty-msg';
+    empty.textContent = query ? 'Aucun article ne correspond à "' + query + '".' : 'Aucun article.';
+    listEl.appendChild(empty);
+  }
+
+  if(!query){
+    const addBtn = document.createElement('button');
+    addBtn.className = 'add-item-btn';
+    addBtn.textContent = '+ Ajouter un article';
+    addBtn.onclick = openAddItemModal;
+    listEl.appendChild(addBtn);
+  }
+}
+
+function renderTotalList(){
+  const listEl = document.getElementById('list');
+  const query = document.getElementById('search').value.trim();
+  listEl.innerHTML = '';
+
+  if(!query){ const b = sstBannerHTML(); if(b){ const d = document.createElement('div'); d.innerHTML = b; listEl.appendChild(d); } }
+
+  const banner = document.createElement('div');
+  banner.className = 'total-banner';
+  banner.textContent = 'Vue Total — détail par équipe et somme des quantités réelles pour "' + catLabel(currentCat) + '".';
+  listEl.appendChild(banner);
+
+  // Récapitulatif des infos de chantier de chaque équipe (lecture seule)
+  const anyInfo = teams.some(t => {
+    const inf = teamInfo[t.id]; return inf && (inf.projet || inf.adresse || inf.contremaitre);
+  });
+  if(anyInfo && !query){
+    const wrap = document.createElement('div');
+    wrap.innerHTML = teams.map(t => {
+      const inf = teamInfo[t.id] || {};
+      if(!(inf.projet || inf.adresse || inf.contremaitre)) return '';
+      const bits = [];
+      if(inf.projet) bits.push('<span class="tir-line">N° projet : <b>' + escapeHtml(inf.projet) + '</b></span>');
+      if(inf.contremaitre) bits.push('<span class="tir-line">Contremaître : <b>' + escapeHtml(inf.contremaitre) + '</b></span>');
+      if(inf.adresse) bits.push('<span class="tir-line">Adresse : <b>' + escapeHtml(inf.adresse) + '</b></span>');
+      return '<div class="team-info-readonly"><div class="tir-team">' + escapeHtml(t.label) + '</div>' + bits.join('<br>') + '</div>';
+    }).join('');
+    listEl.appendChild(wrap);
+  }
+
+  const items = itemsFor(currentCat);
+  let anyVisible = false;
+
+  // Priorité en vue Total : pire priorité parmi toutes les équipes pour l'article
+  const totalPrio = items.map((it, i) => {
+    if(it.header) return 2;
+    let best = 2;
+    for(const t of teams){
+      const st = (perTeamState[t.id] && perTeamState[t.id][currentCat]) || [];
+      const s = st[i] || defaultItemState(it);
+      best = Math.min(best, itemPriority(it, s));
+    }
+    return best;
+  });
+  // Réordonne en gardant les sections
+  const orderedTotal = [];
+  {
+    let block = [];
+    const flush = () => {
+      block.map((e,idx)=>({e,idx})).sort((a,b)=>
+        (totalPrio[a.e.i]-totalPrio[b.e.i]) ||
+        (a.e.it.name||'').replace(/\n/g,' ').localeCompare((b.e.it.name||'').replace(/\n/g,' '), 'fr', { sensitivity:'base', numeric:true }) ||
+        (a.idx-b.idx)
+      ).forEach(x=>orderedTotal.push(x.e));
+      block = [];
+    };
+    items.forEach((it,i)=>{ if(it.header){ flush(); orderedTotal.push({it,i,header:true}); } else { block.push({it,i,header:false}); } });
+    flush();
+  }
+
+  orderedTotal.forEach(({ it, i }) => {
+    if(it.header){
+      if(query) return;
+      const label = document.createElement('div');
+      label.className = 'section-label';
+      label.textContent = it.name;
+      listEl.appendChild(label);
+      return;
+    }
+    if(!matchesSearch(it.name, query)) return;
+    anyVisible = true;
+
+    let totalReel = 0, anyNumeric = false;
+    let aggBon = 0, aggMoyen = 0, aggMauvais = 0, anyEtat = false;
+    const perTeamRows = teams.map(t => {
+      const st = (perTeamState[t.id] && perTeamState[t.id][currentCat]) || [];
+      const s = st[i] || defaultItemState(it);
+      const n = parseFloat(s.qteReel);
+      if(!isNaN(n)){ totalReel += n; anyNumeric = true; }
+      const es = etatSummary(s);
+      if(es){ aggBon += es.b; aggMoyen += es.m; aggMauvais += es.x; anyEtat = true; }
+      return {team: t, s, es};
+    });
+    const hasAnyData = perTeamRows.some(r => r.s.qte !== "" || r.s.qteReel !== "" || r.es);
+
+    const card = document.createElement('div');
+    card.className = 'card' + (openIndex === i ? ' open' : '');
+
+    const row = document.createElement('div');
+    row.className = 'card-row';
+    row.innerHTML = `
+      <div>
+        <div class="card-name">${escapeHtml(it.name.replace(/\n/g,' '))}</div>
+        ${!hasAnyData ? '<div class="card-sub">Aucune donnée saisie</div>' : ''}
+      </div>
+      <div class="card-meta">
+        ${anyNumeric ? `<span class="qty-badge total-badge">${totalReel}</span>` : ''}
+        <span class="chevron">▾</span>
+      </div>
+    `;
+    row.onclick = () => { openIndex = (openIndex === i ? null : i); renderList(); };
+    card.appendChild(row);
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+    let rowsHtml = perTeamRows.map(({team, s, es}) => {
+      const etatChip = es ? `<span class="etat-pill ${es.level}">${escapeHtml(es.label)}</span>` : '';
+      const metaBits = [];
+      if(s.ident) metaBits.push(s.ident);
+      if(s.localisation) metaBits.push('📍 ' + s.localisation);
+      if(s.verif) metaBits.push('Vérif: ' + s.verif);
+      if(s.pression) metaBits.push('Pression: ' + s.pression);
+      if(s.huile) metaBits.push('🛢️ ' + s.huile);
+      if(s.tuneup) metaBits.push('🔧 ' + s.tuneup);
+      if(s.comment) metaBits.push(s.comment);
+      return `
+        <div class="team-detail-row">
+          <div>
+            <div class="team-detail-name">${escapeHtml(team.label)}</div>
+            ${metaBits.length ? `<div class="team-detail-meta">${escapeHtml(metaBits.join(' · '))}</div>` : ''}
+          </div>
+          <div class="team-detail-vals">
+            <span class="qty-badge">P:${s.qte !== "" ? escapeHtml(s.qte) : '-'}</span>
+            <span class="qty-badge">R:${s.qteReel !== "" ? escapeHtml(s.qteReel) : '-'}</span>
+            ${etatChip}
+          </div>
+        </div>
+      `;
+    }).join('');
+    const aggLevel = aggMauvais > 0 ? 'red' : (aggMoyen > 0 ? 'orange' : 'green');
+    const aggParts = [];
+    if(aggBon) aggParts.push(aggBon + ' bon' + (aggBon>1?'s':''));
+    if(aggMoyen) aggParts.push(aggMoyen + ' moyen' + (aggMoyen>1?'s':''));
+    if(aggMauvais) aggParts.push(aggMauvais + ' mauvais');
+    body.innerHTML = rowsHtml + `
+      <div class="team-detail-row" style="margin-top:6px; border-top:2px solid var(--safety-yellow); padding-top:10px;">
+        <div class="team-detail-name" style="color:var(--safety-yellow);">TOTAL (Qté réelle)</div>
+        <div class="team-detail-vals"><span class="qty-badge total-badge">${anyNumeric ? totalReel : '-'}</span></div>
+      </div>
+      ${anyEtat ? `<div class="team-detail-row">
+        <div class="team-detail-name" style="color:var(--safety-yellow);">TOTAL (états)</div>
+        <div class="team-detail-vals"><span class="etat-pill ${aggLevel}">${escapeHtml(aggParts.join(' · '))}</span></div>
+      </div>` : ''}
+    `;
+    card.appendChild(body);
+    listEl.appendChild(card);
+  });
+
+  if(!anyVisible){
+    const empty = document.createElement('div');
+    empty.className = 'empty-msg';
+    empty.textContent = query ? 'Aucun article ne correspond à "' + query + '".' : 'Aucun article.';
+    listEl.appendChild(empty);
+  }
+}
+
+function renderFooter(){
+  const footer = document.getElementById('footer');
+  if(currentTeam === 'TOTAL'){
+    const isCustomCat = customCats.some(c => c.key === currentCat);
+    footer.innerHTML = 'Vue agrégée — lecture seule.' +
+      (isCustomCat ? ' &nbsp;·&nbsp; <span class="reset-link" id="deleteCatBtn">Supprimer cette catégorie</span>' : '');
+    const delCatBtn = document.getElementById('deleteCatBtn');
+    if(delCatBtn) delCatBtn.addEventListener('click', onDeleteCategory);
+    return;
+  }
+  const isCustomCat = customCats.some(c => c.key === currentCat);
+  footer.innerHTML = 'Modifications enregistrées automatiquement, visibles par toute l\'équipe. ' +
+    '<span class="reset-link" id="resetBtn">Réinitialiser (' + escapeHtml(teamLabel(currentTeam)) + ')</span>' +
+    (isCustomCat ? ' &nbsp;·&nbsp; <span class="reset-link" id="deleteCatBtn">Supprimer cette catégorie</span>' : '');
+  document.getElementById('resetBtn').addEventListener('click', onResetCategory);
+  const delCatBtn = document.getElementById('deleteCatBtn');
+  if(delCatBtn) delCatBtn.addEventListener('click', onDeleteCategory);
+}
+
+async function onResetCategory(){
+  if(!confirm('Réinitialiser les données de "' + catLabel(currentCat) + '" pour l\'équipe "' + teamLabel(currentTeam) + '" ? Action irréversible.')) return;
+  perTeamState[currentTeam][currentCat] = itemsFor(currentCat).map(it => defaultItemState(it));
+  try{ await window.storage.delete('inv:' + currentTeam + ':' + currentCat, true); }catch(e){}
+  openIndex = null;
+  renderTabs();
+  renderList();
+}
+
+async function onDeleteCategory(){
+  if(!confirm('Supprimer complètement la catégorie "' + catLabel(currentCat) + '" et toutes les données de toutes les équipes ?')) return;
+  const catToDelete = currentCat;
+  customCats = customCats.filter(c => c.key !== catToDelete);
+  await saveCustomCats();
+  try{ await window.storage.delete('inv:extra:' + catToDelete, true); }catch(e){}
+  for(const t of teams){
+    try{ await window.storage.delete('inv:' + t.id + ':' + catToDelete, true); }catch(e){}
+    if(perTeamState[t.id]) delete perTeamState[t.id][catToDelete];
+  }
+  delete extraItems[catToDelete];
+  currentCat = allCatKeys()[0];
+  openIndex = null;
+  if(currentTeam === 'TOTAL'){
+    for(const t of teams){ await ensureTeamCatLoaded(t.id, currentCat); }
+  } else {
+    await ensureTeamCatLoaded(currentTeam, currentCat);
+  }
+  renderTeamBar();
+  renderTabs();
+  renderList();
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function escapeAttr(str){ return escapeHtml(str); }
+
+/* ---- Recherche globale + suggestions (tous onglets, présents et futurs) ---- */
+function highlightMatch(name, query){
+  const i = name.toLowerCase().indexOf(query.toLowerCase());
+  if(i < 0) return escapeHtml(name);
+  return escapeHtml(name.slice(0,i)) + '<mark>' + escapeHtml(name.slice(i, i+query.length)) + '</mark>' + escapeHtml(name.slice(i+query.length));
+}
+
+function buildSuggestions(query){
+  // Cherche dans TOUTES les catégories (base + lourd + personnalisées, actuelles et futures)
+  const results = [];
+  allCatKeys().forEach(cat => {
+    const items = itemsFor(cat);
+    items.forEach((it, idx) => {
+      if(it.header) return;
+      const cleanName = it.name.replace(/\n/g,' ');
+      if(cleanName.toLowerCase().includes(query.toLowerCase())){
+        results.push({ cat, idx, name: cleanName });
+      }
+    });
+  });
+  return results;
+}
+
+function renderSuggestions(){
+  const box = document.getElementById('suggestions');
+  const query = document.getElementById('search').value.trim();
+  if(query.length < 1){
+    box.classList.remove('show');
+    box.innerHTML = '';
+    return;
+  }
+  const results = buildSuggestions(query);
+  if(results.length === 0){
+    box.innerHTML = '<div class="suggestion-empty">Aucun article trouvé pour « ' + escapeHtml(query) + ' »</div>';
+    box.classList.add('show');
+    return;
+  }
+  // Limite l'affichage pour rester lisible
+  const shown = results.slice(0, 40);
+  box.innerHTML = shown.map(r =>
+    `<div class="suggestion" data-cat="${escapeAttr(r.cat)}" data-idx="${r.idx}">
+      <span class="suggestion-name">${highlightMatch(r.name, query)}</span>
+      <span class="suggestion-cat">${escapeHtml(catLabel(r.cat))}</span>
+    </div>`
+  ).join('') + (results.length > shown.length
+      ? `<div class="suggestion-empty">+ ${results.length - shown.length} autres résultats…</div>`
+      : '');
+  box.classList.add('show');
+  box.querySelectorAll('.suggestion').forEach(el => {
+    el.addEventListener('click', () => goToSuggestion(el.dataset.cat, parseInt(el.dataset.idx, 10)));
+  });
+}
+
+async function goToSuggestion(cat, idx){
+  // Bascule vers l'onglet et ouvre l'article correspondant
+  currentCat = cat;
+  openIndex = idx;
+  document.getElementById('search').value = '';
+  document.getElementById('suggestions').classList.remove('show');
+  document.getElementById('suggestions').innerHTML = '';
+  if(currentTeam === 'TOTAL'){
+    for(const t of teams){ await ensureTeamCatLoaded(t.id, currentCat); }
+  } else {
+    await ensureTeamCatLoaded(currentTeam, currentCat);
+  }
+  renderTabs();
+  renderList();
+  // Fait défiler jusqu'à la carte ouverte
+  setTimeout(() => {
+    const openCard = document.querySelector('.card.open');
+    if(openCard) openCard.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 60);
+}
+
+document.getElementById('search').addEventListener('input', () => {
+  renderSuggestions();  // suggestions globales pendant la frappe
+  renderList();         // filtre aussi l'onglet courant
+});
+// Ferme les suggestions si on tape Échap
+document.getElementById('search').addEventListener('keydown', (e) => {
+  if(e.key === 'Escape'){
+    document.getElementById('search').value = '';
+    document.getElementById('suggestions').classList.remove('show');
+    renderList();
+  }
+});
+// Ferme les suggestions en cliquant ailleurs
+document.addEventListener('click', (e) => {
+  const box = document.getElementById('suggestions');
+  const inp = document.getElementById('search');
+  if(box && !box.contains(e.target) && e.target !== inp){
+    box.classList.remove('show');
+  }
+});
+
+/* ---- Modals ---- */
+function closeModal(){
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('modalBox').innerHTML = '';
+}
+document.getElementById('overlay').addEventListener('click', (e) => {
+  if(e.target.id === 'overlay') closeModal();
+});
+
+function openAddCategoryModal(){
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <h3>Nouvel onglet</h3>
+    <div class="field">
+      <label>Nom de la catégorie</label>
+      <input type="text" id="newCatName" placeholder="ex: Véhicules">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" id="cancelCat">Annuler</button>
+      <button class="btn btn-confirm" id="confirmCat">Créer</button>
+    </div>
+  `;
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('cancelCat').onclick = closeModal;
+  document.getElementById('confirmCat').onclick = async () => {
+    const nameInput = document.getElementById('newCatName');
+    const name = nameInput.value.trim();
+    if(!name) { nameInput.focus(); return; }
+    const key = 'custom_' + Date.now();
+    customCats.push({key, label: name});
+    await saveCustomCats();
+    extraItems[key] = [];
+    currentCat = key;
+    openIndex = null;
+    closeModal();
+    if(currentTeam === 'TOTAL'){
+      for(const t of teams){ await ensureTeamCatLoaded(t.id, currentCat); }
+    } else {
+      await ensureTeamCatLoaded(currentTeam, currentCat);
+    }
+    renderTabs();
+    renderList();
+  };
+  setTimeout(() => document.getElementById('newCatName').focus(), 50);
+}
+
+function openAddItemModal(){
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <h3>Nouvel article — ${escapeHtml(catLabel(currentCat))}</h3>
+    <div class="field">
+      <label>Nom de l'article</label>
+      <input type="text" id="newItemName" placeholder="ex: Perceuse à colonne">
+    </div>
+    <div class="field">
+      <label>Identification (optionnel)</label>
+      <input type="text" id="newItemIdent" placeholder="ex: rouge, JAUNE...">
+    </div>
+    <div class="field">
+      <label>Commentaire (optionnel)</label>
+      <input type="text" id="newItemComment" placeholder="Note libre...">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" id="cancelItem">Annuler</button>
+      <button class="btn btn-confirm" id="confirmItem">Ajouter</button>
+    </div>
+  `;
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('cancelItem').onclick = closeModal;
+  document.getElementById('confirmItem').onclick = async () => {
+    const nameInput = document.getElementById('newItemName');
+    const name = nameInput.value.trim();
+    if(!name) { nameInput.focus(); return; }
+    const ident = document.getElementById('newItemIdent').value.trim();
+    const comment = document.getElementById('newItemComment').value.trim();
+    if(!extraItems[currentCat]) extraItems[currentCat] = [];
+    extraItems[currentCat].push({name, header:false, ident, comment, custom:true});
+    await saveExtraItems(currentCat);
+    if(perTeamState[currentTeam] && perTeamState[currentTeam][currentCat]){
+      perTeamState[currentTeam][currentCat].push(defaultItemState({ident, comment}));
+      await window.storage.set('inv:' + currentTeam + ':' + currentCat, JSON.stringify(perTeamState[currentTeam][currentCat]), true);
+    }
+    closeModal();
+    openIndex = itemsFor(currentCat).length - 1;
+    renderTabs();
+    renderList();
+  };
+  setTimeout(() => document.getElementById('newItemName').focus(), 50);
+}
+
+function openEditTeamsModal(){
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <h3>Noms des emplacements</h3>
+    ${teams.map((t, idx) => `
+      <div class="field">
+        <label>${escapeHtml(t.id === 'entrepot' ? 'Entrepôt' : 'Équipe ' + (idx+1))}</label>
+        <input type="text" data-team-idx="${idx}" value="${escapeAttr(t.label)}">
+      </div>
+    `).join('')}
+    <div class="modal-actions">
+      <button class="btn btn-cancel" id="cancelTeams">Annuler</button>
+      <button class="btn btn-confirm" id="confirmTeams">Enregistrer</button>
+    </div>
+  `;
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('cancelTeams').onclick = closeModal;
+  document.getElementById('confirmTeams').onclick = async () => {
+    box.querySelectorAll('[data-team-idx]').forEach(inp => {
+      const idx = parseInt(inp.dataset.teamIdx, 10);
+      const val = inp.value.trim();
+      if(val) teams[idx].label = val;
+    });
+    await saveTeams();
+    closeModal();
+    renderTeamBar();
+    renderFooter();
+  };
+}
+
+async function init(){
+  document.getElementById('list').innerHTML = '<div class="empty-msg">Chargement...</div>';
+  await loadTeams();
+  await loadCustomCats();
+  for(const cat of allCatKeys()){
+    await loadExtraItems(cat);
+  }
+  for(const t of teams){ await loadTeamInfo(t.id); }
+  await ensureTeamCatLoaded(currentTeam, currentCat);
+  renderTeamBar();
+  renderTabs();
+  renderList();
+}
+init();
+</script>
+</body>
+</html>
