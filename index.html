@@ -272,6 +272,11 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
   border-color:var(--danger-red);
   color:#fff;
 }
+.team-color-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+.team-band{ display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:8px; margin-bottom:10px; font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; color:#fff; font-size:16px; }
+.team-band .tb-dot{ width:14px; height:14px; border-radius:50%; background:rgba(255,255,255,0.9); }
+.alert-dot{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--danger-red); margin-left:5px; vertical-align:middle; box-shadow:0 0 0 2px rgba(194,59,34,0.25); }
+.team-chip .alert-dot{ margin-left:6px; }
 .tab .count{
   font-size:11px;
   opacity:0.8;
@@ -348,6 +353,9 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 }
 .card.filled{border-left-color: var(--ok-green);}
 .card.missing{border-left-color: var(--danger-red);}
+.card.edge-red{border-left-color: var(--danger-red);}
+.card.edge-yellow{border-left-color: var(--safety-yellow);}
+.card.edge-green{border-left-color: var(--ok-green);}
 .card-row{
   padding:12px 14px;
   display:flex;
@@ -605,7 +613,9 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 </div>
 <div id="app">
   <div class="hdr">
-    <div class="hdr-title"><span class="chip">Inv.</span> Inventaire Équipements</div>
+    <div class="hdr-title"><span class="chip">Inv.</span> Inventaire Équipements
+      <button id="exportBtn" style="margin-left:auto;background:#4c7a3f;color:#f3efe6;border:none;border-radius:6px;padding:7px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;">⬇ Excel</button>
+    </div>
     <div class="search-row">
       <input id="search" class="search-input" type="text" placeholder="Rechercher dans tous les onglets..." autocomplete="off" />
       <div class="save-status" id="saveStatus">&nbsp;</div>
@@ -624,6 +634,7 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 const RAW_DATA = {"BASE": {"label": "Base", "items": [{"name": "PAREMENT", "header": true, "ident": "", "comment": ""}, {"name": "Pelle", "header": false, "ident": "", "comment": ""}, {"name": "Balais 18-24po", "header": false, "ident": "", "comment": ""}, {"name": "Chaudières", "header": false, "ident": "", "comment": ""}, {"name": "Panne métal sur roues", "header": false, "ident": "", "comment": ""}, {"name": "Panne plast. sur roues", "header": false, "ident": "", "comment": ""}, {"name": "Panne métal sans roues", "header": false, "ident": "", "comment": ""}, {"name": "Panne plastique mince", "header": false, "ident": "", "comment": ""}, {"name": "Hose a jardin 50pi", "header": false, "ident": "", "comment": ""}, {"name": "Hose a jardin 100pi", "header": false, "ident": "", "comment": ""}, {"name": "Gun hose a jardin", "header": false, "ident": "", "comment": ""}, {"name": "Baril d’eau", "header": false, "ident": "", "comment": ""}, {"name": "Cube tank d’eau", "header": false, "ident": "", "comment": ""}, {"name": "Déverseur pour cube", "header": false, "ident": "", "comment": "Adapteur L vanne"}, {"name": "Rallonge électrique 25pi", "header": false, "ident": "", "comment": ""}, {"name": "Rallonge électrique 50pi", "header": false, "ident": "", "comment": ""}, {"name": "Rallonge électrique 100pi", "header": false, "ident": "", "comment": ""}, {"name": "Pince a brique", "header": false, "ident": "", "comment": ""}, {"name": "Petite tranche orange", "header": false, "ident": "", "comment": ""}, {"name": "Grosse tranche orange", "header": false, "ident": "", "comment": ""}, {"name": "Jack tranche", "header": false, "ident": "", "comment": ""}, {"name": "Table a mortier", "header": false, "ident": "", "comment": ""}, {"name": "Barabolt (poteau)", "header": false, "ident": "", "comment": ""}, {"name": "Barabolt (plate)", "header": false, "ident": "", "comment": ""}, {"name": "Clous 3-6po", "header": false, "ident": "", "comment": ""}, {"name": "Clou 10po", "header": false, "ident": "", "comment": ""}, {"name": "Serre", "header": false, "ident": "", "comment": ""}, {"name": "Clam de linteau /\ndouille-rallonge 6pi", "header": false, "ident": "rouge", "comment": "Ligne sur linteau structural"}, {"name": "Équerre", "header": false, "ident": "", "comment": ""}, {"name": "Grattoir", "header": false, "ident": "", "comment": ""}, {"name": "Masse", "header": false, "ident": "", "comment": "petite   /   grosse"}, {"name": "Talkie Walkie", "header": false, "ident": "", "comment": ""}, {"name": "Crowbar", "header": false, "ident": "", "comment": ""}, {"name": "Clé 1 ½", "header": false, "ident": "", "comment": ""}, {"name": "Clé 1 5/8", "header": false, "ident": "", "comment": ""}, {"name": "Clé a molette", "header": false, "ident": "", "comment": ""}, {"name": "Coffre a ratchet", "header": false, "ident": "", "comment": ""}, {"name": "BLOCS", "header": true, "ident": "", "comment": ""}, {"name": "Serre de ligne", "header": false, "ident": "", "comment": ""}, {"name": "Serre de porte", "header": false, "ident": "", "comment": ""}, {"name": "Cutter (gros)", "header": false, "ident": "", "comment": ""}, {"name": "Cutter (moyen)", "header": false, "ident": "", "comment": ""}, {"name": "Déverseur a coulis", "header": false, "ident": "", "comment": ""}, {"name": "Racloir a eau", "header": false, "ident": "", "comment": ""}, {"name": "Dépoussiéreur", "header": false, "ident": "", "comment": ""}, {"name": "Préfiltre sur frame", "header": false, "ident": "", "comment": ""}, {"name": "Préfiltre mousse", "header": false, "ident": "", "comment": ""}, {"name": "Laser ligneur", "header": false, "ident": "", "comment": ""}, {"name": "broche", "header": false, "ident": "", "comment": ""}, {"name": "Soufflette manuel", "header": false, "ident": "", "comment": ""}, {"name": "Gun a colle", "header": false, "ident": "", "comment": ""}, {"name": "Gun a caulking", "header": false, "ident": "", "comment": ""}, {"name": "Équerre de soutien mur", "header": false, "ident": "", "comment": ""}, {"name": "Vis 3/8 x 1 ¾", "header": false, "ident": "", "comment": ""}, {"name": "Douille 9/16", "header": false, "ident": "", "comment": ""}, {"name": "Chalk line", "header": false, "ident": "", "comment": ""}]}, "S.S.T.": {"label": "S.S.T.", "items": [{"name": "ÉQUIPEMENT", "header": true, "ident": "", "comment": ""}, {"name": "Cartable de prévention", "header": false, "ident": "", "comment": ""}, {"name": "Séparateur S.S.T.", "header": false, "ident": "", "comment": "voir inventaire"}, {"name": "Dossard signaleur", "header": false, "ident": "JAUNE", "comment": ""}, {"name": "Ruban danger JAUNE", "header": false, "ident": "", "comment": "acces a la zone permis"}, {"name": "Ruban danger ROUGE", "header": false, "ident": "", "comment": "acces a la zone interdit"}, {"name": "Collant DMD périmetre", "header": false, "ident": "", "comment": ""}, {"name": "Harnais", "header": false, "ident": "", "comment": ""}, {"name": "Enrouleur", "header": false, "ident": "", "comment": ""}, {"name": "Cable pour enrouleur", "header": false, "ident": "", "comment": ""}, {"name": "Sangle absorbeur de choc", "header": false, "ident": "", "comment": ""}, {"name": "Cônes routier", "header": false, "ident": "", "comment": ""}, {"name": "Poteau délimiteur", "header": false, "ident": "", "comment": ""}, {"name": "Cadenas noir", "header": false, "ident": "", "comment": ""}, {"name": "Cadenas or", "header": false, "ident": "", "comment": ""}, {"name": "Anémomètre", "header": false, "ident": "", "comment": ""}, {"name": "Sarot pour coupe", "header": false, "ident": "", "comment": ""}, {"name": "Gants pour coupe", "header": false, "ident": "", "comment": ""}, {"name": "Habit tyvek silice", "header": false, "ident": "", "comment": ""}, {"name": "Vérif. extincteur", "header": false, "ident": "", "comment": "équipements lourd"}, {"name": "Balayeuse pour vêtements", "header": false, "ident": "", "comment": ""}, {"name": "SÉPARATEUR S.S.T.", "header": true, "ident": "", "comment": ""}, {"name": "Insp. Quoti lift", "header": false, "ident": "", "comment": ""}, {"name": "Insp. Quoti. Fraco", "header": false, "ident": "", "comment": ""}, {"name": "Insp. Ann. Lift", "header": false, "ident": "", "comment": ""}, {"name": "Inps. Ann. Fraco", "header": false, "ident": "", "comment": ""}, {"name": "Plan de sauvetage", "header": false, "ident": "", "comment": ""}, {"name": "Insp. Échafaudage", "header": false, "ident": "", "comment": ""}, {"name": "Inps. madrier", "header": false, "ident": "", "comment": ""}, {"name": "Insp. Scie a gaz", "header": false, "ident": "", "comment": ""}, {"name": "Insp. Scie a chaine", "header": false, "ident": "", "comment": ""}, {"name": "Identification SILICE", "header": false, "ident": "", "comment": ""}, {"name": "EXTINCTEURS", "header": true, "ident": "", "comment": ""}, {"name": "EXTINCTEUR — 1 par moteur", "header": true, "ident": "", "comment": ""}, {"name": "Nb. de moteur : ___", "header": true, "ident": "", "comment": ""}, {"name": "Extincteur 1", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 2", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 3", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 4", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 5", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 6", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 7", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 8", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 9", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 10", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 11", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 12", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 13", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 14", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 15", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 16", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 17", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 18", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 19", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}, {"name": "Extincteur 20", "header": false, "ident": "", "comment": "", "ext": true, "loc": true}]}, "OUTILS": {"label": "Outils", "items": [{"name": "ÉLECTRIQUE", "header": true, "ident": "", "comment": ""}, {"name": "Batterie 4/5/6 amp.", "header": false, "ident": "", "comment": ""}, {"name": "Batterie 9 amp.", "header": false, "ident": "", "comment": ""}, {"name": "Chargeur simple", "header": false, "ident": "", "comment": ""}, {"name": "Chargeur simple fast", "header": false, "ident": "", "comment": ""}, {"name": "Chargeur multi", "header": false, "ident": "", "comment": ""}, {"name": "Visseuse impac 1/4", "header": false, "ident": "", "comment": "Avec embout 2 grosseurs"}, {"name": "Visseuse drill", "header": false, "ident": "", "comment": ""}, {"name": "Visseuse impac ½", "header": false, "ident": "", "comment": ""}, {"name": "Douille 1 ½", "header": false, "ident": "", "comment": ""}, {"name": "Douille 1 5/8", "header": false, "ident": "", "comment": ""}, {"name": "Skillsaw", "header": false, "ident": "", "comment": "Fil    /     batterie"}, {"name": "SDS plus ( petit )", "header": false, "ident": "", "comment": "Fil    /     batterie"}, {"name": "SDS max ( gros )", "header": false, "ident": "", "comment": "Fil    /    batterie"}, {"name": "Laser pointeur", "header": false, "ident": "", "comment": ""}, {"name": "Grindeur", "header": false, "ident": "", "comment": ""}, {"name": "Sawzal ( passe-partout )", "header": false, "ident": "", "comment": ""}, {"name": "Fusil a clou", "header": false, "ident": "", "comment": ""}, {"name": "Radio ( non fm )", "header": false, "ident": "", "comment": "FM     /     non FM"}, {"name": "Mixette", "header": false, "ident": "", "comment": "Fil    /     batterie"}, {"name": "Extracteur de poussiere", "header": false, "ident": "", "comment": ""}, {"name": "Arbotech", "header": false, "ident": "", "comment": ""}, {"name": "Fusil à graisse", "header": false, "ident": "", "comment": "Manuel     /     batterie"}, {"name": "Fusil à caulking", "header": false, "ident": "", "comment": "Manuel     /     batterie"}, {"name": "Lumières", "header": false, "ident": "", "comment": "Fil    /     batterie"}, {"name": "Quick cut 9po.", "header": false, "ident": "", "comment": ""}, {"name": "Blower", "header": false, "ident": "", "comment": "Petit     /     Gros"}, {"name": "Balayeuse", "header": false, "ident": "", "comment": ""}, {"name": "MOTEUR", "header": true, "ident": "", "comment": ""}, {"name": "Génératrice", "header": false, "ident": "", "comment": ""}, {"name": "Quick cut STIHL", "header": false, "ident": "", "comment": ""}, {"name": "Quick cut rouge", "header": false, "ident": "", "comment": ""}, {"name": "Chainsaw HUSQVARNA", "header": false, "ident": "", "comment": ""}, {"name": "Machine à pression", "header": false, "ident": "", "comment": ""}, {"name": "Balais brosse STIHL", "header": false, "ident": "", "comment": ""}, {"name": "ÉCHELLE", "header": true, "ident": "", "comment": ""}, {"name": "16pi", "header": false, "ident": "", "comment": ""}, {"name": "20pi", "header": false, "ident": "", "comment": ""}, {"name": "24pi", "header": false, "ident": "", "comment": ""}, {"name": "28pi", "header": false, "ident": "", "comment": ""}, {"name": "32pi", "header": false, "ident": "", "comment": ""}, {"name": "Escabeau 4pi", "header": false, "ident": "", "comment": ""}, {"name": "Escabeau 6pi", "header": false, "ident": "", "comment": ""}, {"name": "Escabeau 8pi", "header": false, "ident": "", "comment": ""}]}, "HIVER": {"label": "Hiver", "items": [{"name": "Équipements", "header": true, "ident": "", "comment": ""}, {"name": "Pelle a neige", "header": false, "ident": "", "comment": ""}, {"name": "Torche", "header": false, "ident": "", "comment": ""}, {"name": "Lighter", "header": false, "ident": "", "comment": ""}, {"name": "Pierre-a-feux", "header": false, "ident": "", "comment": ""}, {"name": "Wescott", "header": false, "ident": "", "comment": ""}, {"name": "Bruleur diesel (cochon)", "header": false, "ident": "", "comment": ""}, {"name": "Détecteur Co2", "header": false, "ident": "", "comment": ""}, {"name": "Rouleau de broche", "header": false, "ident": "", "comment": ""}, {"name": "Wiss/Snip/cutter", "header": false, "ident": "", "comment": ""}, {"name": "Bache 10x12", "header": false, "ident": "", "comment": ""}, {"name": "Bache 20x30", "header": false, "ident": "", "comment": ""}, {"name": "Bache 30x50", "header": false, "ident": "", "comment": ""}, {"name": "Toile Fraco", "header": false, "ident": "", "comment": ""}, {"name": "Bois 1x3 / 1x4", "header": false, "ident": "", "comment": ""}, {"name": "Bois 2x3 / 2x4", "header": false, "ident": "", "comment": ""}, {"name": "Baril en métal", "header": false, "ident": "", "comment": ""}, {"name": "Bache orange", "header": false, "ident": "", "comment": ""}]}, "SHACK": {"label": "Shack", "items": [{"name": "Équipements", "header": true, "ident": "", "comment": ""}, {"name": "Chaises", "header": false, "ident": "", "comment": ""}, {"name": "Tables", "header": false, "ident": "", "comment": ""}, {"name": "Micro-ondes", "header": false, "ident": "", "comment": ""}, {"name": "Petit-réfrigérateur", "header": false, "ident": "", "comment": ""}, {"name": "Machine a café", "header": false, "ident": "", "comment": ""}, {"name": "Machine a eau", "header": false, "ident": "", "comment": ""}, {"name": "Bouteille d’eau", "header": false, "ident": "", "comment": ""}]}, "NÉCÉSSAIRE": {"label": "Nécessaire", "items": [{"name": "ROULEAU", "header": true, "ident": "", "comment": ""}, {"name": "Rouleau de ligne", "header": false, "ident": "", "comment": ""}, {"name": "Membrane 3m noir", "header": false, "ident": "", "comment": ""}, {"name": "Membrane 3m blanche", "header": false, "ident": "", "comment": ""}, {"name": "Tucktape", "header": false, "ident": "", "comment": ""}, {"name": "Tape a peinture", "header": false, "ident": "", "comment": ""}, {"name": "Polythène 102po", "header": false, "ident": "", "comment": ""}, {"name": "Polythène 12po", "header": false, "ident": "", "comment": ""}, {"name": "Néoprène", "header": false, "ident": "", "comment": ""}, {"name": "Boudin pour scellant", "header": false, "ident": "", "comment": ""}, {"name": "CARBURANT / LIQUIDE", "header": true, "ident": "", "comment": ""}, {"name": "Diesel", "header": false, "ident": "", "comment": ""}, {"name": "Gaz pure", "header": false, "ident": "", "comment": ""}, {"name": "Gaz mix", "header": false, "ident": "", "comment": ""}, {"name": "Huile STIHL 2t mix", "header": false, "ident": "", "comment": ""}, {"name": "Propane BBQ 20lb.", "header": false, "ident": "", "comment": ""}, {"name": "Propane lift 30llb.", "header": false, "ident": "", "comment": ""}, {"name": "Ralentisseur", "header": false, "ident": "", "comment": ""}, {"name": "Accélérateur", "header": false, "ident": "", "comment": ""}, {"name": "Huile hydrau. AW ISO 32", "header": false, "ident": "", "comment": "Skytrak et mixeur mud hog"}, {"name": "Huile hydrau.  AW ISO 46", "header": false, "ident": "", "comment": "Skytrak et mixeur mud hog"}, {"name": "Huile 10w-40 DIESEL", "header": false, "ident": "", "comment": "Moteur skytrak été"}, {"name": "Huile 10w-30 DIESEL", "header": false, "ident": "", "comment": "Moteur skytrak hiver"}, {"name": "Huile 15w-40 CK DIESEL", "header": false, "ident": "", "comment": "Moteur skytrak annuel"}, {"name": "Huile 10w-30 4temps", "header": false, "ident": "", "comment": "Moteur scie/mixeurs"}, {"name": "Lave-glace", "header": false, "ident": "", "comment": ""}]}, "LOURD_LIFT": {"label": "Lift", "items": [{"name": "Skytrak 6036 2008", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Skytrak 6042 2006", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Skytrak 10054 2008", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Skytrak 10054 2021", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Skytrak 10054 2025", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "JLG 2018", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Lift shop 1998", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Lift shop 2017", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Jigger élec.", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Jigger man.", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}]}, "LOURD_FRACO": {"label": "Fraco", "items": [{"name": "FRACO", "header": true, "ident": "", "comment": ""}, {"name": "20K 2003", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "20K 2005", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "20K 2014", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "20K 2016", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "20K 2017 sur essieu", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "20k 2025", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "ACCESSOIRES FRACO", "header": true, "ident": "", "comment": ""}, {"name": "Clé pour patte", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Poignée pour mont./desc.", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Grue FRK 2025", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Boite d’ancrage Fraco", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Élingue avec crochet", "header": false, "ident": "", "comment": "Pour panne", "loc": true, "vf": true}, {"name": "Poteau avec chaine", "header": false, "ident": "", "comment": "Pour brique", "loc": true, "vf": true}, {"name": "Élingue rouge", "header": false, "ident": "", "comment": "Homologué · Straps", "loc": true, "vf": true}, {"name": "Chaine avec crochets", "header": false, "ident": "", "comment": "Homologué", "loc": true, "vf": true}, {"name": "Hook rouge", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "blocage", "header": false, "ident": "", "comment": "MIN. 4xFraco", "loc": true}, {"name": "Rack gris", "header": false, "ident": "", "comment": "Inventaire plus bas", "loc": true}, {"name": "Pont 10pi angle peint.", "header": false, "ident": "", "comment": "3gates", "loc": true, "vf": true}, {"name": "Pont 10pi droit peint.", "header": false, "ident": "", "comment": "3gates", "loc": true, "vf": true}, {"name": "Pont 10pi angle galv.", "header": false, "ident": "", "comment": "3gates", "loc": true, "vf": true}, {"name": "Pont 10pi droit galv.", "header": false, "ident": "", "comment": "3gates", "loc": true, "vf": true}, {"name": "Pont 7pi peint.", "header": false, "ident": "", "comment": "2gates", "loc": true, "vf": true}, {"name": "Pont 7pi galv.", "header": false, "ident": "", "comment": "2gates", "loc": true, "vf": true}, {"name": "Pont 3pi galv.", "header": false, "ident": "", "comment": "1gates", "loc": true, "vf": true}, {"name": "Bolt de pont", "header": false, "ident": "", "comment": "MIN 2xpont", "loc": true}, {"name": "Gates", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Gate 12po", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Gate échelle de Fraco", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Lisse de gates extrémité", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Garde-corps de run 1.", "header": false, "ident": "", "comment": "MIN 2xmachine", "loc": true}, {"name": "Garde-corps de rigger", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Tours", "header": false, "ident": "", "comment": "5pi", "loc": true, "vf": true}, {"name": "Barrure rouge", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Bolt", "header": false, "ident": "", "comment": "MIN. 4xtour", "loc": true}, {"name": "Clams", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Front pine rigger", "header": false, "ident": "", "comment": "Empêche les madriers de glisser", "loc": true}, {"name": "Gros n braquet (hockey)", "header": false, "ident": "", "comment": "Vien de Loiselle", "loc": true}, {"name": "Side-rigger braquet", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Rigger 6pi-", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Rigger 8pi", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Rigger 10pi", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Rigger 12+", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "RACK GRIS", "header": true, "ident": "", "comment": ""}, {"name": "Gates", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Gates 12po", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Lisse de gates extremité", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Garde-corps de run", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Tours", "header": false, "ident": "", "comment": "", "loc": true, "vf": true}, {"name": "Barrure de tour rouge", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Riggers 8pi", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Riggers 5pi", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "Bolts/pines/clams", "header": false, "ident": "", "comment": "", "loc": true}, {"name": "blocages", "header": false, "ident": "", "comment": "", "loc": true}]}, "LOURD_MIXEUR": {"label": "Mixeur", "items": [{"name": "Mud hog élec.", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mud hog gaz", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mud hog gaz", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mud hog gaz", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mud hog gaz", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mathieu élec.", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Gros Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Petit Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Vieu gros mixeur rouge", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}]}, "LOURD_SCIE": {"label": "Scie", "items": [{"name": "Scie dépoussiéreur A.B.L.", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie dépoussiéreur Mathieu élec.", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie dépoussiéreur Mathieu gaz", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie clipper 20po sur pied", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie clipper 20po sur pied", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie clipper 20po", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie clipper 14po", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie IQ", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie IQ", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie Mathieu", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Cut Quick STIHL", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Cut Quick STIHL", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Cut Quick STIHL", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Cut Quick STIHL", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Scie 9po DEWALT", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Chainsaw HUSQVARNA", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}, {"name": "Chainsaw HUSQVARNA", "header": false, "ident": "", "comment": "", "loc": true, "gas": true}]}, "LOURD_ECHAFAUDAGE": {"label": "Échafaudage", "items": [{"name": "Rack pour pattes", "header": false, "ident": "", "comment": ""}, {"name": "Pattes 6pi", "header": false, "ident": "", "comment": ""}, {"name": "Pattes 5pi", "header": false, "ident": "", "comment": ""}, {"name": "Pattes 30po", "header": false, "ident": "", "comment": ""}, {"name": "Patte stabilisatrice triangle", "header": false, "ident": "", "comment": ""}, {"name": "Patte 2pi de haut", "header": false, "ident": "", "comment": ""}, {"name": "Rack pour croisillons", "header": false, "ident": "", "comment": ""}, {"name": "Croisillons 7pi", "header": false, "ident": "", "comment": ""}, {"name": "Croisillons 10pi", "header": false, "ident": "", "comment": ""}, {"name": "Rack a madriers", "header": false, "ident": "", "comment": "Vrai rack"}, {"name": "Madriers 12pi", "header": false, "ident": "", "comment": ""}, {"name": "Madriers 8pi", "header": false, "ident": "", "comment": ""}, {"name": "Madriers 6pi-", "header": false, "ident": "", "comment": ""}, {"name": "Vérins", "header": false, "ident": "", "comment": ""}, {"name": "Blocages", "header": false, "ident": "", "comment": ""}, {"name": "Braquets", "header": false, "ident": "", "comment": ""}, {"name": "Sides braquets", "header": false, "ident": "", "comment": ""}, {"name": "Braquets 4pi", "header": false, "ident": "", "comment": ""}, {"name": "Braquets 1pi", "header": false, "ident": "", "comment": ""}, {"name": "Braquets toit orange", "header": false, "ident": "", "comment": ""}, {"name": "Crinqueux hydrauliques", "header": false, "ident": "", "comment": "Manuel    /    À Drill"}, {"name": "Poteaux d’ancrage", "header": false, "ident": "", "comment": ""}, {"name": "Piece de poteau d’anc.", "header": false, "ident": "", "comment": ""}, {"name": "Wescott", "header": false, "ident": "", "comment": ""}, {"name": "Garde-corps de run 2.", "header": false, "ident": "", "comment": ""}, {"name": "Garde-corps bouteille", "header": false, "ident": "", "comment": ""}, {"name": "Porte pour patte", "header": false, "ident": "", "comment": ""}, {"name": "Verrous banane 5-5", "header": false, "ident": "", "comment": ""}, {"name": "Verrous banane 5-6", "header": false, "ident": "", "comment": ""}, {"name": "Verrous banane 6-6", "header": false, "ident": "", "comment": ""}, {"name": "Palan", "header": false, "ident": "", "comment": ""}, {"name": "Roues", "header": false, "ident": "", "comment": ""}]}, "LOURD_DIVERS": {"label": "Divers", "items": [{"name": "Benne 4pi large", "header": false, "ident": "", "comment": ""}, {"name": "Benne 5pi large", "header": false, "ident": "", "comment": ""}, {"name": "Slabgrab", "header": false, "ident": "", "comment": ""}, {"name": "Jack pole", "header": false, "ident": "", "comment": ""}, {"name": "Cage a bidons/tank", "header": false, "ident": "", "comment": "Cadena"}, {"name": "Coffre jaune", "header": false, "ident": "", "comment": "Cadena"}, {"name": "Coffre bleu", "header": false, "ident": "", "comment": "Cadena"}, {"name": "Container outils 10x8pi", "header": false, "ident": "", "comment": "Cadena"}, {"name": "Coffre outils noir", "header": false, "ident": "", "comment": "Cadena"}, {"name": "Coffre outils brun", "header": false, "ident": "", "comment": "Cadena"}]}};
 
@@ -662,7 +673,13 @@ window.storage = {
   }
 };
 
-const BASE_CAT_KEYS = Object.keys(RAW_DATA);
+/* Ordre d'affichage des onglets voulu : S.S.T., Lift, Fraco, Mixeur juste après Base.
+   On part de l'ordre souhaité, puis on ajoute toute catégorie oubliée pour ne rien perdre. */
+const CAT_ORDER = ['BASE','S.S.T.','LOURD_LIFT','LOURD_FRACO','LOURD_MIXEUR',
+                   'OUTILS','HIVER','SHACK','NÉCÉSSAIRE',
+                   'LOURD_SCIE','LOURD_ECHAFAUDAGE','LOURD_DIVERS'];
+const BASE_CAT_KEYS = CAT_ORDER.filter(k => RAW_DATA[k])
+  .concat(Object.keys(RAW_DATA).filter(k => !CAT_ORDER.includes(k)));
 const DEFAULT_TEAMS = [1,2,3,4,5,6].map(n => ({id: 'team_' + n, label: 'Équipe ' + n}))
   .concat([{id:'entrepot', label:'Entrepôt'}]);
 const ETATS = ['bon','moyen','mauvais'];
@@ -697,10 +714,19 @@ function defaultItemState(catItem){
    - red    : vide, invalide, ou >= 12 mois écoulés (expiré)
    - orange : entre 9 et 12 mois écoulés (approche)
    - green  : < 9 mois écoulés (à jour) */
+/* Formate une saisie libre en AAAA/MM.
+   Garde uniquement les chiffres, insère la barre après l'année. */
+function formatVerif(val){
+  const d = (val || '').replace(/[^\d]/g, '').slice(0, 6); // max 6 chiffres AAAAMM
+  if(d.length <= 4) return d;
+  return d.slice(0,4) + '/' + d.slice(4);
+}
+
 function verifStatus(val){
   const s = (val || '').trim();
-  const m = s.match(/^(\d{4})-(\d{1,2})$/);
-  if(!m) return { level:'red', label: s ? 'Format AAAA-MM attendu' : 'Aucune date — vérif. requise' };
+  // Accepte 2026/07, 2026-07, 2026.07, 2026 07, ou 202607
+  const m = s.match(/^(\d{4})[\/\-. ]?(\d{1,2})$/);
+  if(!m) return { level:'red', label: s ? 'Format AAAA/MM attendu' : 'Aucune date — vérif. requise' };
   const y = parseInt(m[1],10), mo = parseInt(m[2],10);
   if(mo < 1 || mo > 12) return { level:'red', label:'Mois invalide (01–12)' };
   const now = new Date();
@@ -759,6 +785,23 @@ function etatHintText(est, s){
 
 /* Priorité d'un article : 0 = rouge (urgent), 1 = orange, 2 = normal.
    Prend le pire des trois indicateurs (état, quantité, vérif). */
+/* Couleur de la barre gauche d'un article selon TA règle :
+   - rouge  : quantité insuffisante OU état mauvais
+   - jaune  : état moyen (et rien de rouge)
+   - vert   : le reste (données saisies, tout va bien)
+   - ''     : aucune donnée saisie (barre grise par défaut) */
+function edgeClassFor(s){
+  const est = etatSummary(s);
+  const qst = qtyStatus(s.qte, s.qteReel);
+  const qteManque = qst && qst.level === 'red';
+  const etatMauvais = est && est.x > 0;          // au moins 1 en mauvais
+  const etatMoyen   = est && est.m > 0;          // au moins 1 en moyen
+  if(qteManque || etatMauvais) return ' edge-red';
+  if(etatMoyen) return ' edge-yellow';
+  const hasData = s.qte !== "" || s.qteReel !== "" || !!est;
+  return hasData ? ' edge-green' : '';
+}
+
 function levelRank(level){ return level === 'red' ? 0 : (level === 'orange' ? 1 : 2); }
 function itemPriority(it, s){
   let best = 2;
@@ -846,6 +889,9 @@ function renderTeamInfo(){
   if(currentTeam === 'TOTAL'){ box.classList.remove('show'); box.innerHTML=''; return; }
   const info = teamInfo[currentTeam] || { projet:"", adresse:"", contremaitre:"" };
   box.innerHTML = `
+    <div class="team-band" style="background:${teamColor(currentTeam)}">
+      <span class="tb-dot"></span> ${escapeHtml(teamLabel(currentTeam))}
+    </div>
     <div class="team-info-title">Infos du chantier — ${escapeHtml(teamLabel(currentTeam))}</div>
     <div class="ti-row">
       <div class="ti-field">
@@ -944,13 +990,55 @@ function countFilledForTeam(teamId, cat){
 }
 
 /* ---- Rendering: Team bar ---- */
+/* ---- Couleurs d'identification des équipes ----
+   Palette lisible, distincte, attribuée dans l'ordre des équipes.
+   L'entrepôt a une couleur fixe (gris-bleu) pour se distinguer. */
+const TEAM_COLORS = ['#e8600f','#2f7fd1','#4c7a3f','#b5399b','#d1a300','#0f9d9d','#c23b22','#7a5cff'];
+function teamColor(teamId){
+  if(teamId === 'entrepot') return '#8a94a6';
+  const idx = teams.findIndex(t => t.id === teamId);
+  if(idx < 0) return '#8a94a6';
+  return TEAM_COLORS[idx % TEAM_COLORS.length];
+}
+
+/* Renvoie true si, pour une équipe et une catégorie données,
+   au moins un article est au niveau rouge (priorité 0). */
+function catHasRedForTeam(teamId, cat){
+  const items = itemsFor(cat);
+  const st = (perTeamState[teamId] && perTeamState[teamId][cat]) || [];
+  for(let i=0;i<items.length;i++){
+    const it = items[i];
+    if(it.header) continue;
+    const s = st[i] || defaultItemState(it);
+    if(itemPriority(it, s) === 0) return true;
+  }
+  return false;
+}
+/* true si une équipe a au moins un article rouge, toutes catégories confondues. */
+function teamHasRed(teamId){
+  for(const cat of allCatKeys()){
+    if(catHasRedForTeam(teamId, cat)) return true;
+  }
+  return false;
+}
+/* true si une catégorie a au moins un rouge sur l'ensemble des équipes (vue Total). */
+function catHasRedAnyTeam(cat){
+  for(const t of teams){
+    if(catHasRedForTeam(t.id, cat)) return true;
+  }
+  return false;
+}
+
 function renderTeamBar(){
   const bar = document.getElementById('teamBar');
   bar.innerHTML = '';
   teams.forEach(t => {
     const chip = document.createElement('div');
     chip.className = 'team-chip' + (currentTeam === t.id ? ' active' : '');
-    chip.textContent = t.label;
+    const _col = teamColor(t.id);
+    chip.style.borderLeft = '5px solid ' + _col;
+    if(currentTeam === t.id){ chip.style.background = _col; chip.style.borderColor = _col; chip.style.color = '#fff'; }
+    chip.innerHTML = '<span class="team-color-dot" style="background:' + _col + '"></span>' + escapeHtml(t.label) + (teamHasRed(t.id) ? '<span class="alert-dot" title="Article(s) en rouge"></span>' : '');
     chip.onclick = async () => {
       currentTeam = t.id;
       openIndex = null;
@@ -990,7 +1078,9 @@ function renderTabs(){
       const {filled, total} = countFilledForTeam(currentTeam, cat);
       countHtml = `<span class="count">${filled}/${total}</span>`;
     }
-    tab.innerHTML = `${isSST ? '🦺 ' : ''}${escapeHtml(catLabel(cat))} ${countHtml}`;
+    let hasRed = (currentTeam === 'TOTAL') ? catHasRedAnyTeam(cat) : catHasRedForTeam(currentTeam, cat);
+    const redDot = hasRed ? '<span class="alert-dot" title="Article(s) en rouge"></span>' : '';
+    tab.innerHTML = `${isSST ? '🦺 ' : ''}${escapeHtml(catLabel(cat))} ${countHtml}${redDot}`;
     tab.onclick = async () => {
       currentCat = cat; openIndex = null;
       if(currentTeam === 'TOTAL'){
@@ -1064,7 +1154,7 @@ function renderTeamList(){
     const vst = hasVerif ? verifStatus(s.verif) : null;
     const qst = qtyStatus(s.qte, s.qteReel);
     const card = document.createElement('div');
-    const etatBorder = est ? (est.level === 'red' ? ' missing' : (est.level === 'green' ? ' filled' : '')) : (hasData ? ' filled' : '');
+    const etatBorder = edgeClassFor(s);
     card.className = 'card' + (openIndex === i ? ' open' : '') + etatBorder;
 
     const subParts = [];
@@ -1141,16 +1231,16 @@ function renderTeamList(){
       ${it.vf ? `
       <div class="field-row">
         <div class="field">
-          <label>Vérif. annuelle (année-mois)</label>
-          <input type="text" inputmode="numeric" data-field="verif" class="verif-${vst.level}" value="${escapeAttr(s.verif)}" placeholder="9999-00">
+          <label>Vérif. annuelle (AAAA/MM)</label>
+          <input type="text" inputmode="numeric" data-field="verif" class="verif-${vst.level}" value="${escapeAttr(s.verif)}" placeholder="2026/07">
           <div class="verif-hint ${vst.level}">${escapeHtml(vst.label)}</div>
         </div>
       </div>` : ''}
       ${it.ext ? `
       <div class="field-row">
         <div class="field">
-          <label>Vérif. annuelle (année-mois)</label>
-          <input type="text" inputmode="numeric" data-field="verif" class="verif-${vst.level}" value="${escapeAttr(s.verif)}" placeholder="9999-00">
+          <label>Vérif. annuelle (AAAA/MM)</label>
+          <input type="text" inputmode="numeric" data-field="verif" class="verif-${vst.level}" value="${escapeAttr(s.verif)}" placeholder="2026/07">
           <div class="verif-hint ${vst.level}">${escapeHtml(vst.label)}</div>
         </div>
         <div class="field">
@@ -1184,8 +1274,19 @@ function renderTeamList(){
           st[i][inp.dataset.field] = inp.value;
           scheduleSaveTeamCat(currentTeam, currentCat);
           renderTabs();
+          renderTeamBar();  // met à jour les points rouges d'alerte sur les équipes
+          // Recalcule la couleur de la barre gauche (rouge/jaune/vert) en direct
+          card.classList.remove('filled','missing','edge-red','edge-yellow','edge-green');
+          const _edge = edgeClassFor(st[i]).trim();
+          if(_edge) card.classList.add(_edge);
           // Recolore le champ vérif. en direct sans perdre le focus
           if(inp.dataset.field === 'verif'){
+            const formatted = formatVerif(inp.value);
+            if(formatted !== inp.value){
+              inp.value = formatted;
+              st[i].verif = formatted;
+              inp.setSelectionRange(formatted.length, formatted.length);
+            }
             const vs = verifStatus(inp.value);
             inp.classList.remove('verif-red','verif-orange','verif-green');
             inp.classList.add('verif-' + vs.level);
@@ -1240,8 +1341,7 @@ function renderTeamList(){
               if(!edot && meta2){ edot = document.createElement('span'); edot.setAttribute('data-dot','etat'); meta2.insertBefore(edot, meta2.firstChild); }
               if(edot){ edot.className = 'verif-dot ' + es.level; edot.title = 'État — ' + es.label; }
             } else if(edot){ edot.remove(); }
-            card.classList.remove('filled','missing');
-            if(es){ if(es.level==='red') card.classList.add('missing'); else if(es.level==='green') card.classList.add('filled'); }
+            // (bordure recalculée globalement plus bas)
           }
         });
         inp.addEventListener('click', e => e.stopPropagation());
@@ -1711,6 +1811,73 @@ function openEditTeamsModal(){
   };
 }
 
+/* ============================================================
+   EXPORT EXCEL — toutes les équipes, tout le détail, 1 fichier
+   ============================================================ */
+async function exporterExcel(){
+  const btn = document.getElementById('exportBtn');
+  const old = btn ? btn.textContent : '';
+  if(btn){ btn.textContent = '...'; btn.disabled = true; }
+  try{
+    // S'assurer que toutes les données de toutes les équipes/catégories sont chargées
+    for(const t of teams){
+      for(const cat of allCatKeys()){
+        await ensureTeamCatLoaded(t.id, cat);
+      }
+      await loadTeamInfo(t.id);
+    }
+
+    const rows = [];
+    teams.forEach(t => {
+      const info = teamInfo[t.id] || { projet:'', adresse:'', contremaitre:'' };
+      allCatKeys().forEach(cat => {
+        const items = itemsFor(cat);
+        const st = (perTeamState[t.id] && perTeamState[t.id][cat]) || [];
+        items.forEach((it, i) => {
+          if(it.header) return; // on saute les titres de section
+          const s = st[i] || {};
+          const est = etatSummary(s);
+          rows.push({
+            'Équipe'        : teamLabel(t.id),
+            'N° projet'     : info.projet || '',
+            'Contremaître'  : info.contremaitre || '',
+            'Adresse'       : info.adresse || '',
+            'Catégorie'     : catLabel(cat),
+            'Article'       : (it.name || '').replace(/\n/g,' '),
+            'Qté prévue'    : s.qte ?? '',
+            'Qté réelle'    : s.qteReel ?? '',
+            'Bon'           : s.etatBon ?? '',
+            'Moyen'         : s.etatMoyen ?? '',
+            'Mauvais'       : s.etatMauvais ?? '',
+            'Total évalué'  : est ? est.total : '',
+            'Identification': s.ident || '',
+            'Localisation'  : s.localisation || '',
+            'Vérif (AAAA-MM)': s.verif || '',
+            'Pression'      : s.pression || '',
+            'Huile'         : s.huile || '',
+            'Tune-up'       : s.tuneup || '',
+            'Commentaire'   : s.comment || ''
+          });
+        });
+      });
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Inventaire');
+    const d = new Date();
+    const nom = 'Inventaire_DMD_' + d.getFullYear() + '-' +
+      String(d.getMonth()+1).padStart(2,'0') + '-' +
+      String(d.getDate()).padStart(2,'0') + '.xlsx';
+    XLSX.writeFile(wb, nom);
+  }catch(e){
+    console.error(e);
+    alert("Une erreur est survenue pendant l'export. Réessaie dans un instant.");
+  }finally{
+    if(btn){ btn.textContent = old || '⬇ Excel'; btn.disabled = false; }
+  }
+}
+
 async function init(){
   document.getElementById('list').innerHTML = '<div class="empty-msg">Chargement...</div>';
   await loadTeams();
@@ -1742,6 +1909,7 @@ async function _doLogin(){
   }
 })();
 document.getElementById('loginBtn').addEventListener('click', _doLogin);
+var _expBtn = document.getElementById('exportBtn'); if(_expBtn) _expBtn.addEventListener('click', exporterExcel);
 document.getElementById('loginPass').addEventListener('keydown', e => { if(e.key === 'Enter') _doLogin(); });
 </script>
 </body>
