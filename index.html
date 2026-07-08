@@ -903,6 +903,27 @@ function verifStatus(val){
   return { level:'green', label:'À jour (' + months + ' mois)' };
 }
 
+/* Statut d'un entretien libre (Huile / Tune-up).
+   Le champ est du texte libre (ex. « fait 2025-03 »). On tente d'y trouver
+   une date AAAA-MM ; sinon on considère l'entretien comme non daté.
+   - vide          -> rouge (à faire)
+   - date trouvée  -> même règle que la vérif (>=12 mois rouge, >=9 jaune)
+   - texte sans date -> jaune (présent mais date inconnue)  */
+function entretienStatus(val){
+  const s = (val || '').trim();
+  if(!s) return { level:'red', label:'À faire (aucune date)' };
+  const m = s.match(/(\d{4})[\/\-. ]?(\d{1,2})/);
+  if(!m) return { level:'orange', label:'Date à préciser' };
+  const y = parseInt(m[1],10), mo = parseInt(m[2],10);
+  if(mo < 1 || mo > 12) return { level:'orange', label:'Date à préciser' };
+  const now = new Date();
+  const months = (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - mo);
+  if(months < 0) return { level:'green', label:'Date future' };
+  if(months >= 12) return { level:'red', label:'Expiré (' + months + ' mois)' };
+  if(months >= 9)  return { level:'orange', label:'Bientôt dû (' + months + ' mois)' };
+  return { level:'green', label:'À jour (' + months + ' mois)' };
+}
+
 /* Statut de quantité : compare prévue vs réelle.
    - null   : comparaison impossible (une des deux vide)
    - red    : réelle < prévue (manque)
@@ -1363,7 +1384,11 @@ function renderTabs(){
 
 function matchesSearch(name, query){
   if(!query) return true;
-  return name.toLowerCase().includes(query.toLowerCase());
+  const q = query.toLowerCase();
+  // On découpe le nom en mots ; un article correspond si l'un de ses mots
+  // COMMENCE par ce qui est tapé (pas juste s'il le contient au milieu).
+  const mots = name.toLowerCase().split(/[\s\-/(),.]+/).filter(Boolean);
+  return mots.some(m => m.startsWith(q));
 }
 
 /* ---- Rendering: List (team mode vs total mode) ---- */
@@ -1911,7 +1936,7 @@ function buildSuggestions(query){
     items.forEach((it, idx) => {
       if(it.header) return;
       const cleanName = it.name.replace(/\n/g,' ');
-      if(cleanName.toLowerCase().includes(query.toLowerCase())){
+      if(matchesSearch(cleanName, query)){
         results.push({ cat, idx, name: cleanName });
       }
     });
@@ -2261,9 +2286,9 @@ async function exporterExcel(){
       changes.sort((a,b) => (a.team+a.cat+a.article+a.champ).localeCompare(b.team+b.cat+b.article+b.champ, 'fr'));
     }
 
-    const COLS = ['Article','Qté prévue','Qté réelle','Bon','Moyen','Mauvais','Total évalué',
+    const COLS = ['Catégorie','Article','Qté prévue','Qté réelle','Bon','Moyen','Mauvais','Total évalué',
                   'Identification','Type','Localisation','Vérif','Pression','Huile','Tune-up','Commentaire'];
-    const WIDTHS = [32,10,10,6,7,8,11,14,16,16,10,9,9,9,34];
+    const WIDTHS = [14,32,10,10,6,7,8,11,14,16,16,10,9,9,9,34];
 
     function toNum(v){ const n = parseFloat(v); return isNaN(n) ? null : n; }
     function aUneSaisie(s){
@@ -2302,6 +2327,9 @@ async function exporterExcel(){
       const sws = XLSX.utils.aoa_to_sheet(sAoa);
       sws['!cols'] = [{wch:16},{wch:16},{wch:34},{wch:16},{wch:40}];
       sws['!freeze'] = { xSplit:0, ySplit:5 };
+      // Filtre automatique sur la ligne d'en-tête du tableau (ligne 5, index 4)
+      // -> permet de filtrer les modifications par Équipe, Catégorie, etc.
+      sws['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:4,c:0}, e:{r:Math.max(4, sAoa.length-1), c:4}}) };
       // Fusion des lignes titre/info sur toute la largeur
       sws['!merges'] = [
         {s:{r:0,c:0},e:{r:0,c:4}},
@@ -2333,6 +2361,95 @@ async function exporterExcel(){
       XLSX.utils.book_append_sheet(wb, sws, 'Résumé modifs');
     })();
 
+    // === Feuille 2 : Entretien mécanique (Vérif / Huile / Tune-up en jaune ou rouge) ===
+    (function buildEntretienSheet(){
+      // Rassemble, toutes équipes confondues, les entretiens/vérifs non-verts.
+      const lignes = []; // { equipe, cat, article, type, etat(level), detail }
+      teams.forEach(t => {
+        allCatKeys().forEach(cat => {
+          const items = itemsFor(cat);
+          const st = (perTeamState[t.id] && perTeamState[t.id][cat]) || [];
+          const catNom = catLabel(cat).toUpperCase();
+          items.forEach((it, i) => {
+            if(it.header) return;
+            const s = st[i] || {};
+            const article = (it.name||'').replace(/\n/g,' ');
+            // Vérif annuelle : seulement pour les équipements qui en ont une (vf ou ext)
+            if(it.vf || it.ext){
+              const vs = verifStatus(s.verif);
+              if(vs.level === 'orange' || vs.level === 'red'){
+                lignes.push({ equipe:teamLabel(t.id), cat:catNom, article,
+                  type:'Vérif annuelle', level:vs.level, valeur:(s.verif||'').trim(), detail:vs.label });
+              }
+            }
+            // Huile & Tune-up : seulement pour les moteurs (gas)
+            if(it.gas){
+              const hs = entretienStatus(s.huile);
+              if(hs.level === 'orange' || hs.level === 'red'){
+                lignes.push({ equipe:teamLabel(t.id), cat:catNom, article,
+                  type:'Huile', level:hs.level, valeur:(s.huile||'').trim(), detail:hs.label });
+              }
+              const ts = entretienStatus(s.tuneup);
+              if(ts.level === 'orange' || ts.level === 'red'){
+                lignes.push({ equipe:teamLabel(t.id), cat:catNom, article,
+                  type:'Tune-up', level:ts.level, valeur:(s.tuneup||'').trim(), detail:ts.label });
+              }
+            }
+          });
+        });
+      });
+      // Rouge d'abord, puis jaune ; ensuite par catégorie/article
+      const rank = lv => lv === 'red' ? 0 : 1;
+      lignes.sort((a,b) => rank(a.level)-rank(b.level) || (a.cat+a.article).localeCompare(b.cat+b.article,'fr'));
+
+      const EH = ['Priorité','Équipe','Catégorie','Article','Type d\'entretien','Date inscrite','État'];
+      const aoa = [EH];
+      const meta = [{header:true}];
+      if(lignes.length === 0){
+        aoa.push(['—','','','Aucun entretien ni vérification en attente. Tout est à jour ✔','','','']);
+        meta.push({note:true});
+      }else{
+        lignes.forEach(l => {
+          aoa.push([
+            l.level === 'red' ? 'ROUGE' : 'JAUNE',
+            l.equipe, l.cat, l.article, l.type,
+            l.valeur || '(vide)', l.detail
+          ]);
+          meta.push({level:l.level});
+        });
+      }
+      const ews = XLSX.utils.aoa_to_sheet(aoa);
+      ews['!cols'] = [{wch:10},{wch:16},{wch:14},{wch:32},{wch:16},{wch:16},{wch:30}];
+      ews['!freeze'] = { xSplit:0, ySplit:1 };
+      ews['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:Math.max(0,aoa.length-1), c:EH.length-1}}) };
+      const nR = aoa.length, nC = EH.length;
+      for(let r=0; r<nR; r++){
+        for(let c=0; c<nC; c++){
+          const addr = XLSX.utils.encode_cell({r,c});
+          if(!ews[addr]) ews[addr] = { t:'s', v:'' };
+          const m = meta[r] || {};
+          let fill='FFFFFF', bold=false, fontColor='000000';
+          if(m.header){ fill='232221'; bold=true; fontColor='FFFFFF'; }
+          else if(m.note){ fill='D9EAD3'; bold=true; }
+          else if(m.level === 'red') fill='F4CCCC';
+          else if(m.level === 'orange') fill='FFF2CC';
+          // La colonne Priorité en gras coloré
+          const prioBold = (c===0 && !m.header && !m.note);
+          ews[addr].s = {
+            fill:{ patternType:'solid', fgColor:{rgb:fill} },
+            font:{ name:'Arial', sz: m.header?11:10, bold: bold || prioBold,
+                   color:{rgb: prioBold ? (m.level==='red'?'B00000':'9C6500') : fontColor} },
+            alignment:{ vertical:'center', horizontal:(c===3||c===6)?'left':'center', wrapText:m.header },
+            border:{
+              top:{style:'thin',color:{rgb:'CCCCCC'}}, bottom:{style:'thin',color:{rgb:'CCCCCC'}},
+              left:{style:'thin',color:{rgb:'CCCCCC'}}, right:{style:'thin',color:{rgb:'CCCCCC'}}
+            }
+          };
+        }
+      }
+      XLSX.utils.book_append_sheet(wb, ews, 'Entretien mécanique');
+    })();
+
     teams.forEach(t => {
       // Rassembler les lignes réellement saisies de cette équipe
       const aoa = [COLS.slice()];        // 1re ligne = en-têtes
@@ -2340,6 +2457,7 @@ async function exporterExcel(){
       allCatKeys().forEach(cat => {
         const items = itemsFor(cat);
         const st = (perTeamState[t.id] && perTeamState[t.id][cat]) || [];
+        const catNom = catLabel(cat).toUpperCase();
         const lignesCat = [];
         items.forEach((it, i) => {
           if(it.header) return;
@@ -2355,6 +2473,7 @@ async function exporterExcel(){
           }
           lignesCat.push({
             vals:[
+              catNom,
               (it.name||'').replace(/\n/g,' '),
               it.noQty ? '' : (s.qte ?? ''), it.noQty ? '' : (s.qteReel ?? ''),
               s.etatBon ?? '', s.etatMoyen ?? '', s.etatMauvais ?? '',
@@ -2365,7 +2484,7 @@ async function exporterExcel(){
           });
         });
         if(lignesCat.length){
-          aoa.push([catLabel(cat).toUpperCase(), '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+          aoa.push([catNom, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
           meta.push({cat:true});
           lignesCat.forEach(l => { aoa.push(l.vals); meta.push({couleur:l.couleur}); });
         }
@@ -2377,6 +2496,8 @@ async function exporterExcel(){
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws['!cols'] = WIDTHS.map(w => ({wch:w}));
       ws['!freeze'] = { xSplit:0, ySplit:1 };
+      // Filtre automatique sur la ligne d'en-tête (permet de filtrer par Catégorie, etc.)
+      ws['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:aoa.length-1, c:COLS.length-1}}) };
 
       // Styliser chaque cellule (SheetJS communautaire lit .s si présent)
       const nRows = aoa.length, nCols = COLS.length;
@@ -2395,7 +2516,7 @@ async function exporterExcel(){
           ws[addr].s = {
             fill:{ patternType:'solid', fgColor:{rgb:fill} },
             font:{ name:'Arial', sz: m.header?11:10, bold:bold, color:{rgb:fontColor} },
-            alignment:{ vertical:'center', horizontal:(c===0||c===7||c===8||c===9||c===14)?'left':'center', wrapText:m.header },
+            alignment:{ vertical:'center', horizontal:(c===0||c===1||c===8||c===9||c===10||c===15)?'left':'center', wrapText:m.header },
             border:{
               top:{style:'thin',color:{rgb:'CCCCCC'}}, bottom:{style:'thin',color:{rgb:'CCCCCC'}},
               left:{style:'thin',color:{rgb:'CCCCCC'}}, right:{style:'thin',color:{rgb:'CCCCCC'}}
