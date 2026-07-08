@@ -346,6 +346,7 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 .form-ech.orange{ color:var(--safety-yellow); }
 .form-ech.green{ color:#9c7; }
 .people-admin-btn{ margin-top:6px; margin-left:6px; background:var(--asphalt); color:var(--paper-dim); border:1.5px solid var(--line); border-radius:8px; padding:6px 10px; font-weight:600; font-family:'Barlow',sans-serif; cursor:pointer; font-size:12px; }
+.people-del-btn{ margin-top:6px; margin-left:6px; background:rgba(194,59,34,0.15); color:#e88; border:1.5px solid var(--danger-red); border-radius:8px; padding:6px 10px; font-weight:700; font-family:'Barlow',sans-serif; cursor:pointer; font-size:12px; }
 .admin-zone{ background:rgba(242,183,5,0.08); border:1.5px solid var(--safety-yellow); border-radius:10px; padding:12px; }
 .admin-zone-title{ font-weight:800; color:var(--safety-yellow); font-size:14px; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px; }
 /* Sélection des machines par équipe */
@@ -949,6 +950,29 @@ function teamLabel(id){
 function baseItemsFor(cat){ return (RAW_DATA[cat] && RAW_DATA[cat].items) || []; }
 function itemsFor(cat){ return baseItemsFor(cat).concat(extraItems[cat] || []); }
 
+// Articles masqués par l'admin (partagé, permanent) : { cat: [nomArticle, ...] }
+let hiddenItems = {};
+async function loadHiddenItems(){
+  try{
+    const r = await window.storage.get('inv:hiddenItems', true);
+    if(r && r.value){ const p = JSON.parse(r.value); if(p && typeof p === 'object') hiddenItems = p; }
+  }catch(e){ hiddenItems = {}; }
+}
+async function saveHiddenItems(){
+  try{ await window.storage.set('inv:hiddenItems', JSON.stringify(hiddenItems), true); }catch(e){}
+}
+function itemNameKey(it){ return (it && it.name ? it.name : '').replace(/\n/g,' ').trim(); }
+function isItemHidden(cat, name){
+  const list = hiddenItems[cat];
+  return Array.isArray(list) && list.indexOf((name||'').replace(/\n/g,' ').trim()) !== -1;
+}
+async function hideItem(cat, name){
+  const key = (name||'').replace(/\n/g,' ').trim();
+  if(!hiddenItems[cat]) hiddenItems[cat] = [];
+  if(hiddenItems[cat].indexOf(key) === -1) hiddenItems[cat].push(key);
+  await saveHiddenItems();
+}
+
 function defaultItemState(catItem){
   return { qte:"", qteReel:"", etat:"", etatBon:"", etatMoyen:"", etatMauvais:"", ident: (catItem && catItem.ident) || "", comment: (catItem && catItem.comment) || "", localisation:"", verif:"", pression:"", huile:"", tuneup:"", lame:"", opts:[] };
 }
@@ -1260,6 +1284,7 @@ function countFilledForTeam(teamId, cat){
   let filled = 0, total = 0;
   items.forEach((it, i) => {
     if(it.header) return;
+    if(isItemHidden(cat, it.name)) return;
     total++;
     const s = st[i];
     if(s && (s.qte !== "" || s.qteReel !== "" || s.etatBon !== "" || s.etatMoyen !== "" || s.etatMauvais !== "")) filled++;
@@ -1287,6 +1312,7 @@ function catHasRedForTeam(teamId, cat){
   for(let i=0;i<items.length;i++){
     const it = items[i];
     if(it.header) continue;
+    if(isItemHidden(cat, it.name)) continue;
     const s = st[i] || defaultItemState(it);
     if(itemPriority(it, s) === 0) return true;
   }
@@ -1382,6 +1408,14 @@ async function saveDeviceUser(obj){
       if(prev && prev.value){ const p = JSON.parse(prev.value); if(p && p.extra) rec.extra = p.extra; }
     }catch(e){}
     try{ await window.storage.set('inv:person:' + id, JSON.stringify(rec), true); }catch(e){}
+    // si cet appareil avait été supprimé par l'admin, on le réhabilite
+    try{
+      const raw = await window.storage.get('inv:deletedPeople', true);
+      if(raw && raw.value){
+        const list = JSON.parse(raw.value).filter(x => x !== id);
+        await window.storage.set('inv:deletedPeople', JSON.stringify(list), true);
+      }
+    }catch(e){}
   }
 }
 // Charge tout le répertoire partagé des personnes identifiées
@@ -1412,20 +1446,46 @@ async function setAdmin(on){
 }
 
 /* ---- Formations (Excel importé par l'admin, partagé à tous) ---- */
-// Normalise un nom pour la correspondance (sans accents, casse, ponctuation, ordre)
+// Normalise un nom pour la correspondance (sans accents, casse, ponctuation, tirets)
 function normNom(s){
   return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .replace(/[.,]/g,' ').replace(/\s+/g,' ').trim();
+    .replace(/[.,\-]/g,' ').replace(/\s+/g,' ').trim();
 }
-// Génère les variantes d'un nom pour matcher "Prénom Nom" ET "Nom Prénom"
-function nomVariants(s){
-  const n = normNom(s);
-  const parts = n.split(' ').filter(Boolean);
-  const set = new Set([n]);
-  if(parts.length === 2){ set.add(parts[1] + ' ' + parts[0]); }
-  // trie les mots (indépendant de l'ordre) comme filet de sécurité
-  set.add(parts.slice().sort().join(' '));
-  return set;
+// Distance d'édition (Levenshtein) entre deux mots
+function levenshtein(a, b){
+  if(a === b) return 0;
+  if(!a || !b) return (a.length + b.length);
+  let prev = Array.from({length:b.length+1}, (_,i)=>i);
+  for(let i=0;i<a.length;i++){
+    let cur = [i+1];
+    for(let j=0;j<b.length;j++){
+      cur.push(Math.min(prev[j+1]+1, cur[j]+1, prev[j] + (a[i]!==b[j] ? 1 : 0)));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+// Deux mots se ressemblent-ils ? (tolérance selon la longueur, prudente)
+function motsProches(m1, m2){
+  const d = levenshtein(m1, m2), L = Math.max(m1.length, m2.length);
+  if(L >= 6) return d <= 2;   // mots longs : 2 lettres de différence max
+  if(L >= 4) return d <= 1;   // mots moyens : 1 lettre
+  return d === 0;             // mots courts : exact
+}
+// Deux noms complets correspondent-ils ? (même nb de mots, chaque mot proche, ordre libre)
+function nomsProches(n1, n2){
+  const w1 = normNom(n1).split(' ').filter(Boolean);
+  const w2 = normNom(n2).split(' ').filter(Boolean);
+  if(w1.length !== w2.length || w1.length === 0) return false;
+  const used = new Array(w2.length).fill(false);
+  for(const a of w1){
+    let ok = false;
+    for(let i=0;i<w2.length;i++){
+      if(!used[i] && motsProches(a, w2[i])){ used[i] = true; ok = true; break; }
+    }
+    if(!ok) return false;
+  }
+  return true;
 }
 // Statut d'une échéance de formation (date AAAA-MM-JJ) : rouge expiré, jaune <90j, vert sinon
 function echeanceStatus(dateStr){
@@ -1441,12 +1501,8 @@ function echeanceStatus(dateStr){
 }
 
 function indexFormations(data){
-  // data.people = [{ nom, forms:[{formation, date, attestation, echeance}] }]
-  const parNom = {};
-  (data.people || []).forEach(p => {
-    nomVariants(p.nom).forEach(v => { parNom[v] = p.forms; });
-  });
-  data.parNom = parNom;
+  // On garde la liste des personnes ; la correspondance se fait par similarité au moment de l'affichage.
+  data.people = Array.isArray(data.people) ? data.people : [];
   return data;
 }
 async function loadFormations(){
@@ -1815,6 +1871,8 @@ function renderTeamList(){
       return;
     }
     if(!matchesSearch(it.name, query)) return;
+    // Articles supprimés par l'admin : masqués partout
+    if(isItemHidden(currentCat, it.name)) return;
     // Dans les catégories à sélection : masquer seulement les MACHINES non cochées.
     // Les accessoires / rack gris (non sélectionnables) restent toujours affichés.
     if(isSelectCat(currentCat) && isSelectableItem(it) &&
@@ -1960,7 +2018,8 @@ function renderTeamList(){
         <label>Commentaire</label>
         <input type="text" data-field="comment" value="${escapeAttr(s.comment)}" placeholder="Note libre...">
       </div>
-      ${isExtra ? '<div class="delete-link" data-del-item="1">Supprimer cet article</div>' : ''}
+      ${isExtra ? '<div class="delete-link" data-del-item="1">Supprimer cet article</div>'
+                : (isAdmin ? '<div class="delete-link" data-del-base="1">🔑 Supprimer cet article (admin)</div>' : '')}
     `;
     card.appendChild(body);
     listEl.appendChild(card);
@@ -2084,7 +2143,20 @@ function renderTeamList(){
           renderList();
         });
       }
-      // Options cochables (ex: Fil / Batterie) — plusieurs choix possibles
+      // Admin : masquer un article de base (permanent, toutes équipes, survit aux refontes)
+      const delBase = body.querySelector('[data-del-base]');
+      if(delBase){
+        delBase.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if(!isAdmin) return;
+          if(!confirm('Supprimer définitivement « ' + it.name.replace(/\n/g,' ') + ' » ?\n\n' +
+            'Il disparaîtra pour toutes les équipes et restera supprimé, même après une refonte de l\'app.')) return;
+          await hideItem(currentCat, it.name);
+          openIndex = null;
+          renderTabs();
+          renderList();
+        });
+      }
       body.querySelectorAll('.opt-chip[data-opt]').forEach(chip => {
         chip.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -2201,6 +2273,7 @@ function renderTotalList(){
       return;
     }
     if(!matchesSearch(it.name, query)) return;
+    if(isItemHidden(currentCat, it.name)) return;
     anyVisible = true;
 
     let totalReel = 0, anyNumeric = false;
@@ -2450,11 +2523,12 @@ function closeModal(){
 
 // Rend les formations d'une personne : nom de formation + échéance colorée
 function formationsHtmlFor(nom){
-  if(!formationsData || !formationsData.parNom) return '';
-  // essaie les variantes du nom (Prénom Nom / Nom Prénom)
-  let forms = null;
-  for(const v of nomVariants(nom)){ if(formationsData.parNom[v]){ forms = formationsData.parNom[v]; break; } }
-  if(!forms || !forms.length) return '';
+  if(!formationsData || !Array.isArray(formationsData.people)) return '';
+  // 1) correspondance exacte (normalisée) en priorité ; 2) sinon correspondance proche
+  let match = formationsData.people.find(p => normNom(p.nom) === normNom(nom));
+  if(!match) match = formationsData.people.find(p => nomsProches(p.nom, nom));
+  if(!match || !match.forms || !match.forms.length) return '';
+  const forms = match.forms;
   const items = forms.map(f => {
     const st = echeanceStatus(f.echeance);
     const dot = st ? '<span class="verif-dot ' + st.level + '" style="margin-right:5px;"></span>' : '';
@@ -2489,6 +2563,8 @@ async function openPeopleDirectory(){
         ? '<div class="people-carte"><a href="' + escapeAttr(p.extra.carteUrl) + '" target="_blank" rel="noopener">🪪 Voir la carte / certificat</a></div>' : '';
       const adminCarteBtn = isAdmin
         ? '<button type="button" class="people-admin-btn" data-carte-id="' + escapeAttr(p.id) + '">🔗 ' + (p.extra && p.extra.carteUrl ? 'Modifier' : 'Ajouter') + ' lien carte</button>' : '';
+      const adminDelBtn = isAdmin
+        ? '<button type="button" class="people-del-btn" data-del-id="' + escapeAttr(p.id) + '" data-del-nom="' + escapeAttr(p.nom||'') + '">🗑️ Supprimer</button>' : '';
       return '<div class="people-item' + (isMe ? ' me' : '') + '">' +
         '<div class="people-top"><span class="people-name">' + escapeHtml(p.nom || '(sans nom)') +
           (isMe ? ' <span class="people-you">cet appareil</span>' : '') + '</span>' + equipe + '</div>' +
@@ -2496,7 +2572,7 @@ async function openPeopleDirectory(){
         carte +
         formationsHtmlFor(p.nom) +
         (isMe ? '<button type="button" class="people-edit" id="editMyInfo">✏️ Modifier mes infos</button>' : '') +
-        adminCarteBtn +
+        adminCarteBtn + adminDelBtn +
         '</div>';
     }).join('') + '</div>';
   }
@@ -2574,6 +2650,30 @@ async function openPeopleDirectory(){
         const rec = Object.assign({}, person);
         rec.extra = Object.assign({}, person.extra || {}, { carteUrl: url.trim() });
         try{ await window.storage.set('inv:person:' + pid, JSON.stringify(rec), true); }catch(e){}
+        openPeopleDirectory();
+      };
+    });
+    // Supprimer une fiche
+    box.querySelectorAll('[data-del-id]').forEach(btn => {
+      btn.onclick = async () => {
+        const pid = btn.getAttribute('data-del-id');
+        const pnom = btn.getAttribute('data-del-nom') || 'cette personne';
+        if(!confirm('Supprimer la fiche de « ' + pnom + ' » ?\n\n' +
+          'Elle disparaîtra du répertoire. La personne devra se réidentifier pour recréer sa fiche.')) return;
+        // 1) retirer la fiche partagée
+        try{ await window.storage.delete('inv:person:' + pid, true); }catch(e){}
+        // 2) marquer l'appareil comme "supprimé" pour qu'il ne se recrée pas tout seul
+        try{
+          const raw = await window.storage.get('inv:deletedPeople', true);
+          const list = (raw && raw.value) ? JSON.parse(raw.value) : [];
+          if(list.indexOf(pid) === -1) list.push(pid);
+          await window.storage.set('inv:deletedPeople', JSON.stringify(list), true);
+        }catch(e){}
+        // 3) si c'est CET appareil, effacer l'identité locale -> réidentification forcée
+        if(pid === getDeviceId()){
+          deviceUser = null;
+          try{ await window.storage.delete('inv:deviceUser', false); }catch(e){}
+        }
         openPeopleDirectory();
       };
     });
@@ -2811,6 +2911,7 @@ async function exporterExcel(){
         const st = (perTeamState[t.id] && perTeamState[t.id][cat]) || [];
         items.forEach((it, i) => {
           if(it.header) return;
+          if(isItemHidden(cat, it.name)) return;
           const s = st[i] || {};
           const rec = itemFieldsRec(s);
           rec._by = s._by || '';   // qui a modifié en dernier (non compté dans TRACK)
@@ -3007,6 +3108,7 @@ async function exporterExcel(){
           const catNom = catLabel(cat).toUpperCase();
           items.forEach((it, i) => {
             if(it.header) return;
+            if(isItemHidden(cat, it.name)) return;
             const s = st[i] || {};
             const article = (it.name||'').replace(/\n/g,' ');
             // Vérif annuelle : seulement pour les équipements qui en ont une (vf ou ext)
@@ -3096,6 +3198,7 @@ async function exporterExcel(){
         const lignesCat = [];
         items.forEach((it, i) => {
           if(it.header) return;
+          if(isItemHidden(cat, it.name)) return;
           const s = st[i] || {};
           const est = etatSummary(s);
           const qp = it.noQty ? null : toNum(s.qte), qr = it.noQty ? null : toNum(s.qteReel);
@@ -3200,10 +3303,25 @@ async function init(){
   document.getElementById('list').innerHTML = '<div class="empty-msg">Chargement...</div>';
   await loadTeams();
   await loadCustomCats();
+  await loadHiddenItems();
   await loadMyTeam();
   await loadDeviceUser();
   await loadAdmin();
   await loadFormations();
+  // Si l'admin a supprimé la fiche de cet appareil, on efface l'identité locale
+  // pour forcer une nouvelle identification (et on retire l'appareil de la liste).
+  if(deviceUser && !deviceUser.chantier){
+    try{
+      const raw = await window.storage.get('inv:deletedPeople', true);
+      const list = (raw && raw.value) ? JSON.parse(raw.value) : [];
+      if(list.indexOf(getDeviceId()) !== -1){
+        deviceUser = null;
+        try{ await window.storage.delete('inv:deviceUser', false); }catch(e){}
+        const rest = list.filter(x => x !== getDeviceId());
+        await window.storage.set('inv:deletedPeople', JSON.stringify(rest), true);
+      }
+    }catch(e){}
+  }
   // Assure que l'identité de cet appareil figure dans le répertoire partagé
   if(deviceUser && !deviceUser.chantier && (deviceUser.nom || deviceUser.courriel)){
     try{ await saveDeviceUser(deviceUser); }catch(e){}
