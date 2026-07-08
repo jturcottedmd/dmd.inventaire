@@ -323,7 +323,7 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 .team-band .tb-dot{ width:14px; height:14px; border-radius:50%; background:rgba(255,255,255,0.9); }
 .alert-dot{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--danger-red); margin-left:5px; vertical-align:middle; box-shadow:0 0 0 2px rgba(194,59,34,0.25); }
 .team-chip .alert-dot{ margin-left:6px; }
-.my-team-badge{ margin-left:6px; color:#ffd24a; font-size:13px; vertical-align:middle; text-shadow:0 0 2px rgba(0,0,0,0.4); }
+.my-team-badge{ margin-left:6px; font-size:14px; vertical-align:middle; }
 .tab .count{
   font-size:11px;
   opacity:0.8;
@@ -1229,7 +1229,18 @@ function renderTeamBar(){
     const _col = teamColor(t.id);
     chip.style.borderLeft = '5px solid ' + _col;
     if(currentTeam === t.id){ chip.style.background = _col; chip.style.borderColor = _col; chip.style.color = '#fff'; }
-
+    chip.innerHTML = '<span class="team-color-dot" style="background:' + _col + '"></span>' + escapeHtml(t.label) +
+      (myTeam === t.id ? '<span class="my-team-badge" title="Mon équipe">🔨</span>' : '') +
+      (teamHasRed(t.id) ? '<span class="alert-dot" title="Article(s) en rouge"></span>' : '');
+    chip.onclick = async () => {
+      if(currentTeam === t.id) return; // déjà dessus
+      const ok = await switchToTeam(t.id);
+      if(!ok){ renderTeamBar(); return; } // annulé : on ne change pas
+      currentTeam = t.id;
+      openIndex = null;
+      await ensureTeamCatLoaded(currentTeam, currentCat);
+      renderTeamBar(); renderTabs(); renderList();
+    };
     bar.appendChild(chip);
   });
   const totalChip = document.createElement('div');
@@ -2015,7 +2026,7 @@ function openEditTeamsModal(){
       </div>
     `).join('')}
     <div class="field" style="border-top:1px solid var(--line); padding-top:12px; margin-top:4px;">
-      <label>⭐ Mon équipe (sur cet appareil)</label>
+      <label>🔨 Mon équipe (sur cet appareil)</label>
       <select id="myTeamSelect" style="width:100%; padding:10px 12px; font-size:15px; border-radius:8px; border:2px solid var(--line); background:var(--asphalt-2); color:var(--paper);">
         <option value="">— Aucune (juste consultation) —</option>
         ${teams.map(t => `<option value="${escapeAttr(t.id)}" ${myTeam === t.id ? 'selected' : ''}>${escapeHtml(t.label)}</option>`).join('')}
