@@ -438,8 +438,21 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
   margin:18px 4px 8px;
   padding-bottom:4px;
   border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:8px;
+  cursor:pointer; user-select:none;
 }
 .section-label:first-child{margin-top:4px;}
+.section-label .sec-arrow{
+  display:inline-block; font-size:12px; transition:transform 0.15s ease;
+  color:var(--paper-dim); flex:0 0 auto;
+}
+.section-label.collapsed .sec-arrow{ transform:rotate(-90deg); }
+.section-label .sec-name{ flex:1 1 auto; }
+.section-label .sec-count{
+  font-size:11px; letter-spacing:0.5px; color:var(--paper-dim);
+  background:var(--asphalt-2); border:1px solid var(--line);
+  border-radius:10px; padding:1px 8px; font-weight:600;
+}
 
 .total-banner{
   background:rgba(242,183,5,0.12);
@@ -842,9 +855,16 @@ window.storage = {
       try{ const v = localStorage.getItem(k); return v === null ? null : { key:k, value:v }; }
       catch(e){ return null; }
     }
-    const { data, error } = await _sb.from('inv_store').select('value').eq('key', k).maybeSingle();
-    if(error){ console.error(error); return null; }
-    return data ? { key:k, value:data.value } : null;
+    try{
+      const req = _sb.from('inv_store').select('value').eq('key', k).maybeSingle();
+      // Garde-fou : si le réseau ne répond pas, on n'attend pas indéfiniment.
+      const timeout = new Promise((resolve) => setTimeout(() => resolve({ __timeout:true }), 8000));
+      const res = await Promise.race([req, timeout]);
+      if(res && res.__timeout){ console.warn('storage.get timeout:', k); return null; }
+      const { data, error } = res;
+      if(error){ console.error(error); return null; }
+      return data ? { key:k, value:data.value } : null;
+    }catch(e){ console.error(e); return null; }
   },
   async set(k, value, shared = true){
     if(shared === false){
@@ -882,8 +902,8 @@ window.storage = {
 
 /* Ordre d'affichage des onglets voulu : S.S.T., Lift, Fraco, Mixeur juste après Base.
    On part de l'ordre souhaité, puis on ajoute toute catégorie oubliée pour ne rien perdre. */
-const CAT_ORDER = ['BASE','S.S.T.','LOURD_LIFT','LOURD_FRACO','LOURD_MIXEUR','LOURD_SCIE',
-                   'OUTILS','HIVER','SHACK','NÉCÉSSAIRE',
+const CAT_ORDER = ['BASE','S.S.T.','NÉCÉSSAIRE','OUTILS','LOURD_LIFT','LOURD_FRACO','LOURD_MIXEUR','LOURD_SCIE',
+                   'HIVER','SHACK',
                    'LOURD_ECHAFAUDAGE','LOURD_DIVERS'];
 const BASE_CAT_KEYS = CAT_ORDER.filter(k => RAW_DATA[k])
   .concat(Object.keys(RAW_DATA).filter(k => !CAT_ORDER.includes(k)));
@@ -958,6 +978,26 @@ let isAdmin = false;    // débloqué par code admin, mémorisé localement sur 
 const ADMIN_CODE = 'DMD-ADMIN';   // code admin (modifiable sur demande)
 let formationsData = null; // { colonnes:[...], lignes:[{...}], maj:ISO, parNom:{nomMinuscule:[lignes]} }
 let openIndex = null;
+// Sous-classes (en-têtes) repliées : clés « cat|nomEntête », mémorisées sur l'appareil pour la session
+let collapsedSections = new Set();
+// Onglets déjà initialisés (pour n'appliquer l'état par défaut qu'une seule fois par onglet)
+let sectionsInitCats = new Set();
+function sectionKey(cat, headerName){ return cat + '|' + (headerName||'').replace(/\n/g,' '); }
+function isSectionCollapsed(cat, headerName){ return collapsedSections.has(sectionKey(cat, headerName)); }
+function toggleSection(cat, headerName){
+  const k = sectionKey(cat, headerName);
+  if(collapsedSections.has(k)) collapsedSections.delete(k); else collapsedSections.add(k);
+}
+// Par défaut, à la 1re ouverture d'un onglet : toutes les sous-classes fermées.
+// L'utilisateur les ouvre en cliquant sur le titre.
+function ensureSectionsInit(cat, items){
+  if(sectionsInitCats.has(cat)) return;
+  sectionsInitCats.add(cat);
+  items.forEach(it => {
+    if(!it.header) return;
+    collapsedSections.add(sectionKey(cat, it.name)); // toutes fermées
+  });
+}
 let saveTimer = null;
 
 function allCatKeys(){ return BASE_CAT_KEYS.concat(customCats.map(c => c.key)); }
@@ -1236,7 +1276,9 @@ function renderTeamInfo(){
   `;
   box.classList.add('show');
   box.querySelectorAll('input[data-ti]').forEach(inp => {
+    const prev = inp.value;
     inp.addEventListener('input', () => {
+      if(!confirmForeignEdit(0)){ inp.value = (teamInfo[currentTeam] && teamInfo[currentTeam][inp.dataset.ti]) || ''; inp.blur(); return; }
       if(!teamInfo[currentTeam]) teamInfo[currentTeam] = { projet:"", adresse:"", contremaitre:"" };
       teamInfo[currentTeam][inp.dataset.ti] = inp.value;
       scheduleSaveTeamInfo(currentTeam);
@@ -1272,7 +1314,13 @@ async function ensureTeamCatLoaded(teamId, cat){
     const res = await window.storage.get('inv:' + teamId + ':' + cat, true);
     if(res && res.value){
       const parsed = JSON.parse(res.value);
-      arr = items.map((it, i) => parsed[i] ? {...defaultItemState(it), ...parsed[i]} : defaultItemState(it));
+      arr = items.map((it, i) => {
+        if(!parsed[i]) return defaultItemState(it);
+        const merged = {...defaultItemState(it), ...parsed[i]};
+        // Réinjecte le code officiel (L01, F01, MG01...) si l'équipe n'a rien saisi dans Identification
+        if((!merged.ident || merged.ident === '') && it.ident){ merged.ident = it.ident; }
+        return merged;
+      });
     } else {
       arr = items.map(it => defaultItemState(it));
     }
@@ -1359,13 +1407,43 @@ function catHasRedAnyTeam(cat){
 /* ---- "Mon équipe" (par appareil) : alerte si on ouvre l'inventaire d'une autre équipe ---- */
 // Articles déjà confirmés pour modification sur une autre équipe (clé: teamId|cat|index)
 let foreignEditOK = new Set();
-// Vrai si l'équipe affichée n'est pas "mon équipe" (et que mon équipe est définie)
+// Vrai si l'équipe affichée n'est pas « mon équipe »
 function isForeignTeam(){
-  return !!myTeam && currentTeam !== 'TOTAL' && currentTeam !== myTeam;
+  return currentTeam !== 'TOTAL' && currentTeam !== myTeam;
 }
-// Demande confirmation une seule fois par article avant de modifier une équipe étrangère.
-// Retourne true si la modification est autorisée.
+// Règle : on ne peut modifier l'inventaire que de SA PROPRE équipe (admin inclus).
+// Retourne true seulement si l'utilisateur fait partie de l'équipe affichée.
+let _foreignBlockAlerted = false;
 function confirmForeignEdit(i){
+  // Vue Total : lecture seule
+  if(currentTeam === 'TOTAL') return false;
+  // Mon équipe = équipe affichée -> autorisé
+  if(myTeam && currentTeam === myTeam) return true;
+  // Aucune équipe définie sur cet appareil -> déclarer son équipe d'abord
+  if(!myTeam){
+    if(!_foreignBlockAlerted){
+      _foreignBlockAlerted = true;
+      alert('Pour modifier un inventaire, tu dois d\'abord définir ton équipe.\n\n' +
+            'Fais un appui long sur le nom de ton équipe (barre des équipes) puis choisis « Définir comme mon équipe ».');
+      setTimeout(() => { _foreignBlockAlerted = false; }, 400);
+    }
+    return false;
+  }
+  // Équipe affichée différente de la mienne -> interdit (y compris admin)
+  if(!_foreignBlockAlerted){
+    _foreignBlockAlerted = true;
+    const target = teams.find(x => x.id === currentTeam);
+    const mine = teams.find(x => x.id === myTeam);
+    const targetLabel = target ? target.label : currentTeam;
+    const mineLabel = mine ? mine.label : myTeam;
+    alert('Modification impossible.\n\n' +
+          'Seuls les membres de « ' + targetLabel + ' » peuvent modifier son inventaire.\n' +
+          'Ton équipe est « ' + mineLabel + ' ».');
+    setTimeout(() => { _foreignBlockAlerted = false; }, 400);
+  }
+  return false;
+}
+function _legacyConfirmForeignEdit(i){
   if(!isForeignTeam()) return true;
   const key = currentTeam + '|' + currentCat + '|' + i;
   if(foreignEditOK.has(key)) return true;
@@ -1845,6 +1923,7 @@ function renderMachineSelection(){
   wrap.querySelector('.ms-all').onclick = () => boxes().forEach(b => b.checked = true);
   wrap.querySelector('.ms-none').onclick = () => boxes().forEach(b => b.checked = false);
   wrap.querySelector('.ms-save').onclick = async () => {
+    if(!confirmForeignEdit(0)) return;
     const actifs = boxes().filter(b => b.checked).map(b => b.value);
     if(!machineSel[currentTeam]) machineSel[currentTeam] = {};
     machineSel[currentTeam][cat] = { set:true, actifs };
@@ -1880,19 +1959,38 @@ function renderTeamList(){
   }
 
   const items = itemsFor(currentCat);
+  ensureSectionsInit(currentCat, items);
   const st = (perTeamState[currentTeam] && perTeamState[currentTeam][currentCat]) || [];
   const baseLen = baseItemsFor(currentCat).length;
   let anyVisible = false;
 
+  let curHeaderName = null, curCollapsed = false;
   orderedItemsWithPriority(items, st).forEach(({ it, i }) => {
     if(it.header){
-      if(query) return;
+      if(query){ curHeaderName = null; curCollapsed = false; return; }
+      curHeaderName = (it.name||'').replace(/\n/g,' ');
+      curCollapsed = isSectionCollapsed(currentCat, curHeaderName);
+      // Compter les articles visibles de cette section (pour le badge)
+      let count = 0;
+      for(let j = i + 1; j < items.length; j++){
+        const nx = items[j];
+        if(nx.header) break;
+        if(isItemHidden(currentCat, nx.name)) continue;
+        if(isSelectCat(currentCat) && isSelectableItem(nx) &&
+           !isMachineActive(currentTeam, currentCat, (nx.name||'').replace(/\n/g,' '))) continue;
+        count++;
+      }
       const label = document.createElement('div');
-      label.className = 'section-label';
-      label.textContent = it.name;
+      label.className = 'section-label' + (curCollapsed ? ' collapsed' : '');
+      label.innerHTML = '<span class="sec-arrow">▾</span>' +
+        '<span class="sec-name">' + escapeHtml(it.name) + '</span>' +
+        '<span class="sec-count">' + count + '</span>';
+      label.onclick = () => { toggleSection(currentCat, it.name); renderList(); };
       listEl.appendChild(label);
       return;
     }
+    // Si la sous-classe est repliée, on saute ses articles
+    if(curCollapsed) return;
     if(!matchesSearch(it.name, query)) return;
     // Articles supprimés par l'admin : masqués partout
     if(isItemHidden(currentCat, it.name)) return;
@@ -2229,10 +2327,10 @@ function renderTeamList(){
     listEl.appendChild(empty);
   }
 
-  if(!query && isAdmin){
+  if(!query){
     const addBtn = document.createElement('button');
     addBtn.className = 'add-item-btn';
-    addBtn.textContent = '🔑 + Ajouter un article (admin)';
+    addBtn.textContent = '+ Ajouter un article';
     addBtn.onclick = openAddItemModal;
     listEl.appendChild(addBtn);
   }
@@ -2269,6 +2367,7 @@ function renderTotalList(){
   }
 
   const items = itemsFor(currentCat);
+  ensureSectionsInit(currentCat, items);
   let anyVisible = false;
 
   // Priorité en vue Total : pire priorité parmi toutes les équipes pour l'article
@@ -2298,15 +2397,29 @@ function renderTotalList(){
     flush();
   }
 
+  let curHeaderNameT = null, curCollapsedT = false;
   orderedTotal.forEach(({ it, i }) => {
     if(it.header){
-      if(query) return;
+      if(query){ curHeaderNameT = null; curCollapsedT = false; return; }
+      curHeaderNameT = (it.name||'').replace(/\n/g,' ');
+      curCollapsedT = isSectionCollapsed(currentCat, curHeaderNameT);
+      let count = 0;
+      for(let j = i + 1; j < items.length; j++){
+        const nx = items[j];
+        if(nx.header) break;
+        if(isItemHidden(currentCat, nx.name)) continue;
+        count++;
+      }
       const label = document.createElement('div');
-      label.className = 'section-label';
-      label.textContent = it.name;
+      label.className = 'section-label' + (curCollapsedT ? ' collapsed' : '');
+      label.innerHTML = '<span class="sec-arrow">▾</span>' +
+        '<span class="sec-name">' + escapeHtml(it.name) + '</span>' +
+        '<span class="sec-count">' + count + '</span>';
+      label.onclick = () => { toggleSection(currentCat, it.name); renderList(); };
       listEl.appendChild(label);
       return;
     }
+    if(curCollapsedT) return;
     if(!matchesSearch(it.name, query)) return;
     if(isItemHidden(currentCat, it.name)) return;
     anyVisible = true;
@@ -3034,7 +3147,6 @@ function openAddCategoryModal(){
 }
 
 function openAddItemModal(){
-  if(!isAdmin){ alert('Réservé à l\'administrateur.'); return; }
   const box = document.getElementById('modalBox');
   box.innerHTML = `
     <h3>Nouvel article — ${escapeHtml(catLabel(currentCat))}</h3>
@@ -3489,6 +3601,68 @@ async function exporterExcel(){
       XLSX.utils.book_append_sheet(wb, ews, 'Entretien mécanique');
     })();
 
+    // === Feuille : Matériel de maçonnerie (stock global de l'entreprise) ===
+    await (async function buildMasonrySheet(){
+      if(!masonryData){ await loadMasonry(); }
+      if(!masonryData || !Array.isArray(masonryData.cats)) return;
+      const champs = Array.isArray(masonryData.champs) ? masonryData.champs : [];
+      // En-têtes : Catégorie, Article, [champs dynamiques...], Quantité, Unité
+      const EH = ['Catégorie','Article', ...champs.map(c => c.label), 'Quantité','Unité'];
+      const aoa = [EH];
+      const meta = [{header:true}];
+      let nbArticles = 0;
+      masonryData.cats.forEach(cat => {
+        const items = Array.isArray(cat.items) ? cat.items : [];
+        if(!items.length){
+          aoa.push([cat.nom, '(aucun article)', ...champs.map(()=>''), '', '']);
+          meta.push({cat:true});
+          return;
+        }
+        // Ligne titre de catégorie
+        aoa.push([cat.nom, ...champs.map(()=>''), '', '', ''].slice(0, EH.length));
+        meta.push({cat:true});
+        items.forEach(it => {
+          nbArticles++;
+          const champVals = champs.map(ch => (it[ch.key] != null ? String(it[ch.key]) : ''));
+          const qte = (it.qte !== '' && it.qte != null) ? it.qte : '';
+          aoa.push(['', (it.nom || '(sans nom)'), ...champVals, qte, (it.unite || '')]);
+          meta.push({row:true});
+        });
+      });
+      if(nbArticles === 0 && masonryData.cats.length === 0){
+        aoa.push(['—', 'Aucun matériel enregistré', ...champs.map(()=>''), '', '']);
+        meta.push({note:true});
+      }
+      const mws = XLSX.utils.aoa_to_sheet(aoa);
+      const cols = [{wch:20},{wch:28}, ...champs.map(()=>({wch:16})), {wch:12},{wch:12}];
+      mws['!cols'] = cols;
+      mws['!freeze'] = { xSplit:0, ySplit:1 };
+      mws['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:Math.max(0,aoa.length-1), c:EH.length-1}}) };
+      const nR = aoa.length, nC = EH.length;
+      for(let r=0; r<nR; r++){
+        for(let c=0; c<nC; c++){
+          const addr = XLSX.utils.encode_cell({r,c});
+          if(!mws[addr]) mws[addr] = { t:'s', v:'' };
+          const m = meta[r] || {};
+          let fill='FFFFFF', bold=false, fontColor='000000';
+          if(m.header){ fill='232221'; bold=true; fontColor='FFFFFF'; }
+          else if(m.cat){ fill='D9D2C2'; bold=true; }
+          else if(m.note){ fill='FFF2CC'; bold=true; }
+          mws[addr].s = {
+            fill:{ patternType:'solid', fgColor:{rgb:fill} },
+            font:{ name:'Arial', sz:m.header?11:10, bold:bold, color:{rgb:fontColor} },
+            alignment:{ vertical:'center', horizontal:(c===0||c===1)?'left':'center', wrapText:m.header },
+            border:{
+              top:{style:'thin',color:{rgb:'CCCCCC'}}, bottom:{style:'thin',color:{rgb:'CCCCCC'}},
+              left:{style:'thin',color:{rgb:'CCCCCC'}}, right:{style:'thin',color:{rgb:'CCCCCC'}}
+            }
+          };
+        }
+      }
+      XLSX.utils.book_append_sheet(wb, mws, 'Matériel maçonnerie');
+      if(nbArticles > 0) auMoinsUne = true;
+    })();
+
     teams.forEach(t => {
       // Rassembler les lignes réellement saisies de cette équipe
       const aoa = [COLS.slice()];        // 1re ligne = en-têtes
@@ -3603,13 +3777,16 @@ async function exporterExcel(){
 
 async function init(){
   document.getElementById('list').innerHTML = '<div class="empty-msg">Chargement...</div>';
+  // 1) Réglages de base — en parallèle (indépendants les uns des autres)
   await loadTeams();
-  await loadCustomCats();
-  await loadHiddenItems();
-  await loadMyTeam();
-  await loadDeviceUser();
-  await loadAdmin();
-  await loadFormations();
+  await Promise.all([
+    loadCustomCats(),
+    loadHiddenItems(),
+    loadMyTeam(),
+    loadDeviceUser(),
+    loadAdmin()
+  ]);
+
   // Si l'admin a supprimé la fiche de cet appareil, on efface l'identité locale
   // pour forcer une nouvelle identification (et on retire l'appareil de la liste).
   if(deviceUser && !deviceUser.chantier){
@@ -3626,18 +3803,44 @@ async function init(){
   }
   // Assure que l'identité de cet appareil figure dans le répertoire partagé
   if(deviceUser && !deviceUser.chantier && (deviceUser.nom || deviceUser.courriel)){
-    try{ await saveDeviceUser(deviceUser); }catch(e){}
+    try{ saveDeviceUser(deviceUser); }catch(e){}  // sans await : non bloquant
   }
-  for(const cat of allCatKeys()){
-    await loadExtraItems(cat);
-  }
-  for(const t of teams){ await loadTeamInfo(t.id); }
+
+  // 2) Le strict minimum pour afficher le PREMIER écran :
+  //    les articles ajoutés de l'onglet courant + l'inventaire de l'équipe courante.
+  await Promise.all([
+    loadExtraItems(currentCat),
+    loadTeamInfo(currentTeam)
+  ]);
   await ensureTeamCatLoaded(currentTeam, currentCat);
+
+  // 3) Affichage immédiat : l'utilisateur voit l'app tout de suite.
   renderTeamBar();
   renderTabs();
   renderList();
-  // Identification obligatoire à la première connexion
   if(!deviceUser){ openIdentityModal(true); }
+
+  // 4) Chargement du RESTE en arrière-plan, en parallèle (ne bloque pas l'écran).
+  (async () => {
+    try{
+      const resteCats = allCatKeys().filter(c => c !== currentCat);
+      const resteTeams = teams.filter(t => t.id !== currentTeam);
+      await Promise.all([
+        ...resteCats.map(c => loadExtraItems(c)),
+        ...resteTeams.map(t => loadTeamInfo(t.id)),
+        loadFormations()
+      ]);
+      // Précharge l'inventaire de l'équipe courante pour toutes les catégories,
+      // afin que les compteurs (x/y) et pastilles rouges des onglets soient exacts.
+      if(currentTeam !== 'TOTAL'){
+        await Promise.all(resteCats.map(c => ensureTeamCatLoaded(currentTeam, c)));
+      }
+      // Rafraîchit une fois tout chargé (badges, listes, etc.)
+      renderTeamBar();
+      renderTabs();
+      renderList();
+    }catch(e){ console.error('Chargement arrière-plan', e); }
+  })();
 }
 const LOGIN_EMAIL = "equipe@dmd-inventaire.app";
 async function _doLogin(){
