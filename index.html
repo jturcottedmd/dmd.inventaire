@@ -324,6 +324,18 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 .alert-dot{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--danger-red); margin-left:5px; vertical-align:middle; box-shadow:0 0 0 2px rgba(194,59,34,0.25); }
 .team-chip .alert-dot{ margin-left:6px; }
 .my-team-badge{ margin-left:6px; font-size:14px; vertical-align:middle; }
+.team-ctx-menu{
+  position:fixed; z-index:3000;
+  background:var(--asphalt-2); border:2px solid var(--brick);
+  border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,0.5);
+  padding:6px;
+}
+.team-ctx-menu button{
+  background:var(--brick); color:var(--paper); border:none;
+  border-radius:7px; padding:11px 14px; font-size:14px; font-weight:700;
+  font-family:'Barlow',sans-serif; cursor:pointer; white-space:nowrap;
+}
+.team-ctx-menu button:active{ background:var(--brick-line); }
 .tab .count{
   font-size:11px;
   opacity:0.8;
@@ -1197,27 +1209,64 @@ async function saveMyTeam(teamId){
 // Passe à l'équipe teamId, avec confirmation si ce n'est pas "mon équipe".
 // Retourne true si le changement a lieu, false s'il est annulé.
 async function switchToTeam(teamId){
-  // Première fois : on demande quelle est l'équipe de cet appareil
-  if(!myTeam){
-    const t = teams.find(x => x.id === teamId);
-    const label = t ? t.label : teamId;
-    const ok = confirm('Est-ce que « ' + label + " » est ton équipe sur cet appareil ?\n\n" +
-      "OK = oui, c'est mon équipe (on s'en souviendra).\n" +
-      "Annuler = non, je ne fais que consulter.");
-    if(ok) await saveMyTeam(teamId);
-    return true; // dans les deux cas on ouvre l'équipe demandée
-  }
+  // Si "mon équipe" n'est pas encore défini, on ouvre simplement l'équipe demandée
+  // (le choix de "mon équipe" se fait par appui long -> bouton "Définir comme mon équipe").
+  if(!myTeam) return true;
   // Équipe différente de la mienne -> avertissement
   if(teamId !== myTeam){
     const mine = teams.find(x => x.id === myTeam);
     const target = teams.find(x => x.id === teamId);
     const mineLabel = mine ? mine.label : myTeam;
     const targetLabel = target ? target.label : teamId;
-    const ok = confirm('⚠️ Attention : tu es sur l\'inventaire de « ' + targetLabel + ' », ' +
-      'mais ton équipe est « ' + mineLabel + ' ».\n\nEs-tu bien sûr de vouloir modifier l\'inventaire de « ' + targetLabel + ' » ?');
+    const ok = confirm('Es-tu sûr de vouloir changer l\'inventaire de « ' + targetLabel + ' » ?\n\n' +
+      'Ton équipe est « ' + mineLabel + ' ».');
     if(!ok) return false;
   }
   return true;
+}
+
+// Petit menu flottant sur appui long d'un onglet d'équipe
+function showTeamContextMenu(chip, teamId){
+  // retirer un éventuel menu déjà ouvert
+  const old = document.getElementById('teamCtxMenu');
+  if(old) old.remove();
+  const t = teams.find(x => x.id === teamId);
+  const label = t ? t.label : teamId;
+  const isMine = (myTeam === teamId);
+
+  const menu = document.createElement('div');
+  menu.id = 'teamCtxMenu';
+  menu.className = 'team-ctx-menu';
+  menu.innerHTML = isMine
+    ? '<button data-act="unset">🔨 Retirer « mon équipe »</button>'
+    : '<button data-act="set">🔨 Définir « ' + escapeHtml(label) + ' » comme mon équipe</button>';
+  document.body.appendChild(menu);
+
+  // positionner sous le chip
+  const r = chip.getBoundingClientRect();
+  const mw = menu.offsetWidth;
+  let left = r.left + (r.width/2) - (mw/2);
+  left = Math.max(8, Math.min(left, window.innerWidth - mw - 8));
+  menu.style.left = left + 'px';
+  menu.style.top = (r.bottom + 6) + 'px';
+
+  menu.querySelector('button').onclick = async (e) => {
+    e.stopPropagation();
+    const act = e.currentTarget.getAttribute('data-act');
+    if(act === 'set') await saveMyTeam(teamId);
+    else { myTeam = null; try{ await window.storage.delete('inv:myTeam', false); }catch(err){} }
+    menu.remove();
+    renderTeamBar();
+  };
+
+  // fermer si on touche ailleurs
+  setTimeout(() => {
+    const closer = (ev) => {
+      if(!menu.contains(ev.target)){ menu.remove(); document.removeEventListener('click', closer, true); document.removeEventListener('touchstart', closer, true); }
+    };
+    document.addEventListener('click', closer, true);
+    document.addEventListener('touchstart', closer, true);
+  }, 10);
 }
 
 function renderTeamBar(){
@@ -1233,6 +1282,7 @@ function renderTeamBar(){
       (myTeam === t.id ? '<span class="my-team-badge" title="Mon équipe">🔨</span>' : '') +
       (teamHasRed(t.id) ? '<span class="alert-dot" title="Article(s) en rouge"></span>' : '');
     chip.onclick = async () => {
+      if(chip._lpFired){ chip._lpFired = false; return; } // ignore le clic si un appui long vient de se déclencher
       if(currentTeam === t.id) return; // déjà dessus
       const ok = await switchToTeam(t.id);
       if(!ok){ renderTeamBar(); return; } // annulé : on ne change pas
@@ -1241,6 +1291,22 @@ function renderTeamBar(){
       await ensureTeamCatLoaded(currentTeam, currentCat);
       renderTeamBar(); renderTabs(); renderList();
     };
+    // Appui long -> menu "Définir comme mon équipe"
+    let lpTimer = null;
+    const startLP = (ev) => {
+      clearTimeout(lpTimer);
+      lpTimer = setTimeout(() => {
+        chip._lpFired = true;
+        showTeamContextMenu(chip, t.id);
+      }, 500);
+    };
+    const cancelLP = () => { clearTimeout(lpTimer); };
+    chip.addEventListener('touchstart', startLP, {passive:true});
+    chip.addEventListener('touchend', cancelLP);
+    chip.addEventListener('touchmove', cancelLP);
+    chip.addEventListener('mousedown', startLP);
+    chip.addEventListener('mouseup', cancelLP);
+    chip.addEventListener('mouseleave', cancelLP);
     bar.appendChild(chip);
   });
   const totalChip = document.createElement('div');
