@@ -829,14 +829,14 @@ const BASE_CAT_KEYS = CAT_ORDER.filter(k => RAW_DATA[k])
   ['LOURD_LIFT','LOURD_MIXEUR','LOURD_SCIE'].forEach(cat => {
     const d = RAW_DATA[cat];
     if(!d) return;
-    d.items.forEach(it => { if(!it.header) it.noQty = true; });
+    d.items.forEach(it => { if(!it.header){ it.noQty = true; it.selectable = true; } });
   });
   const fraco = RAW_DATA['LOURD_FRACO'];
   if(fraco){
     let stopped = false;
     fraco.items.forEach(it => {
       if(it.header && /ACCESSOIRES/i.test(it.name)) stopped = true;
-      if(!stopped && !it.header) it.noQty = true;
+      if(!stopped && !it.header){ it.noQty = true; it.selectable = true; } // machines FRACO uniquement
     });
   }
 })();
@@ -1260,6 +1260,8 @@ async function saveMyTeam(teamId){
 
 /* ---- Sélection des machines par équipe (Lift/Fraco/Mixeur/Scie) ---- */
 function isSelectCat(cat){ return SELECT_CATS.indexOf(cat) !== -1; }
+// Un article est-il une "machine" sélectionnable ? (dans Fraco, seules les vraies Fraco le sont)
+function isSelectableItem(it){ return !!(it && it.selectable); }
 async function loadMachineSel(teamId, cat){
   if(!machineSel[teamId]) machineSel[teamId] = {};
   if(machineSel[teamId][cat]) return machineSel[teamId][cat];
@@ -1471,7 +1473,7 @@ function renderMachineSelection(){
   const listEl = document.getElementById('list');
   listEl.innerHTML = '';
   const cat = currentCat;
-  const items = itemsFor(cat).filter(it => !it.header);
+  const items = itemsFor(cat).filter(it => !it.header && isSelectableItem(it));
   const v = (machineSel[currentTeam] && machineSel[currentTeam][cat]) || { set:false, actifs:[] };
   const dejaConfig = v.set;
   // pré-cocher : si déjà configuré, on garde les actifs ; sinon rien de coché
@@ -1550,8 +1552,10 @@ function renderTeamList(){
       return;
     }
     if(!matchesSearch(it.name, query)) return;
-    // Dans les catégories à sélection : ne montrer que les machines actives (sur le chantier)
-    if(isSelectCat(currentCat) && !isMachineActive(currentTeam, currentCat, (it.name||'').replace(/\n/g,' '))) return;
+    // Dans les catégories à sélection : masquer seulement les MACHINES non cochées.
+    // Les accessoires / rack gris (non sélectionnables) restent toujours affichés.
+    if(isSelectCat(currentCat) && isSelectableItem(it) &&
+       !isMachineActive(currentTeam, currentCat, (it.name||'').replace(/\n/g,' '))) return;
     anyVisible = true;
     const s = st[i] || defaultItemState(it);
     const est = etatSummary(s);
@@ -2372,7 +2376,20 @@ async function exporterExcel(){
     }
 
     // Calculer TOUTES les modifications
-    // change = { team, cat, article, champ, avant, apres }
+    // change = { team, cat, article, champ, avant, apres, level? }
+    // Niveau de couleur d'un champ d'après sa valeur APRÈS modif (pour colorer la ligne)
+    function champLevel(fieldKey, after){
+      if(!after) return null;
+      if(fieldKey === 'verif'){ const r = verifStatus(after.verif); return r ? r.level : null; }
+      if(fieldKey === 'huile'){ const r = entretienStatus(after.huile); return r ? r.level : null; }
+      if(fieldKey === 'tuneup'){ const r = entretienStatus(after.tuneup); return r ? r.level : null; }
+      if(fieldKey === 'qte' || fieldKey === 'qteReel'){ const r = qtyStatus(after.qte, after.qteReel); return r ? r.level : null; }
+      if(fieldKey === 'etatBon' || fieldKey === 'etatMoyen' || fieldKey === 'etatMauvais'){
+        const es = etatSummary({ etatBon:after.etatBon, etatMoyen:after.etatMoyen, etatMauvais:after.etatMauvais });
+        return es ? es.level : null;
+      }
+      return null; // ident, type, localisation, pression, lame, commentaire -> neutre
+    }
     const changes = [];
     if(prevSnap){
       const pCats = prevSnap.cats || {}, nCats = snapshotNow.cats || {};
@@ -2410,7 +2427,8 @@ async function exporterExcel(){
         TRACK.forEach(k => {
           const av = before[k] ?? '', ap = after[k] ?? '';
           if(av !== ap){
-            changes.push({ team:teamNom, cat:catNom, article:nom, champ:FIELD_LABELS[k], avant: av===''?'(vide)':av, apres: ap===''?'(vide)':ap });
+            changes.push({ team:teamNom, cat:catNom, article:nom, champ:FIELD_LABELS[k],
+              avant: av===''?'(vide)':av, apres: ap===''?'(vide)':ap, level: champLevel(k, after) });
           }
         });
       });
@@ -2466,7 +2484,7 @@ async function exporterExcel(){
       }else{
         changes.forEach(c => {
           sAoa.push([c.team, c.cat, c.article, c.champ, c.avant + '  →  ' + c.apres]);
-          sMeta.push({row:true});
+          sMeta.push({row:true, level: c.level || null});
         });
       }
       const sws = XLSX.utils.aoa_to_sheet(sAoa);
@@ -2492,6 +2510,10 @@ async function exporterExcel(){
           else if(m.info){ fill='2F2D2B'; fontColor='F3EFE6'; }
           else if(m.header){ fill='D9D2C2'; bold=true; }
           else if(m.note){ fill='FFF2CC'; bold=true; }
+          else if(m.row && m.level === 'red') fill='F4CCCC';
+          else if(m.row && m.level === 'orange') fill='FFF2CC';
+          else if(m.row && m.level === 'green') fill='D9EAD3';
+          // sinon (changement neutre : ident, localisation, type, commentaire...) -> blanc
           sws[addr].s = {
             fill:{ patternType:'solid', fgColor:{rgb:fill} },
             font:{ name:'Arial', sz:sz, bold:bold, color:{rgb:fontColor} },
@@ -2769,3 +2791,4 @@ document.getElementById('loginPass').addEventListener('keydown', e => { if(e.key
 </script>
 </body>
 </html>
+
