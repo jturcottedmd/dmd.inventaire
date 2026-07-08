@@ -332,6 +332,22 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 .people-team{ font-size:12px; font-weight:700; color:var(--paper); background:var(--brick); border-radius:12px; padding:2px 10px; white-space:nowrap; }
 .people-contact{ font-size:13px; color:var(--paper-dim); margin-top:4px; word-break:break-word; }
 .people-contact a{ color:var(--paper-dim); text-decoration:underline; }
+.people-item.me{ border-color:var(--brick); background:rgba(138,47,49,0.18); }
+.people-you{ font-size:11px; font-weight:700; color:var(--paper); background:var(--brick); border-radius:10px; padding:1px 8px; margin-left:4px; vertical-align:middle; }
+.people-edit{ margin-top:8px; background:var(--brick); color:var(--paper); border:none; border-radius:8px; padding:8px 12px; font-weight:700; font-family:'Barlow',sans-serif; cursor:pointer; font-size:13px; }
+.people-carte{ margin-top:6px; font-size:13px; }
+.people-carte a{ color:var(--safety-yellow); text-decoration:underline; font-weight:600; }
+.people-formations{ margin-top:8px; border-top:1px dashed var(--line); padding-top:8px; }
+.pf-title{ font-size:12px; font-weight:700; color:var(--paper-dim); margin-bottom:4px; }
+.formation-line{ font-size:12.5px; color:var(--paper); padding:3px 0; line-height:1.4; }
+.formation-line b{ color:var(--paper-dim); font-weight:700; }
+.form-ech{ font-weight:700; }
+.form-ech.red{ color:#e88; }
+.form-ech.orange{ color:var(--safety-yellow); }
+.form-ech.green{ color:#9c7; }
+.people-admin-btn{ margin-top:6px; margin-left:6px; background:var(--asphalt); color:var(--paper-dim); border:1.5px solid var(--line); border-radius:8px; padding:6px 10px; font-weight:600; font-family:'Barlow',sans-serif; cursor:pointer; font-size:12px; }
+.admin-zone{ background:rgba(242,183,5,0.08); border:1.5px solid var(--safety-yellow); border-radius:10px; padding:12px; }
+.admin-zone-title{ font-weight:800; color:var(--safety-yellow); font-size:14px; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px; }
 /* Sélection des machines par équipe */
 .manage-machines-bar{
   display:flex; align-items:center; justify-content:space-between; gap:10px;
@@ -914,6 +930,9 @@ const SELECT_CATS = ['LOURD_LIFT','LOURD_FRACO','LOURD_MIXEUR','LOURD_SCIE'];
 let machineSel = {};
 // Identité de l'appareil (qui modifie) — mémorisée localement, demandée à la 1re connexion
 let deviceUser = null; // { nom, tel, courriel } ou { chantier:true }
+let isAdmin = false;    // débloqué par code admin, mémorisé localement sur cet appareil
+const ADMIN_CODE = 'DMD-ADMIN';   // code admin (modifiable sur demande)
+let formationsData = null; // { colonnes:[...], lignes:[{...}], maj:ISO, parNom:{nomMinuscule:[lignes]} }
 let openIndex = null;
 let saveTimer = null;
 
@@ -1329,16 +1348,26 @@ async function loadDeviceUser(){
     if(raw && raw.value){ const p = JSON.parse(raw.value); if(p && typeof p === 'object') deviceUser = p; }
   }catch(e){ deviceUser = null; }
 }
+// Identifiant stable de CET appareil (local), pour rattacher sa fiche du répertoire
+let _deviceId = null;
+function getDeviceId(){
+  if(_deviceId) return _deviceId;
+  try{
+    let v = localStorage.getItem('inv:deviceId');
+    if(!v){ v = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8); localStorage.setItem('inv:deviceId', v); }
+    _deviceId = v;
+  }catch(e){ _deviceId = 'dev_' + Math.random().toString(36).slice(2, 10); }
+  return _deviceId;
+}
 async function saveDeviceUser(obj){
   deviceUser = obj;
   try{ await window.storage.set('inv:deviceUser', JSON.stringify(obj), false); }catch(e){}
   // Enregistre aussi dans le répertoire PARTAGÉ (visible par tous les appareils),
   // sauf pour "tablette de chantier" (ce n'est pas une personne).
   if(obj && !obj.chantier && (obj.nom || obj.courriel)){
-    // id stable : courriel en minuscules, sinon nom normalisé
-    const rawId = (obj.courriel || obj.nom || '').toLowerCase().trim();
-    const id = rawId.replace(/[^\w.@-]+/g, '_').slice(0, 120) || ('p_' + Date.now());
+    const id = getDeviceId();   // clé stable par appareil : l'édition met à jour la même fiche
     const rec = {
+      id,
       nom: obj.nom || '',
       tel: obj.tel || '',
       courriel: obj.courriel || '',
@@ -1371,6 +1400,125 @@ async function loadPeopleDirectory(){
   // tri par nom
   people.sort((a,b) => (a.nom||'').localeCompare(b.nom||'', 'fr'));
   return people;
+}
+
+/* ---- Admin (débloqué par code, mémorisé sur cet appareil) ---- */
+async function loadAdmin(){
+  try{ const r = await window.storage.get('inv:isAdmin', false); isAdmin = !!(r && r.value === '1'); }catch(e){ isAdmin = false; }
+}
+async function setAdmin(on){
+  isAdmin = !!on;
+  try{ await window.storage.set('inv:isAdmin', on ? '1' : '0', false); }catch(e){}
+}
+
+/* ---- Formations (Excel importé par l'admin, partagé à tous) ---- */
+// Normalise un nom pour la correspondance (sans accents, casse, ponctuation, ordre)
+function normNom(s){
+  return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[.,]/g,' ').replace(/\s+/g,' ').trim();
+}
+// Génère les variantes d'un nom pour matcher "Prénom Nom" ET "Nom Prénom"
+function nomVariants(s){
+  const n = normNom(s);
+  const parts = n.split(' ').filter(Boolean);
+  const set = new Set([n]);
+  if(parts.length === 2){ set.add(parts[1] + ' ' + parts[0]); }
+  // trie les mots (indépendant de l'ordre) comme filet de sécurité
+  set.add(parts.slice().sort().join(' '));
+  return set;
+}
+// Statut d'une échéance de formation (date AAAA-MM-JJ) : rouge expiré, jaune <90j, vert sinon
+function echeanceStatus(dateStr){
+  const m = (dateStr||'').match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if(!m) return null; // pas une date (ex: N.A., NORME) -> pas de couleur
+  const d = new Date(+m[1], +m[2]-1, +m[3]);
+  if(isNaN(d)) return null;
+  const now = new Date(); now.setHours(0,0,0,0);
+  const jours = Math.round((d - now) / 86400000);
+  if(jours < 0) return { level:'red', label:'Expirée' };
+  if(jours <= 90) return { level:'orange', label:'Bientôt due' };
+  return { level:'green', label:'À jour' };
+}
+
+function indexFormations(data){
+  // data.people = [{ nom, forms:[{formation, date, attestation, echeance}] }]
+  const parNom = {};
+  (data.people || []).forEach(p => {
+    nomVariants(p.nom).forEach(v => { parNom[v] = p.forms; });
+  });
+  data.parNom = parNom;
+  return data;
+}
+async function loadFormations(){
+  try{
+    const r = await window.storage.get('inv:formations', true);
+    if(r && r.value){ const p = JSON.parse(r.value); if(p && Array.isArray(p.people)) formationsData = indexFormations(p); }
+  }catch(e){ formationsData = null; }
+}
+async function saveFormations(data){
+  formationsData = indexFormations(data);
+  try{ await window.storage.set('inv:formations', JSON.stringify({ people:data.people, maj:data.maj }), true); }catch(e){}
+}
+// Lit l'Excel croisé « Liste des formations » : en-têtes sur 2 lignes,
+// blocs de 3 lignes par employé (Date / Attestation reçu / Échéance).
+async function importFormationsFromFile(file){
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type:'array', cellDates:true });
+
+  // Choisir la feuille croisée : celle qui contient "EMPLOYÉ" en haut à gauche
+  // et une ligne "Échéance" dans la colonne 2.
+  let sheet = null;
+  wb.SheetNames.forEach(sn => {
+    const ws = wb.Sheets[sn];
+    const aoa = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:false });
+    const flat = aoa.slice(0,6).map(r => (r||[]).join(' ')).join(' ').toLowerCase();
+    const hasEmp = /employ/.test(flat);
+    const hasEch = aoa.some(r => (r||[]).some(c => /échéance|echeance/i.test(String(c))));
+    if(hasEmp && hasEch && !sheet){ sheet = { sn, aoa }; }
+  });
+  if(!sheet) return { people:[], maj:new Date().toISOString() };
+
+  const aoa = sheet.aoa;
+  const fmt = v => {
+    if(v == null) return '';
+    if(v instanceof Date){ return v.getFullYear() + '-' + String(v.getMonth()+1).padStart(2,'0') + '-' + String(v.getDate()).padStart(2,'0'); }
+    return String(v).trim();
+  };
+
+  // Ligne d'en-tête des formations = celle qui contient "SECOURISTE" (ligne 2 dans ton fichier)
+  let hRow = -1;
+  for(let r=0; r<Math.min(aoa.length, 6); r++){
+    if((aoa[r]||[]).some(c => /secouriste|silice/i.test(String(c)))){ hRow = r; break; }
+  }
+  if(hRow === -1) hRow = 1;
+  // colonnes de formation = à partir de la 3e colonne (index 2), là où il y a un nom en hRow
+  const formCols = [];
+  const headerRow = aoa[hRow] || [];
+  for(let c=2; c<headerRow.length; c++){
+    const nom = fmt(headerRow[c]).replace(/\s+/g,' ').trim();
+    if(nom) formCols.push({ c, nom });
+  }
+
+  // Blocs employés : à partir de la ligne suivant les en-têtes.
+  // Nom en colonne 0 (1re ligne du bloc) ; 3 lignes = Date / Attestation / Échéance.
+  const people = [];
+  let r = hRow + 1;
+  while(r < aoa.length){
+    const nom = fmt((aoa[r]||[])[0]);
+    if(nom){
+      const rowDate = aoa[r] || [], rowAtt = aoa[r+1] || [], rowEch = aoa[r+2] || [];
+      const forms = [];
+      formCols.forEach(({c, nom:fnom}) => {
+        const d = fmt(rowDate[c]), a = fmt(rowAtt[c]), e = fmt(rowEch[c]);
+        if(d || a || e){ forms.push({ formation:fnom, date:d, attestation:a, echeance:e }); }
+      });
+      if(forms.length) people.push({ nom, forms });
+      r += 3;
+    } else {
+      r += 1;
+    }
+  }
+  return { people, maj:new Date().toISOString() };
 }
 // Étiquette courte de l'identité, pour marquer les modifications
 function deviceUserLabel(){
@@ -2300,7 +2448,25 @@ function closeModal(){
   document.getElementById('modalBox').innerHTML = '';
 }
 
-// Répertoire partagé des personnes identifiées (lecture seule)
+// Rend les formations d'une personne : nom de formation + échéance colorée
+function formationsHtmlFor(nom){
+  if(!formationsData || !formationsData.parNom) return '';
+  // essaie les variantes du nom (Prénom Nom / Nom Prénom)
+  let forms = null;
+  for(const v of nomVariants(nom)){ if(formationsData.parNom[v]){ forms = formationsData.parNom[v]; break; } }
+  if(!forms || !forms.length) return '';
+  const items = forms.map(f => {
+    const st = echeanceStatus(f.echeance);
+    const dot = st ? '<span class="verif-dot ' + st.level + '" style="margin-right:5px;"></span>' : '';
+    const ech = f.echeance
+      ? ('<span class="form-ech ' + (st ? st.level : '') + '">' + escapeHtml(f.echeance) + (st && st.level!=='green' ? ' — ' + st.label : '') + '</span>')
+      : '<span class="form-ech">—</span>';
+    return '<div class="formation-line">' + dot + '<b>' + escapeHtml(f.formation) + '</b> · éch : ' + ech + '</div>';
+  }).join('');
+  return '<div class="people-formations"><div class="pf-title">🎓 Formations (' + forms.length + ')</div>' + items + '</div>';
+}
+
+// Répertoire partagé des personnes identifiées
 async function openPeopleDirectory(){
   const box = document.getElementById('modalBox');
   box.innerHTML = '<h3>👤 Identification — Répertoire</h3>' +
@@ -2308,30 +2474,115 @@ async function openPeopleDirectory(){
   document.getElementById('overlay').classList.add('show');
 
   const people = await loadPeopleDirectory();
+  const myId = getDeviceId();
   let rows;
   if(!people.length){
     rows = '<div style="color:var(--paper-dim);font-size:14px;">Aucune personne identifiée pour le moment.</div>';
   }else{
     rows = '<div class="people-list">' + people.map(p => {
+      const isMe = (p.id === myId);
       const equipe = p.equipe ? '<span class="people-team">' + escapeHtml(p.equipe) + '</span>' : '';
       const tel = p.tel ? '<a href="tel:' + escapeAttr(p.tel) + '">' + escapeHtml(p.tel) + '</a>' : '';
       const mail = p.courriel ? '<a href="mailto:' + escapeAttr(p.courriel) + '">' + escapeHtml(p.courriel) + '</a>' : '';
       const contact = [tel, mail].filter(Boolean).join(' · ');
-      return '<div class="people-item">' +
-        '<div class="people-top"><span class="people-name">' + escapeHtml(p.nom || '(sans nom)') + '</span>' + equipe + '</div>' +
+      const carte = (p.extra && p.extra.carteUrl)
+        ? '<div class="people-carte"><a href="' + escapeAttr(p.extra.carteUrl) + '" target="_blank" rel="noopener">🪪 Voir la carte / certificat</a></div>' : '';
+      const adminCarteBtn = isAdmin
+        ? '<button type="button" class="people-admin-btn" data-carte-id="' + escapeAttr(p.id) + '">🔗 ' + (p.extra && p.extra.carteUrl ? 'Modifier' : 'Ajouter') + ' lien carte</button>' : '';
+      return '<div class="people-item' + (isMe ? ' me' : '') + '">' +
+        '<div class="people-top"><span class="people-name">' + escapeHtml(p.nom || '(sans nom)') +
+          (isMe ? ' <span class="people-you">cet appareil</span>' : '') + '</span>' + equipe + '</div>' +
         (contact ? '<div class="people-contact">' + contact + '</div>' : '') +
+        carte +
+        formationsHtmlFor(p.nom) +
+        (isMe ? '<button type="button" class="people-edit" id="editMyInfo">✏️ Modifier mes infos</button>' : '') +
+        adminCarteBtn +
         '</div>';
     }).join('') + '</div>';
   }
+
+  // Bandeau formations (état + bouton d'import pour l'admin)
+  const majTxt = formationsData && formationsData.maj
+    ? ('Formations à jour : ' + new Date(formationsData.maj).toLocaleDateString('fr-CA')) : 'Aucune formation importée.';
+  const adminZone = isAdmin
+    ? '<div class="admin-zone">' +
+        '<div class="admin-zone-title">🔑 Admin</div>' +
+        '<div style="font-size:12px;color:var(--paper-dim);margin-bottom:8px;">' + escapeHtml(majTxt) + '</div>' +
+        '<input type="file" id="formFile" accept=".xlsx,.xls,.csv" style="display:none;">' +
+        '<button class="btn btn-confirm" id="importForm" style="width:100%;margin-bottom:6px;">📥 Mettre à jour les formations (Excel)</button>' +
+        '<button class="btn btn-cancel" id="adminLock" style="width:100%;">Quitter le mode admin</button>' +
+      '</div>'
+    : '<button class="btn btn-cancel" id="adminUnlock" style="width:100%;margin-top:6px;">🔑 Mode admin</button>';
+
   box.innerHTML = '<h3>👤 Identification — Répertoire</h3>' +
-    '<div style="color:var(--paper-dim);font-size:13px;margin-bottom:12px;">' + people.length + ' personne' + (people.length>1?'s':'') + ' identifiée' + (people.length>1?'s':'') + '.</div>' +
+    '<div style="color:var(--paper-dim);font-size:13px;margin-bottom:12px;">' + people.length + ' personne' + (people.length>1?'s':'') + ' identifiée' + (people.length>1?'s':'') + '. Tu peux modifier ta propre fiche.</div>' +
     rows +
-    '<div class="modal-actions" style="margin-top:14px;"><button class="btn btn-cancel" id="closePeople" style="width:100%;">Fermer</button></div>';
+    '<div class="modal-actions" style="margin-top:14px;flex-direction:column;gap:8px;">' +
+      (people.some(p => p.id === myId) ? '' : '<button class="btn btn-confirm" id="addMyInfo" style="width:100%;">👤 M\'ajouter au répertoire</button>') +
+      adminZone +
+      '<button class="btn btn-cancel" id="closePeople" style="width:100%;">Fermer</button>' +
+    '</div>';
+
   document.getElementById('closePeople').onclick = closeModal;
+  const editBtn = document.getElementById('editMyInfo');
+  if(editBtn) editBtn.onclick = () => openIdentityModal(false, true);
+  const addBtn = document.getElementById('addMyInfo');
+  if(addBtn) addBtn.onclick = () => openIdentityModal(false, true);
+
+  // Débloquer / verrouiller admin
+  const unlock = document.getElementById('adminUnlock');
+  if(unlock) unlock.onclick = async () => {
+    const code = prompt('Code admin :');
+    if(code == null) return;
+    if(code.trim() === ADMIN_CODE){ await setAdmin(true); openPeopleDirectory(); }
+    else alert('Code incorrect.');
+  };
+  const lock = document.getElementById('adminLock');
+  if(lock) lock.onclick = async () => { await setAdmin(false); openPeopleDirectory(); };
+
+  // Import Excel des formations (admin)
+  const importBtn = document.getElementById('importForm');
+  const fileInp = document.getElementById('formFile');
+  if(importBtn && fileInp){
+    importBtn.onclick = () => fileInp.click();
+    fileInp.onchange = async () => {
+      const f = fileInp.files && fileInp.files[0];
+      if(!f) return;
+      try{
+        importBtn.textContent = 'Lecture…'; importBtn.disabled = true;
+        const data = await importFormationsFromFile(f);
+        if(!data.people || !data.people.length){ alert('Aucune formation trouvée. Vérifie que la feuille « Liste des formations » est présente.'); }
+        else {
+          await saveFormations(data);
+          const total = data.people.reduce((n,p) => n + p.forms.length, 0);
+          alert(data.people.length + ' employé(s) et ' + total + ' formation(s) importés.');
+        }
+      }catch(e){ console.error(e); alert('Impossible de lire ce fichier Excel.'); }
+      finally{ importBtn.textContent = '📥 Mettre à jour les formations (Excel)'; importBtn.disabled = false; openPeopleDirectory(); }
+    };
+  }
+
+  // Admin : ajouter/modifier le lien de carte d'une personne
+  if(isAdmin){
+    box.querySelectorAll('[data-carte-id]').forEach(btn => {
+      btn.onclick = async () => {
+        const pid = btn.getAttribute('data-carte-id');
+        const person = people.find(x => x.id === pid);
+        const actuel = (person && person.extra && person.extra.carteUrl) || '';
+        const url = prompt('Lien vers la photo de la carte / certificat (Google Drive, etc.) :', actuel);
+        if(url == null) return;
+        const rec = Object.assign({}, person);
+        rec.extra = Object.assign({}, person.extra || {}, { carteUrl: url.trim() });
+        try{ await window.storage.set('inv:person:' + pid, JSON.stringify(rec), true); }catch(e){}
+        openPeopleDirectory();
+      };
+    });
+  }
 }
 
 // Modale d'identification. force=true : impossible de fermer sans identifier.
-function openIdentityModal(force){
+// returnToDir=true : rouvre le répertoire après enregistrement.
+function openIdentityModal(force, returnToDir){
   const box = document.getElementById('modalBox');
   const u = deviceUser || {};
   box.innerHTML = `
@@ -2370,12 +2621,14 @@ function openIdentityModal(force){
     document.getElementById('overlay').dataset.locked = '';
     closeModal();
     renderFooter();
+    if(returnToDir) openPeopleDirectory();
   };
   document.getElementById('idChantier').onclick = async () => {
     await saveDeviceUser({ chantier:true });
     document.getElementById('overlay').dataset.locked = '';
     closeModal();
     renderFooter();
+    if(returnToDir) openPeopleDirectory();
   };
   const cancelBtn = document.getElementById('idCancel');
   if(cancelBtn) cancelBtn.onclick = () => { closeModal(); };
@@ -2949,6 +3202,8 @@ async function init(){
   await loadCustomCats();
   await loadMyTeam();
   await loadDeviceUser();
+  await loadAdmin();
+  await loadFormations();
   // Assure que l'identité de cet appareil figure dans le répertoire partagé
   if(deviceUser && !deviceUser.chantier && (deviceUser.nom || deviceUser.courriel)){
     try{ await saveDeviceUser(deviceUser); }catch(e){}
