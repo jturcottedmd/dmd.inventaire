@@ -797,22 +797,41 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 window.storage = {
-  async get(k){
+  async get(k, shared = true){
+    if(shared === false){
+      try{ const v = localStorage.getItem(k); return v === null ? null : { key:k, value:v }; }
+      catch(e){ return null; }
+    }
     const { data, error } = await _sb.from('inv_store').select('value').eq('key', k).maybeSingle();
     if(error){ console.error(error); return null; }
     return data ? { key:k, value:data.value } : null;
   },
-  async set(k, value){
+  async set(k, value, shared = true){
+    if(shared === false){
+      try{ localStorage.setItem(k, value); return { key:k, value }; }
+      catch(e){ return null; }
+    }
     const { error } = await _sb.from('inv_store').upsert({ key:k, value:value, updated_at:new Date().toISOString() });
     if(error){ console.error(error); return null; }
     return { key:k, value };
   },
-  async delete(k){
+  async delete(k, shared = true){
+    if(shared === false){
+      try{ localStorage.removeItem(k); return { key:k, deleted:true }; }
+      catch(e){ return null; }
+    }
     const { error } = await _sb.from('inv_store').delete().eq('key', k);
     if(error){ console.error(error); return null; }
     return { key:k, deleted:true };
   },
-  async list(prefix){
+  async list(prefix, shared = true){
+    if(shared === false){
+      const keys = [];
+      try{
+        for(let i=0;i<localStorage.length;i++){ const kk = localStorage.key(i); if(!prefix || kk.startsWith(prefix)) keys.push(kk); }
+      }catch(e){}
+      return { keys };
+    }
     let q = _sb.from('inv_store').select('key');
     if(prefix) q = q.like('key', prefix + '%');
     const { data, error } = await q;
