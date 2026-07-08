@@ -324,6 +324,31 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 .alert-dot{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--danger-red); margin-left:5px; vertical-align:middle; box-shadow:0 0 0 2px rgba(194,59,34,0.25); }
 .team-chip .alert-dot{ margin-left:6px; }
 .my-team-badge{ margin-left:6px; font-size:14px; vertical-align:middle; }
+/* Sélection des machines par équipe */
+.manage-machines-bar{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  background:var(--asphalt-2); border:1px solid var(--line); border-radius:10px;
+  padding:10px 14px; margin-bottom:12px; font-weight:600; color:var(--paper-dim);
+}
+.manage-machines-bar button{
+  background:var(--brick); color:var(--paper); border:none; border-radius:8px;
+  padding:8px 14px; font-weight:700; font-family:'Barlow',sans-serif; cursor:pointer; white-space:nowrap;
+}
+.machine-select{ padding:4px 2px 20px; }
+.ms-title{ font-family:'Barlow Condensed',sans-serif; font-weight:800; font-size:22px; text-transform:uppercase; color:var(--paper); margin-bottom:4px; }
+.ms-sub{ color:var(--paper-dim); font-size:14px; margin-bottom:14px; line-height:1.4; }
+.ms-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
+.ms-item{
+  display:flex; align-items:center; gap:12px;
+  background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:10px;
+  padding:12px 14px; cursor:pointer; font-size:15px; color:var(--paper); font-weight:600;
+}
+.ms-item input{ width:20px; height:20px; accent-color:var(--brick); flex:none; }
+.ms-item:has(input:checked){ border-color:var(--brick); background:rgba(138,47,49,0.18); }
+.ms-actions{ display:flex; flex-wrap:wrap; gap:10px; position:sticky; bottom:0; padding-top:8px; }
+.ms-actions button{ flex:1; min-width:110px; padding:12px; border-radius:9px; border:none; font-weight:700; font-family:'Barlow',sans-serif; cursor:pointer; font-size:14px; }
+.ms-all, .ms-none{ background:var(--asphalt-2); color:var(--paper-dim); border:1.5px solid var(--line) !important; }
+.ms-save{ background:var(--brick); color:var(--paper); }
 .team-ctx-menu{
   position:fixed; z-index:3000;
   background:var(--asphalt-2); border:2px solid var(--brick);
@@ -855,6 +880,10 @@ let perTeamState = {}; // teamId -> { cat -> [ {qte,qteReel,etat,ident,comment} 
 let currentTeam = teams[0].id; // or 'TOTAL'
 let currentCat = BASE_CAT_KEYS[0];
 let myTeam = null; // équipe de CET appareil (mémorisée localement), pour l'alerte "bonne équipe ?"
+// Catégories où chaque équipe choisit quelles machines elle a sur son chantier
+const SELECT_CATS = ['LOURD_LIFT','LOURD_FRACO','LOURD_MIXEUR','LOURD_SCIE'];
+// machineSel[teamId][cat] = { set:true/false, actifs:[noms...] }
+let machineSel = {};
 let openIndex = null;
 let saveTimer = null;
 
@@ -872,7 +901,7 @@ function baseItemsFor(cat){ return (RAW_DATA[cat] && RAW_DATA[cat].items) || [];
 function itemsFor(cat){ return baseItemsFor(cat).concat(extraItems[cat] || []); }
 
 function defaultItemState(catItem){
-  return { qte:"", qteReel:"", etat:"", etatBon:"", etatMoyen:"", etatMauvais:"", ident: (catItem && catItem.ident) || "", comment: (catItem && catItem.comment) || "", localisation:"", verif:"", pression:"", huile:"", tuneup:"", opts:[] };
+  return { qte:"", qteReel:"", etat:"", etatBon:"", etatMoyen:"", etatMauvais:"", ident: (catItem && catItem.ident) || "", comment: (catItem && catItem.comment) || "", localisation:"", verif:"", pression:"", huile:"", tuneup:"", lame:"", opts:[] };
 }
 
 /* Statut d'une date de vérif. annuelle au format AAAA-MM.
@@ -1144,6 +1173,7 @@ async function ensureTeamCatLoaded(teamId, cat){
   }
   if(!perTeamState[teamId]) perTeamState[teamId] = {};
   perTeamState[teamId][cat] = arr;
+  if(isSelectCat(cat)) await loadMachineSel(teamId, cat);
   return arr;
 }
 
@@ -1226,6 +1256,30 @@ async function loadMyTeam(){
 async function saveMyTeam(teamId){
   myTeam = teamId;
   try{ await window.storage.set('inv:myTeam', teamId, false); }catch(e){}
+}
+
+/* ---- Sélection des machines par équipe (Lift/Fraco/Mixeur/Scie) ---- */
+function isSelectCat(cat){ return SELECT_CATS.indexOf(cat) !== -1; }
+async function loadMachineSel(teamId, cat){
+  if(!machineSel[teamId]) machineSel[teamId] = {};
+  if(machineSel[teamId][cat]) return machineSel[teamId][cat];
+  let val = { set:false, actifs:[] };
+  try{
+    const raw = await window.storage.get('inv:machines:' + teamId + ':' + cat, true);
+    if(raw && raw.value){ const p = JSON.parse(raw.value); if(p && typeof p === 'object'){ val = { set: !!p.set, actifs: Array.isArray(p.actifs)?p.actifs:[] }; } }
+  }catch(e){}
+  machineSel[teamId][cat] = val;
+  return val;
+}
+async function saveMachineSel(teamId, cat){
+  const v = (machineSel[teamId] && machineSel[teamId][cat]) || { set:true, actifs:[] };
+  try{ await window.storage.set('inv:machines:' + teamId + ':' + cat, JSON.stringify(v), true); }catch(e){}
+}
+// Un article est-il actif (sur le chantier) pour l'équipe courante dans une select-cat ?
+function isMachineActive(teamId, cat, itemName){
+  const v = machineSel[teamId] && machineSel[teamId][cat];
+  if(!v || !v.set) return true;           // pas encore configuré -> tout visible
+  return v.actifs.indexOf(itemName) !== -1;
 }
 // Passe à l'équipe teamId, avec confirmation si ce n'est pas "mon équipe".
 // Retourne true si le changement a lieu, false s'il est annulé.
@@ -1412,11 +1466,75 @@ function renderList(){
   renderFooter();
 }
 
+// Écran de sélection des machines pour l'équipe courante dans une select-cat
+function renderMachineSelection(){
+  const listEl = document.getElementById('list');
+  listEl.innerHTML = '';
+  const cat = currentCat;
+  const items = itemsFor(cat).filter(it => !it.header);
+  const v = (machineSel[currentTeam] && machineSel[currentTeam][cat]) || { set:false, actifs:[] };
+  const dejaConfig = v.set;
+  // pré-cocher : si déjà configuré, on garde les actifs ; sinon rien de coché
+  const coche = new Set(v.actifs);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'machine-select';
+  wrap.innerHTML =
+    '<div class="ms-title">🔧 ' + escapeHtml(catLabel(cat)) + ' — ' + escapeHtml(teamLabel(currentTeam)) + '</div>' +
+    '<div class="ms-sub">Coche les ' + escapeHtml(catLabel(cat).toLowerCase()) + ' présents sur ton chantier. ' +
+      'Les autres restent en réserve et pourront être ajoutés plus tard.</div>' +
+    '<div class="ms-list">' +
+      items.map(it => {
+        const nom = (it.name||'').replace(/\n/g,' ');
+        return '<label class="ms-item"><input type="checkbox" value="' + escapeAttr(nom) + '"' +
+               (coche.has(nom) ? ' checked' : '') + '><span>' + escapeHtml(nom) + '</span></label>';
+      }).join('') +
+    '</div>' +
+    '<div class="ms-actions">' +
+      '<button type="button" class="ms-all">Tout cocher</button>' +
+      '<button type="button" class="ms-none">Tout décocher</button>' +
+      '<button type="button" class="ms-save">Enregistrer ma liste</button>' +
+    '</div>';
+  listEl.appendChild(wrap);
+
+  const boxes = () => Array.from(wrap.querySelectorAll('input[type="checkbox"]'));
+  wrap.querySelector('.ms-all').onclick = () => boxes().forEach(b => b.checked = true);
+  wrap.querySelector('.ms-none').onclick = () => boxes().forEach(b => b.checked = false);
+  wrap.querySelector('.ms-save').onclick = async () => {
+    const actifs = boxes().filter(b => b.checked).map(b => b.value);
+    if(!machineSel[currentTeam]) machineSel[currentTeam] = {};
+    machineSel[currentTeam][cat] = { set:true, actifs };
+    await saveMachineSel(currentTeam, cat);
+    openIndex = null;
+    renderTeamList();
+    renderTabs();
+  };
+}
+
 function renderTeamList(){
   const listEl = document.getElementById('list');
   const query = document.getElementById('search').value.trim();
   listEl.innerHTML = '';
+
+  // Catégories à sélection de machines (Lift/Fraco/Mixeur/Scie) :
+  // si l'équipe n'a pas encore choisi ses machines -> écran de sélection.
+  if(isSelectCat(currentCat)){
+    const v = (machineSel[currentTeam] && machineSel[currentTeam][currentCat]) || { set:false, actifs:[] };
+    if(!v.set){ renderMachineSelection(); return; }
+  }
+
   if(!query){ const b = sstBannerHTML(); if(b){ const d = document.createElement('div'); d.innerHTML = b; listEl.appendChild(d); } }
+  // Bouton "Gérer ma liste" en haut des catégories à sélection
+  if(isSelectCat(currentCat) && !query){
+    const bar = document.createElement('div');
+    bar.className = 'manage-machines-bar';
+    const v = machineSel[currentTeam][currentCat];
+    bar.innerHTML = '<span>🔧 ' + v.actifs.length + ' machine' + (v.actifs.length>1?'s':'') + ' sur le chantier</span>' +
+                    '<button type="button" id="manageMachinesBtn">Gérer ma liste</button>';
+    listEl.appendChild(bar);
+    bar.querySelector('#manageMachinesBtn').onclick = () => { renderMachineSelection(); };
+  }
+
   const items = itemsFor(currentCat);
   const st = (perTeamState[currentTeam] && perTeamState[currentTeam][currentCat]) || [];
   const baseLen = baseItemsFor(currentCat).length;
@@ -1432,6 +1550,8 @@ function renderTeamList(){
       return;
     }
     if(!matchesSearch(it.name, query)) return;
+    // Dans les catégories à sélection : ne montrer que les machines actives (sur le chantier)
+    if(isSelectCat(currentCat) && !isMachineActive(currentTeam, currentCat, (it.name||'').replace(/\n/g,' '))) return;
     anyVisible = true;
     const s = st[i] || defaultItemState(it);
     const est = etatSummary(s);
@@ -1439,6 +1559,8 @@ function renderTeamList(){
     const isExtra = i >= baseLen;
     const hasVerif = !!(it.vf || it.ext);
     const vst = hasVerif ? verifStatus(s.verif) : null;
+    const hst = it.gas ? entretienStatus(s.huile) : null;   // huile
+    const tst = it.gas ? entretienStatus(s.tuneup) : null;  // tune-up
     const qst = qtyStatus(s.qte, s.qteReel);
     const card = document.createElement('div');
     const etatBorder = edgeClassFor(s, it);
@@ -1550,12 +1672,21 @@ function renderTeamList(){
       ${it.gas ? `
       <div class="field-row">
         <div class="field">
-          <label>🛢️ Changement d'huile</label>
-          <input type="text" data-field="huile" value="${escapeAttr(s.huile)}" placeholder="ex: fait 2026-03, ou date">
+          <label>🛢️ Changement d'huile (AAAA/MM)</label>
+          <input type="text" inputmode="numeric" data-field="huile" class="verif-${hst.level}" value="${escapeAttr(s.huile)}" placeholder="2026/03">
+          <div class="verif-hint ${hst.level}">${escapeHtml(hst.label)}</div>
         </div>
         <div class="field">
-          <label>🔧 Tune up</label>
-          <input type="text" data-field="tuneup" value="${escapeAttr(s.tuneup)}" placeholder="ex: fait 2026-03, ou date">
+          <label>🔧 Tune up (AAAA/MM)</label>
+          <input type="text" inputmode="numeric" data-field="tuneup" class="verif-${tst.level}" value="${escapeAttr(s.tuneup)}" placeholder="2026/03">
+          <div class="verif-hint ${tst.level}">${escapeHtml(tst.label)}</div>
+        </div>
+      </div>` : ''}
+      ${currentCat === 'LOURD_SCIE' ? `
+      <div class="field-row">
+        <div class="field">
+          <label>🪚 État de la lame</label>
+          <input type="text" data-field="lame" value="${escapeAttr(s.lame || '')}" placeholder="ex: bonne, à changer...">
         </div>
       </div>` : ''}
       <div class="field">
@@ -1593,6 +1724,20 @@ function renderTeamList(){
             if(hint){ hint.className = 'verif-hint ' + vs.level; hint.textContent = vs.label; }
             const dot = card.querySelector('.verif-dot[data-dot="verif"]');
             if(dot){ dot.className = 'verif-dot ' + vs.level; dot.title = 'Vérif — ' + vs.label; }
+          }
+          // Recolore huile / tune-up en direct (format date AAAA/MM comme la vérif)
+          if(inp.dataset.field === 'huile' || inp.dataset.field === 'tuneup'){
+            const formatted = formatVerif(inp.value);
+            if(formatted !== inp.value){
+              inp.value = formatted;
+              st[i][inp.dataset.field] = formatted;
+              inp.setSelectionRange(formatted.length, formatted.length);
+            }
+            const es = entretienStatus(inp.value);
+            inp.classList.remove('verif-red','verif-orange','verif-green');
+            inp.classList.add('verif-' + es.level);
+            const hint = inp.parentElement.querySelector('.verif-hint');
+            if(hint){ hint.className = 'verif-hint ' + es.level; hint.textContent = es.label; }
           }
           // Recolore l'indicateur de quantité en direct
           if(inp.dataset.field === 'qte' || inp.dataset.field === 'qteReel'){
@@ -2171,7 +2316,7 @@ async function exporterExcel(){
       qte:'Qté prévue', qteReel:'Qté réelle',
       etatBon:'État bon', etatMoyen:'État moyen', etatMauvais:'État mauvais',
       ident:'Identification', opts:'Type', localisation:'Localisation',
-      verif:'Vérif', pression:'Pression', huile:'Huile', tuneup:'Tune-up',
+      verif:'Vérif', pression:'Pression', huile:'Huile', tuneup:'Tune-up', lame:'État lame',
       comment:'Commentaire'
     };
     const TRACK = Object.keys(FIELD_LABELS);
@@ -2287,8 +2432,8 @@ async function exporterExcel(){
     }
 
     const COLS = ['Catégorie','Article','Qté prévue','Qté réelle','Bon','Moyen','Mauvais','Total évalué',
-                  'Identification','Type','Localisation','Vérif','Pression','Huile','Tune-up','Commentaire'];
-    const WIDTHS = [14,32,10,10,6,7,8,11,14,16,16,10,9,9,9,34];
+                  'Identification','Type','Localisation','Vérif','Huile','Tune-up','État lame','Pression','Commentaire'];
+    const WIDTHS = [14,32,10,10,6,7,8,11,14,16,16,10,10,10,14,9,34];
 
     function toNum(v){ const n = parseFloat(v); return isNaN(n) ? null : n; }
     function aUneSaisie(s){
@@ -2478,13 +2623,13 @@ async function exporterExcel(){
               it.noQty ? '' : (s.qte ?? ''), it.noQty ? '' : (s.qteReel ?? ''),
               s.etatBon ?? '', s.etatMoyen ?? '', s.etatMauvais ?? '',
               est ? est.total : '',
-              s.ident || '', (Array.isArray(s.opts) ? s.opts.join(' + ') : ''), s.localisation || '', s.verif || '',
-              s.pression || '', s.huile || '', s.tuneup || '', s.comment || ''
+              s.ident || '', (Array.isArray(s.opts) ? s.opts.join(' + ') : ''), s.localisation || '',
+              s.verif || '', s.huile || '', s.tuneup || '', s.lame || '', s.pression || '', s.comment || ''
             ], couleur
           });
         });
         if(lignesCat.length){
-          aoa.push([catNom, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+          aoa.push([catNom, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
           meta.push({cat:true});
           lignesCat.forEach(l => { aoa.push(l.vals); meta.push({couleur:l.couleur}); });
         }
@@ -2516,7 +2661,7 @@ async function exporterExcel(){
           ws[addr].s = {
             fill:{ patternType:'solid', fgColor:{rgb:fill} },
             font:{ name:'Arial', sz: m.header?11:10, bold:bold, color:{rgb:fontColor} },
-            alignment:{ vertical:'center', horizontal:(c===0||c===1||c===8||c===9||c===10||c===15)?'left':'center', wrapText:m.header },
+            alignment:{ vertical:'center', horizontal:(c===0||c===1||c===8||c===9||c===10||c===14||c===16)?'left':'center', wrapText:m.header },
             border:{
               top:{style:'thin',color:{rgb:'CCCCCC'}}, bottom:{style:'thin',color:{rgb:'CCCCCC'}},
               left:{style:'thin',color:{rgb:'CCCCCC'}}, right:{style:'thin',color:{rgb:'CCCCCC'}}
