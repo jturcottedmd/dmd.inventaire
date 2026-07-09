@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#232221">
+<title>DMD — Infos personnelles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --asphalt: #232221;
+  --asphalt-2: #2f2d2b;
+  --paper: #f3efe6;
+  --paper-dim: #d9d2c2;
+  --brick: #8a2f31;
+  --brick-line: #5e2022;
+  --logo-grey: #656263;
+  --safety-yellow: #f2b705;
+  --ok-green: #4c7a3f;
+  --danger-red: #c0392b;
+  --line: #46433f;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-family:'Barlow',sans-serif;min-height:100%;}
+#app{min-height:100vh; display:flex; flex-direction:column; max-width:560px; margin:0 auto; background:var(--asphalt);}
+
+/* En-tête façon mur de brique, comme l'accueil */
+.hdr{
+  padding:14px 16px 14px;
+  background-color:#6e2325;
+  background-image:
+    linear-gradient(180deg, rgba(0,0,0,0.10), rgba(0,0,0,0.30)),
+    repeating-linear-gradient(0deg, rgba(48,16,16,0.85) 0px, rgba(48,16,16,0.85) 3px, transparent 3px, transparent 30px),
+    repeating-linear-gradient(90deg, rgba(48,16,16,0.85) 0px, rgba(48,16,16,0.85) 3px, transparent 3px, transparent 62px);
+  border-bottom:3px solid var(--brick-line);
+  display:flex; align-items:center; gap:12px;
+}
+.back{
+  color:var(--paper); text-decoration:none; font-size:22px; line-height:1;
+  padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.25);
+  border:1px solid rgba(0,0,0,0.3); flex:0 0 auto;
+}
+.hdr-txt{ text-align:left; }
+.hdr-title{
+  font-family:'Barlow Condensed',sans-serif; font-weight:700;
+  font-size:21px; letter-spacing:1.5px; text-transform:uppercase;
+  margin:0; color:var(--paper);
+}
+.hdr-sub{ font-size:11.5px; letter-spacing:1px; text-transform:uppercase; color:var(--paper-dim); margin-top:1px; }
+
+.toolbar{ padding:14px 16px 4px; }
+.toolbar input{
+  width:100%; padding:11px 14px; font-size:16px; border-radius:10px;
+  border:1.5px solid var(--line); background:var(--asphalt-2); color:var(--paper);
+}
+.toolbar input:focus{ outline:none; border-color:var(--paper-dim); }
+.count{ padding:6px 18px 2px; font-size:12.5px; color:var(--paper-dim); }
+.maj{ color:var(--logo-grey); }
+
+.list{ padding:8px 14px 20px; display:flex; flex-direction:column; gap:10px; }
+.card{
+  background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:14px;
+  padding:14px 14px 12px;
+}
+.card.me{ border-color:var(--safety-yellow); }
+.p-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+.p-name{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:19px; letter-spacing:0.5px; }
+.p-you{
+  font-size:10px; letter-spacing:0.5px; text-transform:uppercase; font-weight:700;
+  background:var(--safety-yellow); color:#232221; border-radius:20px; padding:2px 8px; vertical-align:middle;
+}
+.p-team{
+  font-size:11px; letter-spacing:0.5px; text-transform:uppercase; font-weight:600;
+  background:var(--asphalt); border:1px solid var(--line); color:var(--paper-dim);
+  border-radius:20px; padding:3px 9px;
+}
+.p-contact{ margin-top:6px; font-size:14px; display:flex; flex-direction:column; gap:3px; }
+.p-contact a{ color:var(--paper); text-decoration:none; }
+.p-contact a b{ color:var(--safety-yellow); font-weight:600; }
+.p-carte{ margin-top:7px; font-size:13.5px; }
+.p-carte a{ color:var(--safety-yellow); text-decoration:none; }
+
+.pf{ margin-top:10px; border-top:1px dashed var(--line); padding-top:8px; }
+.pf-title{ font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--paper-dim); margin-bottom:4px; }
+.f-line{ font-size:12.5px; color:var(--paper); padding:3px 0; line-height:1.4; }
+.f-line b{ color:var(--paper-dim); font-weight:700; }
+.dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+.dot.red{ background:var(--danger-red); }
+.dot.orange{ background:var(--safety-yellow); }
+.dot.green{ background:var(--ok-green); }
+.f-ech.red{ color:#ff9d8f; font-weight:700; }
+.f-ech.orange{ color:var(--safety-yellow); font-weight:700; }
+
+.edit-btn{
+  margin-top:10px; width:100%; padding:10px; font-size:14px; font-weight:700;
+  border:1.5px solid var(--line); border-radius:10px; background:var(--asphalt);
+  color:var(--paper); cursor:pointer; font-family:'Barlow',sans-serif;
+}
+.empty{ padding:30px 20px; text-align:center; color:var(--paper-dim); font-size:14px; line-height:1.5; }
+.loading{ padding:40px 20px; text-align:center; color:var(--paper-dim); }
+
+.foot{
+  margin-top:auto; padding:14px 18px 20px;
+  color:var(--logo-grey); font-size:11px; text-align:center;
+  border-top:1px solid var(--line); line-height:1.5;
+}
+
+/* ---- Petit panneau « modifier mes infos » ---- */
+.overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.65); display:none; align-items:center; justify-content:center; z-index:500; padding:20px; }
+.overlay.show{ display:flex; }
+.modal{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:14px; padding:18px; width:100%; max-width:360px; }
+.modal h3{ margin:0 0 10px; font-family:'Barlow Condensed',sans-serif; font-size:20px; letter-spacing:0.5px; text-transform:uppercase; }
+.modal input{ width:100%; padding:11px 13px; font-size:16px; border-radius:8px; border:1.5px solid var(--line); background:var(--asphalt); color:var(--paper); margin:5px 0; }
+.modal input:focus{ outline:none; border-color:var(--paper-dim); }
+.m-err{ color:#ff9d8f; font-size:13px; min-height:16px; font-weight:600; }
+.m-btn{ width:100%; padding:11px; font-size:15px; font-weight:700; border:none; border-radius:8px; background:var(--brick); color:var(--paper); cursor:pointer; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px; }
+.m-btn.cancel{ background:var(--asphalt); border:1.5px solid var(--line); text-transform:none; letter-spacing:0; font-weight:600; }
+</style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<div id="app">
+  <div class="hdr">
+    <a class="back" href="./index.html" aria-label="Retour à l'accueil">←</a>
+    <div class="hdr-txt">
+      <h1 class="hdr-title">Infos personnelles</h1>
+      <div class="hdr-sub">Répertoire & formations</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="🔍 Chercher un nom…">
+  </div>
+  <div class="count" id="count"></div>
+
+  <div class="list" id="list"><div class="loading">Chargement du répertoire…</div></div>
+
+  <div class="foot">
+    Renseignements réservés à l'usage interne de Maçonnerie DMD.<br>
+    Pour consulter ou corriger tes renseignements : bouton « Modifier mes infos » sur ta fiche.
+  </div>
+</div>
+
+<!-- Panneau modifier mes infos -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3>👤 Mes infos</h3>
+    <input type="text" id="idNom" placeholder="Prénom Nom" autocomplete="name">
+    <input type="tel" id="idTel" placeholder="Téléphone" autocomplete="tel">
+    <input type="email" id="idCourriel" placeholder="Courriel" autocomplete="email">
+    <div class="m-err" id="idError">&nbsp;</div>
+    <button class="m-btn" id="idSave">Enregistrer</button>
+    <button class="m-btn cancel" id="idCancel">Annuler</button>
+  </div>
+</div>
+
+<script>
+// ================== CONNEXION (partagée avec l'accueil et l'inventaire) ==================
+const SUPABASE_URL = "https://toajegeqsqulnhdwkajm.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvYWplZ2Vxc3F1bG5oZHdrYWptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1OTY1OTQsImV4cCI6MjA5OTE3MjU5NH0.LBLVG--c1d9V_ZRw-h_ATZE2SUX3OAP7lf0SxMqPqNE";
+let _sb = null;
+try{ if(window.supabase && window.supabase.createClient){ _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } }catch(e){ console.error(e); }
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout:' + (label||''))), ms))
+  ]);
+}
+
+function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
+
+// --- Identité de CET appareil (mêmes clés que l'accueil et l'inventaire) ---
+function getDeviceId(){
+  try{
+    let v = localStorage.getItem('inv:deviceId');
+    if(!v){ v = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8); localStorage.setItem('inv:deviceId', v); }
+    return v;
+  }catch(e){ return 'dev_' + Math.random().toString(36).slice(2,10); }
+}
+function getDeviceUser(){
+  try{ const v = localStorage.getItem('inv:deviceUser'); return v ? JSON.parse(v) : null; }catch(e){ return null; }
+}
+
+// ================== CORRESPONDANCE NOMS ↔ FORMATIONS (même logique que l'inventaire) ==================
+function normNom(s){
+  return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[.,\-]/g,' ').replace(/\s+/g,' ').trim();
+}
+function levenshtein(a, b){
+  if(a === b) return 0;
+  if(!a || !b) return (a.length + b.length);
+  let prev = Array.from({length:b.length+1}, (_,i)=>i);
+  for(let i=0;i<a.length;i++){
+    let cur = [i+1];
+    for(let j=0;j<b.length;j++){
+      cur.push(Math.min(prev[j+1]+1, cur[j]+1, prev[j] + (a[i]!==b[j] ? 1 : 0)));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+function motsProches(m1, m2){
+  const d = levenshtein(m1, m2), L = Math.max(m1.length, m2.length);
+  if(L >= 6) return d <= 2;
+  if(L >= 4) return d <= 1;
+  return d === 0;
+}
+function nomsProches(n1, n2){
+  const w1 = normNom(n1).split(' ').filter(Boolean);
+  const w2 = normNom(n2).split(' ').filter(Boolean);
+  if(w1.length !== w2.length || w1.length === 0) return false;
+  const used = new Array(w2.length).fill(false);
+  for(const a of w1){
+    let ok = false;
+    for(let i=0;i<w2.length;i++){
+      if(!used[i] && motsProches(a, w2[i])){ used[i] = true; ok = true; break; }
+    }
+    if(!ok) return false;
+  }
+  return true;
+}
+// Statut d'une échéance : rouge expirée, jaune <90 jours, verte sinon
+function echeanceStatus(dateStr){
+  const m = (dateStr||'').match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if(!m) return null;
+  const d = new Date(+m[1], +m[2]-1, +m[3]);
+  if(isNaN(d)) return null;
+  const now = new Date(); now.setHours(0,0,0,0);
+  const jours = Math.round((d - now) / 86400000);
+  if(jours < 0) return { level:'red', label:'Expirée' };
+  if(jours <= 90) return { level:'orange', label:'Bientôt due' };
+  return { level:'green', label:'À jour' };
+}
+
+// ================== DONNÉES ==================
+let people = [];          // fiches inv:person:*
+let formationsData = null; // { people:[{nom, forms:[{formation,date,attestation,echeance}]}], maj }
+
+async function loadAll(){
+  // Une seule requête pour toutes les fiches + une pour les formations
+  const [pRes, fRes] = await Promise.all([
+    withTimeout(_sb.from('inv_store').select('key,value').like('key','inv:person:%'), 12000, 'people'),
+    withTimeout(_sb.from('inv_store').select('value').eq('key','inv:formations').maybeSingle(), 12000, 'formations')
+  ]);
+  people = [];
+  if(pRes && Array.isArray(pRes.data)){
+    pRes.data.forEach(r => {
+      try{
+        const p = JSON.parse(r.value);
+        if(p){ p._key = r.key; if(!p.id) p.id = r.key.replace('inv:person:',''); people.push(p); }
+      }catch(e){}
+    });
+  }
+  people.sort((a,b) => (a.nom||'').localeCompare(b.nom||'', 'fr'));
+  formationsData = null;
+  if(fRes && fRes.data && fRes.data.value){
+    try{ const f = JSON.parse(fRes.data.value); if(f && Array.isArray(f.people)) formationsData = f; }catch(e){}
+  }
+}
+
+function formationsHtmlFor(nom){
+  if(!formationsData || !Array.isArray(formationsData.people)) return '';
+  let match = formationsData.people.find(p => normNom(p.nom) === normNom(nom));
+  if(!match) match = formationsData.people.find(p => nomsProches(p.nom, nom));
+  if(!match || !match.forms || !match.forms.length) return '';
+  const items = match.forms.map(f => {
+    const st = echeanceStatus(f.echeance);
+    const dot = st ? '<span class="dot ' + st.level + '"></span>' : '';
+    const ech = f.echeance
+      ? ('<span class="f-ech ' + (st ? st.level : '') + '">' + escapeHtml(f.echeance) + (st && st.level !== 'green' ? ' — ' + st.label : '') + '</span>')
+      : '—';
+    return '<div class="f-line">' + dot + '<b>' + escapeHtml(f.formation) + '</b> · éch : ' + ech + '</div>';
+  }).join('');
+  return '<div class="pf"><div class="pf-title">🎓 Formations (' + match.forms.length + ')</div>' + items + '</div>';
+}
+
+// ================== AFFICHAGE ==================
+function render(){
+  const list = document.getElementById('list');
+  const q = normNom(document.getElementById('search').value);
+  const myId = getDeviceId();
+  const shown = q ? people.filter(p => normNom(p.nom).includes(q)) : people;
+
+  const majTxt = (formationsData && formationsData.maj)
+    ? ' · <span class="maj">Formations à jour : ' + new Date(formationsData.maj).toLocaleDateString('fr-CA') + '</span>' : '';
+  document.getElementById('count').innerHTML =
+    shown.length + ' personne' + (shown.length > 1 ? 's' : '') + (q ? ' trouvée' + (shown.length > 1 ? 's' : '') : ' identifiée' + (shown.length > 1 ? 's' : '')) + majTxt;
+
+  if(!shown.length){
+    list.innerHTML = '<div class="empty">' + (q
+      ? 'Aucun nom ne correspond à ta recherche.'
+      : 'Aucune personne identifiée pour le moment.<br>Chaque personne apparaît ici après s\'être identifiée sur l\'accueil.') + '</div>';
+    return;
+  }
+  list.innerHTML = shown.map(p => {
+    const isMe = (p.id === myId);
+    const tel = p.tel ? '<a href="tel:' + escapeAttr(p.tel) + '"><b>📞</b> ' + escapeHtml(p.tel) + '</a>' : '';
+    const mail = p.courriel ? '<a href="mailto:' + escapeAttr(p.courriel) + '"><b>✉️</b> ' + escapeHtml(p.courriel) + '</a>' : '';
+    const contact = [tel, mail].filter(Boolean).join('');
+    const equipe = p.equipe ? '<span class="p-team">' + escapeHtml(p.equipe) + '</span>' : '';
+    const carte = (p.extra && p.extra.carteUrl)
+      ? '<div class="p-carte"><a href="' + escapeAttr(p.extra.carteUrl) + '" target="_blank" rel="noopener">🪪 Voir la carte / certificat</a></div>' : '';
+    return '<div class="card' + (isMe ? ' me' : '') + '">' +
+      '<div class="p-top"><span class="p-name">' + escapeHtml(p.nom || '(sans nom)') +
+        (isMe ? ' <span class="p-you">Toi</span>' : '') + '</span>' + equipe + '</div>' +
+      (contact ? '<div class="p-contact">' + contact + '</div>' : '') +
+      carte +
+      formationsHtmlFor(p.nom) +
+      (isMe ? '<button type="button" class="edit-btn" id="editMe">✏️ Modifier mes infos</button>' : '') +
+      '</div>';
+  }).join('');
+  const btn = document.getElementById('editMe');
+  if(btn) btn.onclick = openEdit;
+}
+
+// ================== MODIFIER MES INFOS ==================
+function openEdit(){
+  const u = getDeviceUser() || {};
+  document.getElementById('idNom').value = u.nom || '';
+  document.getElementById('idTel').value = u.tel || '';
+  document.getElementById('idCourriel').value = u.courriel || '';
+  document.getElementById('idError').innerHTML = '&nbsp;';
+  document.getElementById('overlay').classList.add('show');
+}
+document.getElementById('idCancel').onclick = () => document.getElementById('overlay').classList.remove('show');
+document.getElementById('overlay').addEventListener('click', e => { if(e.target.id === 'overlay') document.getElementById('overlay').classList.remove('show'); });
+document.getElementById('idSave').onclick = async () => {
+  const nom = document.getElementById('idNom').value.trim();
+  const tel = document.getElementById('idTel').value.trim();
+  const courriel = document.getElementById('idCourriel').value.trim();
+  if(!nom){ document.getElementById('idError').textContent = 'Le nom est requis.'; return; }
+  const obj = { nom, tel, courriel };
+  try{ localStorage.setItem('inv:deviceUser', JSON.stringify(obj)); }catch(e){}
+  document.getElementById('overlay').classList.remove('show');
+  // Met à jour la fiche partagée puis recharge la liste
+  try{
+    const id = getDeviceId();
+    const rec = { id, nom, tel, courriel, equipe:'', equipeId:'', maj:new Date().toISOString(), extra:{} };
+    const prev = people.find(x => x.id === id);
+    if(prev){ rec.equipe = prev.equipe || ''; rec.equipeId = prev.equipeId || ''; if(prev.extra) rec.extra = prev.extra; }
+    await withTimeout(_sb.from('inv_store').upsert({ key:'inv:person:' + id, value:JSON.stringify(rec), updated_at:new Date().toISOString() }), 10000, 'save');
+  }catch(e){ console.error(e); }
+  try{ await loadAll(); }catch(e){}
+  render();
+};
+
+document.getElementById('search').addEventListener('input', render);
+
+// ================== DÉMARRAGE ==================
+(async function(){
+  const list = document.getElementById('list');
+  if(!_sb){
+    list.innerHTML = '<div class="empty">Connexion au serveur impossible (librairie non chargée).<br>Vérifie ta connexion Internet et réessaie.</div>';
+    return;
+  }
+  // Session obligatoire : sinon on retourne à l'accueil (qui gère le mot de passe)
+  try{
+    const { data } = await withTimeout(_sb.auth.getSession(), 8000, 'getSession');
+    if(!data || !data.session){ location.replace('./index.html'); return; }
+  }catch(e){
+    list.innerHTML = '<div class="empty">Serveur injoignable. Vérifie ta connexion et réessaie.</div>';
+    return;
+  }
+  try{
+    await loadAll();
+    render();
+  }catch(e){
+    console.error(e);
+    list.innerHTML = '<div class="empty">Impossible de charger le répertoire. Vérifie ta connexion et réessaie.</div>';
+  }
+})();
+</script>
+</body>
+</html>
