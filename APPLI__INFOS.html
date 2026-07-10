@@ -8,6 +8,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#232221">
 <title>DMD — Infos personnelles</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://toajegeqsqulnhdwkajm.supabase.co" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
@@ -65,13 +67,9 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 .list{ padding:8px 14px 20px; display:flex; flex-direction:column; gap:10px; }
 .card{
   background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:14px;
-  padding:14px 14px 12px; border-left-width:5px;
+  padding:14px 14px 12px;
 }
 .card.me{ border-color:var(--safety-yellow); }
-/* Pastille de bord : pire échéance de formation de la personne */
-.card.edge-red{ border-left-color:var(--danger-red); }
-.card.edge-yellow{ border-left-color:var(--safety-yellow); }
-.card.edge-green{ border-left-color:var(--ok-green); }
 .save-status{ padding:2px 18px 0; font-size:11.5px; color:var(--paper-dim); min-height:16px; }
 .save-status.ok{ color:#a9d39a; } .save-status.err{ color:#ff9d8f; font-weight:700; }
 .p-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
@@ -93,8 +91,12 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 
 .pf{ margin-top:10px; border-top:1px dashed var(--line); padding-top:8px; }
 .pf-title{ font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--paper-dim); margin-bottom:4px; }
-.f-line{ font-size:12.5px; color:var(--paper); padding:3px 0; line-height:1.4; }
+.f-line{ font-size:12.5px; color:var(--paper); padding:5px 8px; line-height:1.4; border-radius:7px; margin:3px 0; border-left:4px solid transparent; }
 .f-line b{ color:var(--paper-dim); font-weight:700; }
+/* Ligne de formation colorée : rouge = échue, jaune = échue < 1 an, verte = valide */
+.f-line.f-red{ background:rgba(192,57,43,0.18); border-left-color:var(--danger-red); }
+.f-line.f-yellow{ background:rgba(242,183,5,0.13); border-left-color:var(--safety-yellow); }
+.f-line.f-green{ background:rgba(76,122,63,0.16); border-left-color:var(--ok-green); }
 .dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:middle; }
 .dot.red{ background:var(--danger-red); }
 .dot.orange{ background:var(--safety-yellow); }
@@ -156,7 +158,6 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 </head>
 <body>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 
 <div id="app">
   <div class="hdr">
@@ -268,6 +269,7 @@ async function saveFormations(data){
 // Lit l'Excel croisé « Liste des formations » : en-têtes sur 2 lignes,
 // blocs de 3 lignes par employé (Date / Attestation reçu / Échéance).
 async function importFormationsFromFile(file){
+  await ensureXLSX();
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type:'array', cellDates:true });
 
@@ -431,7 +433,8 @@ function nomsProches(n1, n2){
   }
   return true;
 }
-// Statut d'une échéance : rouge expirée, jaune <90 jours, verte sinon
+// Statut d'une échéance (tableau Excel des formations) :
+// rouge = échue · jaune = échue dans moins d'un an · verte = valide
 function echeanceStatus(dateStr){
   const m = (dateStr||'').match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if(!m) return null;
@@ -439,9 +442,9 @@ function echeanceStatus(dateStr){
   if(isNaN(d)) return null;
   const now = new Date(); now.setHours(0,0,0,0);
   const jours = Math.round((d - now) / 86400000);
-  if(jours < 0) return { level:'red', label:'Expirée' };
-  if(jours <= 90) return { level:'orange', label:'Bientôt due' };
-  return { level:'green', label:'À jour' };
+  if(jours < 0) return { level:'red', label:'Échue' };
+  if(jours <= 365) return { level:'orange', label:'Échue dans moins d\'un an' };
+  return { level:'green', label:'Valide' };
 }
 
 // ================== DONNÉES ==================
@@ -470,20 +473,6 @@ async function loadAll(){
   }
 }
 
-// Pire niveau d'échéance de formation d'une personne (pour la pastille de bord)
-function worstFormationLevel(nom){
-  if(!formationsData || !Array.isArray(formationsData.people)) return null;
-  let match = formationsData.people.find(p => normNom(p.nom) === normNom(nom));
-  if(!match) match = formationsData.people.find(p => nomsProches(p.nom, nom));
-  if(!match || !match.forms || !match.forms.length) return null;
-  let worst = null;
-  const rank = { green:1, orange:2, red:3 };
-  match.forms.forEach(f => {
-    const st = echeanceStatus(f.echeance);
-    if(st && (!worst || rank[st.level] > rank[worst])) worst = st.level;
-  });
-  return worst;
-}
 function formationsHtmlFor(nom){
   if(!formationsData || !Array.isArray(formationsData.people)) return '';
   let match = formationsData.people.find(p => normNom(p.nom) === normNom(nom));
@@ -491,11 +480,12 @@ function formationsHtmlFor(nom){
   if(!match || !match.forms || !match.forms.length) return '';
   const items = match.forms.map(f => {
     const st = echeanceStatus(f.echeance);
+    const lineCls = st ? (' f-' + (st.level==='orange' ? 'yellow' : st.level)) : '';
     const dot = st ? '<span class="dot ' + st.level + '"></span>' : '';
     const ech = f.echeance
       ? ('<span class="f-ech ' + (st ? st.level : '') + '">' + escapeHtml(f.echeance) + (st && st.level !== 'green' ? ' — ' + st.label : '') + '</span>')
       : '—';
-    return '<div class="f-line">' + dot + '<b>' + escapeHtml(f.formation) + '</b> · éch : ' + ech + '</div>';
+    return '<div class="f-line' + lineCls + '">' + dot + '<b>' + escapeHtml(f.formation) + '</b> · éch : ' + ech + '</div>';
   }).join('');
   return '<div class="pf"><div class="pf-title">🎓 Formations (' + match.forms.length + ')</div>' + items + '</div>';
 }
@@ -507,7 +497,8 @@ function render(){
   const myId = getDeviceId();
   const shown = q ? people.filter(p => normNom(p.nom).includes(q)) : people;
 
-  const majTxt = (formationsData && formationsData.maj)
+  // Les formations sont réservées aux admins ; les autres voient le répertoire de contacts.
+  const majTxt = (isAdmin && formationsData && formationsData.maj)
     ? ' · <span class="maj">Formations à jour : ' + new Date(formationsData.maj).toLocaleDateString('fr-CA') + '</span>' : '';
   document.getElementById('count').innerHTML =
     shown.length + ' personne' + (shown.length > 1 ? 's' : '') + (q ? ' trouvée' + (shown.length > 1 ? 's' : '') : ' identifiée' + (shown.length > 1 ? 's' : '')) + majTxt;
@@ -533,14 +524,13 @@ function render(){
           '<button type="button" class="p-admin-btn danger" data-del-key="' + pKey + '" data-del-id="' + escapeAttr(p.id || '') + '" data-del-nom="' + escapeAttr(p.nom || '') + '">🗑️ Supprimer</button>' +
         '</div>'
       : '';
-    const wl = worstFormationLevel(p.nom);
-    const edge = wl ? (' edge-' + (wl==='orange' ? 'yellow' : wl)) : '';
-    return '<div class="card' + (isMe ? ' me' : '') + edge + '">' +
+    // Formations : visibles par les admins seulement (lignes colorées, pas de pastille de bord)
+    return '<div class="card' + (isMe ? ' me' : '') + '">' +
       '<div class="p-top"><span class="p-name">' + escapeHtml(p.nom || '(sans nom)') +
         (isMe ? ' <span class="p-you">Toi</span>' : '') + '</span>' + equipe + '</div>' +
       (contact ? '<div class="p-contact">' + contact + '</div>' : '') +
       carte +
-      formationsHtmlFor(p.nom) +
+      (isAdmin ? formationsHtmlFor(p.nom) : '') +
       (isMe ? '<button type="button" class="edit-btn" id="editMe">✏️ Modifier mes infos</button>' : '') +
       adminBtns +
       '</div>';
@@ -661,12 +651,26 @@ function xlsSheet(aoa, meta, widths, leftCols){
   }
   return ws;
 }
+// Chargement à la demande de la librairie Excel (~1 Mo) : uniquement lors d'un export/import.
+let _xlsxLoading = null;
+function ensureXLSX(){
+  if(window.XLSX) return Promise.resolve();
+  if(_xlsxLoading) return _xlsxLoading;
+  _xlsxLoading = new Promise(function(res, rej){
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+    s.onload = function(){ res(); };
+    s.onerror = function(){ _xlsxLoading = null; rej(new Error('xlsx')); };
+    document.head.appendChild(s);
+  });
+  return _xlsxLoading;
+}
 async function exporterExcel(){
   const btn = document.getElementById('exportBtn');
   const old = btn ? btn.textContent : '';
   if(btn){ btn.textContent='...'; btn.disabled=true; }
   try{
-    if(typeof XLSX === 'undefined'){ alert('Librairie Excel non chargée. Vérifie ta connexion.'); return; }
+    try{ await ensureXLSX(); }catch(e){ alert('Impossible de charger le module Excel. Vérifie ta connexion et réessaie.'); return; }
     if(!people.length && !(formationsData && formationsData.people && formationsData.people.length)){ alert('Aucune donnée à exporter.'); return; }
     const wb = XLSX.utils.book_new();
     // --- Répertoire ---
@@ -675,8 +679,8 @@ async function exporterExcel(){
       people.forEach(p => { aoa.push([p.nom||'—', p.tel||'', p.courriel||'', p.equipe||'']); meta.push({}); });
       XLSX.utils.book_append_sheet(wb, xlsSheet(aoa, meta, [30,16,32,14], [0,2]), 'Répertoire');
     }
-    // --- Formations (avec échéances colorées, comme à l'écran) ---
-    if(formationsData && Array.isArray(formationsData.people) && formationsData.people.length){
+    // --- Formations (admins seulement, avec échéances colorées comme à l'écran) ---
+    if(isAdmin && formationsData && Array.isArray(formationsData.people) && formationsData.people.length){
       const aoa=[['Employé','Formation','Date','Attestation','Échéance','Statut']], meta=[{header:true}];
       formationsData.people.forEach(pers => {
         (pers.forms||[]).forEach(f => {

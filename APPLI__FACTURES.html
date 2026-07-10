@@ -8,6 +8,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#232221">
 <title>DMD — Factures</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://toajegeqsqulnhdwkajm.supabase.co" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
@@ -108,7 +110,6 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 </head>
 <body>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 
 <div id="app">
   <div class="hdr">
@@ -488,12 +489,26 @@ function xlsSheet(aoa, meta, widths, leftCols){
   }
   return ws;
 }
+// Chargement à la demande de la librairie Excel (~1 Mo) : uniquement lors d'un export/import.
+let _xlsxLoading = null;
+function ensureXLSX(){
+  if(window.XLSX) return Promise.resolve();
+  if(_xlsxLoading) return _xlsxLoading;
+  _xlsxLoading = new Promise(function(res, rej){
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+    s.onload = function(){ res(); };
+    s.onerror = function(){ _xlsxLoading = null; rej(new Error('xlsx')); };
+    document.head.appendChild(s);
+  });
+  return _xlsxLoading;
+}
 async function exporterExcel(){
   const btn = document.getElementById('exportBtn');
   const old = btn ? btn.textContent : '';
   if(btn){ btn.textContent='...'; btn.disabled=true; }
   try{
-    if(typeof XLSX === 'undefined'){ alert('Librairie Excel non chargée. Vérifie ta connexion.'); return; }
+    try{ await ensureXLSX(); }catch(e){ alert('Impossible de charger le module Excel. Vérifie ta connexion et réessaie.'); return; }
     if(!factures.length){ alert('Aucune facture pour '+ymLabel(curYM)+'.'); return; }
     const wb = XLSX.utils.book_new();
     // --- Résumé modifs depuis le dernier export (du même mois) ---
