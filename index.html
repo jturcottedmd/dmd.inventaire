@@ -278,7 +278,7 @@ const APPS = [
   {
     id:'chat',
     nom:'Chat',
-    desc:'Discussion & photos chantier',
+    desc:'Discussion de chantier',
     icon:'chat',
     href:'./APPLI__CHAT.html',   // <-- canal de chat + photos live (Supabase Storage)
     soon:false
@@ -510,13 +510,16 @@ function isOnRoster(nom){
 }
 function isDeviceAdmin(){ try{ return localStorage.getItem('inv:isAdmin') === '1'; }catch(e){ return false; } }
 // Enregistre l'identité — MÊME format que l'app d'inventaire (localStorage partagé + fiche Supabase)
-// Écrit l'identité LOCALEMENT (instantané) puis synchronise la fiche partagée
-// en arrière-plan — on n'attend jamais le réseau pour laisser entrer l'utilisateur.
+// Écrit l'identité LOCALEMENT (instantané) puis synchronise la fiche partagée.
+// Retourne la promesse de synchro : à l'identification on l'attend (brièvement)
+// pour que la fiche et le contact d'urgence soient bien rendus au serveur avant
+// de naviguer (sinon la navigation annule la requête et la fiche n'existe jamais).
 function saveDeviceUser(obj){
   try{ localStorage.setItem('inv:deviceUser', JSON.stringify(obj)); }catch(e){}
   if(_sb && obj && !obj.chantier && (obj.nom || obj.courriel)){
-    _syncPersonRecord(obj);   // volontairement PAS de await
+    return _syncPersonRecord(obj);
   }
+  return Promise.resolve();
 }
 async function _syncPersonRecord(obj){
   try{
@@ -545,19 +548,20 @@ function hasConsent(){
 function saveConsentLocal(){
   try{ localStorage.setItem('inv:consentement', JSON.stringify({ accepte:true, version:CONSENT_VERSION, date:new Date().toISOString() })); }catch(e){}
 }
-// Copie la preuve de consentement dans la base partagée (après connexion), en arrière-plan
+// Copie la preuve de consentement (Loi 25) dans la base partagée.
+// Retourne la promesse : attendue à l'identification, best-effort ensuite.
 function syncConsent(){
-  if(!_sb) return;
+  if(!_sb) return Promise.resolve();
   try{
     const c = JSON.parse(localStorage.getItem('inv:consentement') || 'null');
-    if(!c || !c.accepte || c.synced) return;
+    if(!c || !c.accepte || c.synced) return Promise.resolve();
     const id = getDeviceId();
     const u = getDeviceUser() || {};
     const rec = { deviceId:id, nom:(u.chantier ? 'Tablette de chantier' : (u.nom || '')), version:c.version, date:c.date };
-    withTimeout(_sb.from('inv_store').upsert({ key:'inv:consent:' + id, value:JSON.stringify(rec), updated_at:new Date().toISOString() }), 10000, 'consent')
+    return withTimeout(_sb.from('inv_store').upsert({ key:'inv:consent:' + id, value:JSON.stringify(rec), updated_at:new Date().toISOString() }), 10000, 'consent')
       .then(() => { c.synced = true; try{ localStorage.setItem('inv:consentement', JSON.stringify(c)); }catch(e){} })
       .catch(e => console.error('Sync consentement:', e));
-  }catch(e){}
+  }catch(e){ return Promise.resolve(); }
 }
 
 // --- Affichage ---
@@ -618,7 +622,20 @@ async function doLogin(){
   }
 }
 // L'identité est enregistrée localement immédiatement : on entre sans attendre le réseau.
-function saveIdentity(obj){ saveDeviceUser(obj); enterApp(); }
+// À l'identification : on pousse la fiche (avec contact d'urgence) ET la preuve de
+// consentement AVANT d'entrer, avec un plafond de 6 s pour ne pas bloquer sur une
+// mauvaise connexion (le reste se rattrapera en arrière-plan aux visites suivantes).
+async function saveIdentity(obj){
+  const btn = document.getElementById('idSave');
+  const old = btn ? btn.textContent : '';
+  if(btn){ btn.textContent = 'Enregistrement…'; btn.disabled = true; }
+  try{
+    const syncs = Promise.all([ saveDeviceUser(obj), syncConsent() ]).catch(()=>{});
+    await Promise.race([ syncs, new Promise(r => setTimeout(r, 6000)) ]);
+  }catch(e){}
+  if(btn){ btn.textContent = old || "C'est moi"; btn.disabled = false; }
+  enterApp();
+}
 
 // Ligne « qui suis-je » + lien pour changer, dans le pied de page
 function renderMe(){

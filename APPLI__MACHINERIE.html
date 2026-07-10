@@ -272,6 +272,8 @@ let catalog = [];               // [{ident,nom,cat,gas,vf}]
 let records = {};               // key -> record de suivi
 let teams = DEFAULT_TEAMS.slice();
 let currentCat = 'Lift';
+let teamMachines = {};          // teamId -> [noms de machines cochées par l'équipe dans l'inventaire]
+let teamChantier = {};          // teamId -> { projet, adresse } (encart chantier de l'équipe)
 
 function machineKey(m){ return (m.ident && m.ident.trim()) ? m.ident.trim() : 'nom:'+normNom(m.nom); }
 function recFor(m){ return records[machineKey(m)] || {}; }
@@ -283,11 +285,30 @@ function setSaveStatus(state){
   else if(state==='err'){ el.className='save-status err'; el.textContent='⚠ Non enregistré — vérifie la connexion et réessaie'; }
   else { el.className='save-status'; el.innerHTML='&nbsp;'; }
 }
+// Fusionne les listes d'événements avec la version serveur avant d'écrire :
+// si un collègue a ajouté un bris/une inspection sur la MÊME machine pendant qu'on
+// éditait, son entrée est réintégrée au lieu d'être écrasée (dernier-écrit-gagne).
+// Les entrées supprimées volontairement sont mémorisées dans rec.del pour ne pas revenir.
+function mergeEventLists(rec, srv){
+  const del = new Set(rec.del || []);
+  ['bris','reparations','inspections'].forEach(f => {
+    const loc = rec[f] || [], remote = (srv && srv[f]) || [];
+    const ids = new Set(loc.map(x => x && x.id));
+    remote.forEach(x => { if(x && x.id && !ids.has(x.id) && !del.has(x.id)) loc.push(x); });
+    loc.sort((a,b) => String((b&&b.date)||'').localeCompare(String((a&&a.date)||'')));
+    rec[f] = loc;
+  });
+  return rec;
+}
 async function saveMachine(m, rec){
   const key = machineKey(m);
   rec.ident = m.ident||''; rec.nom = m.nom; rec.cat = m.cat;
-  records[key] = rec;
   setSaveStatus('saving');
+  try{
+    const r = await storage.get('inv:machine:'+key, true);
+    if(r && r.value){ mergeEventLists(rec, JSON.parse(r.value)); }
+  }catch(e){}
+  records[key] = rec;
   const res = await storage.set('inv:machine:'+key, JSON.stringify(rec), true);
   setSaveStatus(res ? 'ok' : 'err');
 }
@@ -323,6 +344,40 @@ async function loadRecords(){
       res.data.forEach(r => { try{ const rec=JSON.parse(r.value); if(rec) records[r.key.replace('inv:machine:','')]=rec; }catch(e){} });
     }
   }catch(e){ console.error(e); }
+}
+// Sélection des machines par équipe (faite dans l'inventaire) + chantier de chaque équipe.
+// C'est la source de la localisation/équipe AUTOMATIQUE de chaque machine.
+async function loadTeamAssignments(){
+  teamMachines = {}; teamChantier = {};
+  await Promise.all(teams.map(async t => {
+    try{
+      const r = await storage.get('inv:machines:'+t.id+':MACHINERIE', true);
+      if(r && r.value){ const p = JSON.parse(r.value); if(p && p.set && Array.isArray(p.actifs)) teamMachines[t.id] = p.actifs; }
+    }catch(e){}
+    try{
+      const r2 = await storage.get('inv:info:'+t.id, true);
+      if(r2 && r2.value){ const info = JSON.parse(r2.value); if(info && typeof info==='object') teamChantier[t.id] = info; }
+    }catch(e){}
+  }));
+}
+// Localisation automatique d'une machine = équipe(s) qui l'ont cochée dans l'inventaire + le chantier de l'équipe.
+function autoLocForMachine(m){
+  const target = normNom(m.nom);
+  const found = teams.filter(t => (teamMachines[t.id]||[]).some(n => normNom(n) === target));
+  if(!found.length) return null;
+  const info = teamChantier[found[0].id] || {};
+  const cbits = [];
+  if(info.projet && String(info.projet).trim()) cbits.push('Projet '+String(info.projet).trim());
+  if(info.adresse && String(info.adresse).trim()) cbits.push(String(info.adresse).trim());
+  return { equipe: found.map(x=>x.label).join(', '), chantier: cbits.join(' — '), multi: found.length>1 };
+}
+function locTextAuto(m){
+  const a = autoLocForMachine(m);
+  if(!a) return '<span class="muted">Non assignée — coche cette machine dans une équipe de l\'inventaire</span>';
+  const bits = [];
+  if(a.chantier) bits.push('🏗 '+escapeHtml(a.chantier));
+  bits.push('👷 '+escapeHtml(a.equipe));
+  return '📍 ' + bits.join(' · ');
 }
 
 // ================== STATUT / AFFICHAGE ==================
@@ -414,7 +469,7 @@ function renderList(){
     return '<div class="card'+st.edge+'" data-key="'+escapeAttr(machineKey(m))+'">' +
       '<div class="c-top"><span class="c-ident">'+escapeHtml(m.ident||'—')+'</span>' +
         '<span class="c-nom">'+escapeHtml(m.nom)+'</span>' + (q?'<span class="c-cat">'+escapeHtml(m.cat)+'</span>':'') + '</div>' +
-      '<div class="c-loc">'+locText(st.rec)+'</div>' +
+      '<div class="c-loc">'+locTextAuto(m)+'</div>' +
       '<div class="c-pills">'+pills.join('')+'</div>' +
     '</div>';
   }).join('');
@@ -436,23 +491,13 @@ function openDetail(key){
 
   const box = document.getElementById('modalBox');
 
-  // --- Localisation & déplacements ---
-  const hist = (rec.histoLoc||[]);
-  const histHtml = hist.length ? hist.map(h =>
-    '<div class="entry"><div class="e-top"><span class="e-date">'+fmtDateFR(h.date)+'</span><span class="e-by">'+escapeHtml(h.par||'')+'</span></div>' +
-    '<div class="e-desc">'+ (h.chantier?('🏗 '+escapeHtml(h.chantier)):'') + (h.chantier&&h.equipe?' · ':'') + (h.equipe?('👷 '+escapeHtml(h.equipe)):'') + (!h.chantier&&!h.equipe?'<span class="muted">—</span>':'') + (h.note?('<br><span class="muted">'+escapeHtml(h.note)+'</span>'):'') + '</div></div>'
-  ).join('') : '<div class="empty-sec">Aucun déplacement enregistré.</div>';
-  const teamOpts = '<option value="">— Équipe (optionnel) —</option>' + teams.map(t => '<option value="'+escapeAttr(t.label)+'">'+escapeHtml(t.label)+'</option>').join('');
+  // --- Localisation & équipe (AUTOMATIQUES, tirées de la sélection dans l'inventaire) ---
+  const auto = autoLocForMachine(m);
   const locSection =
-    '<details class="sec" open><summary>📍 Localisation & déplacements<span class="chev">▶</span></summary><div class="sec-body">' +
-      '<div class="statusline">'+locText(rec)+'</div>' +
-      '<div class="field-label">Nouveau chantier / emplacement</div>' +
-      '<input class="inp" id="mvChantier" placeholder="ex : Rue Principale, Chambly — ou Cour / Atelier">' +
-      '<div class="field-label">Équipe (facultatif — sans incidence sur les onglets)</div>' +
-      '<select class="inp" id="mvEquipe">'+teamOpts+'</select>' +
-      '<input class="inp" id="mvNote" placeholder="Note (facultatif)">' +
-      '<button type="button" class="btn primary" id="mvSave">📍 Enregistrer le déplacement</button>' +
-      '<div class="field-label" style="margin-top:12px;">Historique</div>' + histHtml +
+    '<details class="sec" open><summary>📍 Localisation & équipe<span class="chev">▶</span></summary><div class="sec-body">' +
+      '<div class="statusline">'+locTextAuto(m)+'</div>' +
+      (auto && auto.multi ? '<div class="note">⚠️ Cette machine est cochée dans <b>plusieurs équipes</b> ('+escapeHtml(auto.equipe)+'). Vérifie la sélection dans l\'inventaire pour n\'en garder qu\'une.</div>' : '') +
+      '<div class="note">La localisation et l\'équipe sont <b>automatiques</b> : elles proviennent de la sélection des machines par équipe dans l\'app <b>Inventaire</b> (onglet Machinerie) et du chantier de l\'équipe. Pour déplacer une machine, coche-la dans la bonne équipe dans l\'inventaire.</div>' +
     '</div></details>';
 
   // --- Vérification annuelle ---
@@ -548,18 +593,7 @@ function wireDetail(m, key){
   const rec = records[key];
   const reopen = () => { renderSummary(); renderTabs(); renderList(); openDetail(key); };
 
-  // Déplacement
-  const mv = document.getElementById('mvSave');
-  if(mv) mv.onclick = async () => {
-    const chantier = document.getElementById('mvChantier').value.trim();
-    const equipe = document.getElementById('mvEquipe').value.trim();
-    const note = document.getElementById('mvNote').value.trim();
-    if(!chantier && !equipe){ alert('Indique au moins un chantier ou une équipe.'); return; }
-    const entry = { chantier, equipe, note, date:new Date().toISOString(), par:parLabel() };
-    rec.histoLoc = rec.histoLoc || []; rec.histoLoc.unshift(entry);
-    rec.loc = { chantier, equipe, depuis:entry.date };
-    await saveMachine(m, rec); reopen();
-  };
+  // (La localisation & l'équipe sont automatiques — plus de déplacement manuel ici.)
   // Vérif annuelle
   const vfIn = document.getElementById('vfInput');
   if(vfIn) vfIn.addEventListener('input', () => { const p=vfIn.selectionStart; vfIn.value=formatVerif(vfIn.value); });
@@ -574,7 +608,7 @@ function wireDetail(m, key){
     await saveMachine(m, rec); reopen();
   };
   document.querySelectorAll('[data-bris-res]').forEach(el => el.onclick = async () => { const id=el.getAttribute('data-bris-res'); const b=(rec.bris||[]).find(x=>x.id===id); if(b){ b.statut='resolu'; b.resoluDate=new Date().toISOString(); } await saveMachine(m, rec); reopen(); });
-  document.querySelectorAll('[data-bris-del]').forEach(el => el.onclick = async () => { if(!confirm('Supprimer ce bris ?')) return; const id=el.getAttribute('data-bris-del'); rec.bris=(rec.bris||[]).filter(x=>x.id!==id); await saveMachine(m, rec); reopen(); });
+  document.querySelectorAll('[data-bris-del]').forEach(el => el.onclick = async () => { if(!confirm('Supprimer ce bris ?')) return; const id=el.getAttribute('data-bris-del'); rec.bris=(rec.bris||[]).filter(x=>x.id!==id); (rec.del=rec.del||[]).push(id); await saveMachine(m, rec); reopen(); });
   // Réparations
   const repAdd = document.getElementById('repAdd');
   if(repAdd) repAdd.onclick = async () => {
@@ -584,7 +618,7 @@ function wireDetail(m, key){
     await saveMachine(m, rec); reopen();
   };
   document.querySelectorAll('[data-rep-cyc]').forEach(el => el.onclick = async () => { const id=el.getAttribute('data-rep-cyc'); const r=(rec.reparations||[]).find(x=>x.id===id); if(r){ r.statut = r.statut==='a_faire'?'en_cours':(r.statut==='en_cours'?'fait':'a_faire'); } await saveMachine(m, rec); reopen(); });
-  document.querySelectorAll('[data-rep-del]').forEach(el => el.onclick = async () => { if(!confirm('Supprimer cette réparation ?')) return; const id=el.getAttribute('data-rep-del'); rec.reparations=(rec.reparations||[]).filter(x=>x.id!==id); await saveMachine(m, rec); reopen(); });
+  document.querySelectorAll('[data-rep-del]').forEach(el => el.onclick = async () => { if(!confirm('Supprimer cette réparation ?')) return; const id=el.getAttribute('data-rep-del'); rec.reparations=(rec.reparations||[]).filter(x=>x.id!==id); (rec.del=rec.del||[]).push(id); await saveMachine(m, rec); reopen(); });
   // Inspections
   const inspAdd = document.getElementById('inspAdd');
   if(inspAdd) inspAdd.onclick = async () => {
@@ -592,7 +626,7 @@ function wireDetail(m, key){
     rec.inspections = rec.inspections||[]; rec.inspections.unshift({ id:uid(), date, conforme, note, par:parLabel() });
     await saveMachine(m, rec); reopen();
   };
-  document.querySelectorAll('[data-insp-del]').forEach(el => el.onclick = async () => { if(!confirm('Supprimer cette inspection ?')) return; const id=el.getAttribute('data-insp-del'); rec.inspections=(rec.inspections||[]).filter(x=>x.id!==id); await saveMachine(m, rec); reopen(); });
+  document.querySelectorAll('[data-insp-del]').forEach(el => el.onclick = async () => { if(!confirm('Supprimer cette inspection ?')) return; const id=el.getAttribute('data-insp-del'); rec.inspections=(rec.inspections||[]).filter(x=>x.id!==id); (rec.del=rec.del||[]).push(id); await saveMachine(m, rec); reopen(); });
   // Entretien moteur
   const entSave = document.getElementById('entSave');
   if(entSave) entSave.onclick = async () => { rec.huile=document.getElementById('entHuile').value.trim(); rec.tuneup=document.getElementById('entTune').value.trim(); await saveMachine(m, rec); reopen(); };
@@ -635,7 +669,7 @@ function xlsSheet(aoa, meta, widths, leftCols){
 function machSnapshotNow(){
   const snap = {};
   catalog.forEach(m => {
-    const r = recFor(m) || {}; const loc = r.loc || {};
+    const r = recFor(m) || {}; const loc = autoLocForMachine(m) || {};
     snap[machineKey(m)] = {
       nom:m.nom, verif:r.verif||'', chantier:loc.chantier||'', equipe:loc.equipe||'',
       huile:r.huile||'', tuneup:r.tuneup||'',
@@ -716,10 +750,10 @@ async function exporterExcel(){
       const aoa=[H], meta=[{header:true}];
       machines.forEach(m => {
         const st = machineStatus(m); const rec = st.rec || {};
-        const loc = rec.loc || {};
+        const loc = autoLocForMachine(m) || {};
         aoa.push([
           m.ident||'—', m.nom, loc.chantier||'', loc.equipe||'',
-          loc.depuis ? String(loc.depuis).slice(0,10) : '',
+          '',
           rec.verif||'', st.verifActive ? st.verif.label : 'n/a',
           st.openBris||0, st.openRepar||0,
           st.lastInsp ? String(st.lastInsp.date).slice(0,10) : '',
@@ -777,7 +811,8 @@ document.addEventListener('keydown', function(e){
     document.getElementById('list').innerHTML = '<div class="empty">Serveur injoignable. Vérifie ta connexion.</div>'; return;
   }
   try{
-    await Promise.all([ loadTeams(), loadCatalog(), loadRecords() ]);
+    await loadTeams();
+    await Promise.all([ loadCatalog(), loadRecords(), loadTeamAssignments() ]);
     renderSummary(); renderTabs(); renderList();
   }catch(e){
     console.error(e);

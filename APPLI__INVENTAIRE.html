@@ -1536,15 +1536,20 @@ async function saveDeviceUser(obj){
       nom: obj.nom || '',
       tel: obj.tel || '',
       courriel: obj.courriel || '',
+      urgence: obj.urgence || {},   // contact d'urgence (saisi à l'accueil / dans Infos)
       equipe: (myTeam ? (teams.find(t => t.id === myTeam)?.label || '') : ''),
       equipeId: myTeam || '',
       maj: new Date().toISOString(),
       extra: {}   // réservé pour plus tard (cartes, formations, etc.)
     };
     try{
-      // conserver un éventuel "extra" déjà présent pour ne pas l'écraser
+      // conserver "extra" ET "urgence" déjà présents pour ne pas les écraser
       const prev = await window.storage.get('inv:person:' + id, true);
-      if(prev && prev.value){ const p = JSON.parse(prev.value); if(p && p.extra) rec.extra = p.extra; }
+      if(prev && prev.value){
+        const p = JSON.parse(prev.value);
+        if(p && p.extra) rec.extra = p.extra;
+        if(p && p.urgence && p.urgence.nom && !(rec.urgence && rec.urgence.nom)) rec.urgence = p.urgence;
+      }
     }catch(e){}
     try{ await window.storage.set('inv:person:' + id, JSON.stringify(rec), true); }catch(e){}
     // si cet appareil avait été supprimé par l'admin, on le réhabilite

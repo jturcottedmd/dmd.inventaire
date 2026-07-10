@@ -79,6 +79,17 @@ automatiquement.
   localisation affiche, en lecture seule, le chantier de l'équipe qui détient la machine
   (n° de projet + adresse). Prête à recevoir la future fonction **Transport**.
 
+### 8. App Machinerie (tuile Machinerie) — localisation & équipe automatiques
+- Dans la tuile **Machinerie**, la **localisation et l'équipe** de chaque machine se
+  mettent à jour **automatiquement** dès qu'une machine est cochée dans une équipe dans
+  l'inventaire (onglet Machinerie). Fini la saisie manuelle du déplacement : la machine
+  affiche l'équipe et son chantier (n° projet + adresse). Une machine non cochée affiche
+  « Non assignée ». Un avis apparaît si une même machine est cochée dans plusieurs équipes.
+
+### 9. Tuile Chat
+- La description de la tuile Chat sur l'accueil n'indique plus les photos
+  (« Discussion de chantier »).
+
 ---
 
 ## À faire de ton côté (hors code) avant le déploiement officiel
