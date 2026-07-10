@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#232221">
+<title>DMD — Factures</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --asphalt:#232221; --asphalt-2:#2f2d2b; --paper:#f3efe6; --paper-dim:#d9d2c2;
+  --brick:#8a2f31; --brick-line:#5e2022; --logo-grey:#656263;
+  --safety-yellow:#f2b705; --ok-green:#4c7a3f; --danger-red:#c0392b; --line:#46433f;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-family:'Barlow',sans-serif;min-height:100%;}
+#app{min-height:100vh; display:flex; flex-direction:column; max-width:560px; margin:0 auto; background:var(--asphalt);}
+
+.hdr{
+  padding:14px 16px; background-color:#6e2325;
+  background-image:
+    linear-gradient(180deg, rgba(0,0,0,0.10), rgba(0,0,0,0.30)),
+    repeating-linear-gradient(0deg, rgba(48,16,16,0.85) 0px, rgba(48,16,16,0.85) 3px, transparent 3px, transparent 30px),
+    repeating-linear-gradient(90deg, rgba(48,16,16,0.85) 0px, rgba(48,16,16,0.85) 3px, transparent 3px, transparent 62px);
+  border-bottom:3px solid var(--brick-line); display:flex; align-items:center; gap:12px;
+}
+.back{ color:var(--paper); text-decoration:none; font-size:22px; line-height:1; padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.25); border:1px solid rgba(0,0,0,0.3); }
+.hdr-title{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:21px; letter-spacing:1.5px; text-transform:uppercase; margin:0; }
+.hdr-sub{ font-size:11.5px; letter-spacing:1px; text-transform:uppercase; color:var(--paper-dim); margin-top:1px; }
+
+/* Sélecteur de mois */
+.monthbar{ display:flex; align-items:center; gap:10px; padding:12px 14px 4px; }
+.mb-btn{ width:42px; height:42px; border-radius:10px; border:1.5px solid var(--line); background:var(--asphalt-2); color:var(--paper); font-size:18px; cursor:pointer; }
+.mb-label{ flex:1; text-align:center; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:20px; letter-spacing:1px; text-transform:uppercase; }
+.mb-label small{ display:block; font-family:'Barlow',sans-serif; font-size:11px; color:var(--paper-dim); letter-spacing:0.5px; text-transform:none; font-weight:500; }
+
+.summary{ display:flex; gap:8px; padding:10px 14px 2px; flex-wrap:wrap; }
+.sum-chip{ flex:1 1 auto; min-width:100px; background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:10px; padding:8px 11px; font-size:12px; color:var(--paper-dim); }
+.sum-chip b{ display:block; font-family:'Barlow Condensed',sans-serif; font-size:20px; color:var(--paper); }
+.sum-chip.warn{ border-color:var(--safety-yellow); } .sum-chip.warn b{ color:var(--safety-yellow); }
+.sum-chip.ok{ border-color:#345c2a; } .sum-chip.ok b{ color:#a9d39a; }
+
+.addbar{ padding:10px 14px 2px; }
+.add-btn{ width:100%; padding:14px; font-size:16px; font-weight:700; border:none; border-radius:12px; background:var(--brick); color:var(--paper); cursor:pointer; text-transform:uppercase; letter-spacing:0.5px; font-family:'Barlow Condensed',sans-serif; }
+
+.list{ padding:10px 14px 26px; display:flex; flex-direction:column; gap:10px; }
+.holder{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:14px; overflow:hidden; border-left-width:5px; }
+.holder.me{ border-color:var(--safety-yellow); }
+/* Pastille de bord : jaune = factures à confirmer, vert = mois confirmé */
+.holder.edge-yellow{ border-left-color:var(--safety-yellow); }
+.holder.edge-green{ border-left-color:var(--ok-green); }
+.save-status{ padding:4px 16px 0; font-size:11.5px; color:var(--paper-dim); min-height:16px; }
+.save-status.ok{ color:#a9d39a; } .save-status.err{ color:#ff9d8f; font-weight:700; }
+.h-head{ display:flex; align-items:center; gap:9px; padding:13px 14px; cursor:pointer; }
+.h-name{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:18px; flex:1; }
+.h-you{ font-size:10px; letter-spacing:0.5px; text-transform:uppercase; font-weight:700; background:var(--safety-yellow); color:#232221; border-radius:20px; padding:2px 8px; }
+.h-total{ font-weight:700; font-size:15px; color:var(--paper); }
+.h-sub{ padding:0 14px 10px; font-size:12px; color:var(--paper-dim); display:flex; gap:8px; flex-wrap:wrap; }
+.tag{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; border-radius:20px; padding:2px 8px; }
+.tag.red{ background:#3a1516; color:#ff9d8f; } .tag.green{ background:#1f3018; color:#a9d39a; } .tag.orange{ background:#3a2f0a; color:var(--safety-yellow); }
+.h-body{ border-top:1px solid var(--line); padding:10px 12px; display:none; }
+.holder.open .h-body{ display:block; }
+.fact{ display:flex; gap:10px; align-items:center; background:var(--asphalt); border:1px solid var(--line); border-radius:11px; padding:8px; margin-bottom:8px; }
+.fact img{ width:58px; height:58px; object-fit:cover; border-radius:8px; cursor:zoom-in; flex:0 0 auto; background:var(--asphalt-2); }
+.f-mid{ flex:1; min-width:0; }
+.f-montant{ font-weight:700; font-size:16px; }
+.f-info{ font-size:12px; color:var(--paper-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.f-actions{ display:flex; flex-direction:column; gap:5px; align-items:flex-end; }
+.f-btn{ background:var(--asphalt-2); border:1.5px solid var(--line); color:var(--paper); border-radius:8px; padding:6px 9px; font-size:11.5px; font-weight:600; cursor:pointer; font-family:'Barlow',sans-serif; }
+.f-btn.ok{ border-color:#345c2a; color:#a9d39a; }
+.f-btn.danger{ color:#ff9d8f; border-color:#5e2022; }
+.confirm-month{ width:100%; padding:11px; font-size:14px; font-weight:700; border:1.5px solid #345c2a; border-radius:10px; background:#1f3018; color:#a9d39a; cursor:pointer; margin-top:4px; font-family:'Barlow',sans-serif; }
+.month-done{ text-align:center; font-size:13px; color:#a9d39a; font-weight:700; padding:8px 0 2px; }
+
+.empty,.loading{ padding:34px 20px; text-align:center; color:var(--paper-dim); font-size:14px; line-height:1.5; }
+.foot{ margin-top:auto; padding:14px 18px 20px; color:var(--logo-grey); font-size:11px; text-align:center; border-top:1px solid var(--line); line-height:1.5; }
+
+/* Modale ajout */
+.overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.66); display:none; align-items:flex-start; justify-content:center; z-index:500; padding:16px; overflow:auto; }
+.overlay.show{ display:flex; }
+.modal{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:16px; padding:16px; width:100%; max-width:420px; margin:12px 0 30px; }
+.modal h3{ margin:0 0 10px; font-family:'Barlow Condensed',sans-serif; font-size:20px; letter-spacing:0.5px; text-transform:uppercase; }
+.field-label{ font-size:12px; text-transform:uppercase; letter-spacing:0.5px; color:var(--paper-dim); font-weight:700; margin:8px 0 4px; }
+.inp{ width:100%; padding:11px 13px; font-size:16px; border-radius:9px; border:1.5px solid var(--line); background:var(--asphalt); color:var(--paper); font-family:'Barlow',sans-serif; }
+.inp:focus{ outline:none; border-color:var(--paper-dim); }
+.photo-zone{ border:2px dashed var(--line); border-radius:12px; padding:14px; text-align:center; color:var(--paper-dim); cursor:pointer; margin-top:4px; }
+.photo-zone img{ max-width:100%; max-height:220px; border-radius:10px; }
+.pz-status{ font-size:12px; color:var(--paper-dim); margin-top:6px; }
+.btn{ width:100%; padding:12px; font-size:15px; font-weight:700; border:1.5px solid var(--line); border-radius:10px; background:var(--asphalt); color:var(--paper); cursor:pointer; margin-top:10px; font-family:'Barlow',sans-serif; }
+.btn.primary{ background:var(--brick); border-color:var(--brick-line); }
+.btn:disabled{ opacity:0.55; }
+.m-err{ color:#ff9d8f; font-size:13px; min-height:17px; font-weight:600; margin-top:6px; }
+
+/* Visualiseur zoom (repris du chat) */
+.viewer{ position:fixed; inset:0; background:#000; display:none; z-index:600; touch-action:none; overflow:hidden; }
+.viewer.show{ display:block; }
+.viewer img{ position:absolute; top:0; left:0; transform-origin:0 0; will-change:transform; user-select:none; -webkit-user-drag:none; }
+.viewer .vtop{ position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:center; padding:calc(10px + env(safe-area-inset-top)) 14px 10px; z-index:2; background:linear-gradient(180deg, rgba(0,0,0,0.6), transparent); }
+.viewer .vbtn{ background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.25); color:#fff; border-radius:8px; padding:8px 12px; font-size:16px; cursor:pointer; }
+.viewer .vmeta{ color:#fff; font-size:13px; opacity:0.85; }
+.viewer .vzoom{ position:absolute; bottom:calc(16px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); display:flex; gap:10px; z-index:2; }
+</style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+
+<div id="app">
+  <div class="hdr">
+    <a class="back" href="./index.html" aria-label="Accueil">←</a>
+    <div>
+      <h1 class="hdr-title">Factures</h1>
+      <div class="hdr-sub">Cartes de crédit · suivi mensuel</div>
+    </div>
+    <button id="exportBtn" style="display:none;margin-left:auto;background:#4c7a3f;color:#f3efe6;border:none;border-radius:6px;padding:7px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;white-space:nowrap;">⬇ Excel</button>
+  </div>
+
+  <div class="monthbar">
+    <button class="mb-btn" id="mPrev">‹</button>
+    <div class="mb-label" id="mLabel"></div>
+    <button class="mb-btn" id="mNext">›</button>
+  </div>
+
+  <div class="summary" id="summary"></div>
+  <div class="addbar"><button class="add-btn" id="addBtn">📸 Ajouter une facture</button></div>
+  <div class="save-status" id="saveStatus">&nbsp;</div>
+  <div class="list" id="list"><div class="loading">Chargement des factures…</div></div>
+
+  <div class="foot">
+    Chaque détenteur de carte publie ses factures au fil du mois,<br>
+    puis confirme son mois quand tout est là. Photos conservées en haute résolution.
+  </div>
+</div>
+
+<!-- Modale ajout de facture -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3>📸 Nouvelle facture</h3>
+    <div class="photo-zone" id="photoZone">
+      <div id="pzEmpty">Touche ici pour <b>photographier la facture</b><br><span style="font-size:12px;">(ou choisir dans la galerie)</span></div>
+      <img id="pzImg" style="display:none;" alt="">
+      <div class="pz-status" id="pzStatus"></div>
+    </div>
+    <div class="field-label">Montant ($)</div>
+    <input class="inp" id="fMontant" inputmode="decimal" placeholder="ex : 154.32">
+    <div class="field-label">Fournisseur</div>
+    <input class="inp" id="fFournisseur" placeholder="ex : BMR, Esso, Rona…">
+    <div class="field-label">Note (facultatif)</div>
+    <input class="inp" id="fNote" placeholder="ex : matériel chantier Chambly">
+    <div class="m-err" id="fErr">&nbsp;</div>
+    <button class="btn primary" id="fSend">Publier la facture</button>
+    <button class="btn" id="fCancel">Annuler</button>
+    <input type="file" id="camInput" accept="image/*" capture="environment" style="display:none;">
+    <input type="file" id="galInput" accept="image/*" style="display:none;">
+  </div>
+</div>
+
+<!-- Visualiseur photo -->
+<div class="viewer" id="viewer">
+  <div class="vtop">
+    <button class="vbtn" id="vClose">✕ Fermer</button>
+    <span class="vmeta" id="vMeta"></span>
+    <a class="vbtn" id="vOpen" target="_blank" rel="noopener">Ouvrir ↗</a>
+  </div>
+  <img id="vImg" alt="">
+  <div class="vzoom">
+    <button class="vbtn" id="vMinus">−</button>
+    <button class="vbtn" id="vReset">100%</button>
+    <button class="vbtn" id="vPlus">+</button>
+  </div>
+</div>
+
+<script>
+// ================== CONFIG ==================
+const SUPABASE_URL = "https://toajegeqsqulnhdwkajm.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvYWplZ2Vxc3F1bG5oZHdrYWptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1OTY1OTQsImV4cCI6MjA5OTE3MjU5NH0.LBLVG--c1d9V_ZRw-h_ATZE2SUX3OAP7lf0SxMqPqNE";
+const BUCKET = "chat-photos";        // même bucket que le chat (dossier factures/) — une seule config Supabase
+const ADMIN_CODE = "DMD-ADMIN";
+const MAX_DIM = 2560, JPEG_Q = 0.9;  // haute résolution : on doit pouvoir lire la facture
+
+let _sb = null;
+try{ if(window.supabase && window.supabase.createClient){ _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } }catch(e){ console.error(e); }
+function withTimeout(p, ms, label){ return Promise.race([Promise.resolve(p), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout:'+(label||''))), ms))]); }
+function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function getDeviceId(){ try{ let v=localStorage.getItem('inv:deviceId'); if(!v){ v='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); localStorage.setItem('inv:deviceId',v);} return v; }catch(e){ return 'dev_'+Math.random().toString(36).slice(2,10); } }
+function myName(){ try{ const v=localStorage.getItem('inv:deviceUser'); if(v){ const u=JSON.parse(v); if(u){ if(u.chantier) return 'Tablette de chantier'; if(u.nom) return u.nom; } } }catch(e){} return 'Appareil '+getDeviceId().slice(-4); }
+function fmtMoney(n){ const v=parseFloat(n); if(isNaN(v)) return '—'; return v.toLocaleString('fr-CA',{minimumFractionDigits:2, maximumFractionDigits:2})+' $'; }
+
+const storage = {
+  async get(k, shared=true){
+    if(shared===false){ try{ const v=localStorage.getItem(k); return v===null?null:{key:k,value:v}; }catch(e){ return null; } }
+    try{ const r=await withTimeout(_sb.from('inv_store').select('value').eq('key',k).maybeSingle(),8000,'get'); const {data,error}=r||{}; if(error){console.error(error);return null;} return data?{key:k,value:data.value}:null; }catch(e){ return null; }
+  },
+  async set(k, value, shared=true){
+    if(shared===false){ try{ localStorage.setItem(k,value); return {key:k,value}; }catch(e){ return null; } }
+    const {error}=await _sb.from('inv_store').upsert({key:k,value,updated_at:new Date().toISOString()}); if(error){console.error(error);return null;} return {key:k,value};
+  },
+  async del(k){ const {error}=await _sb.from('inv_store').delete().eq('key',k); return !error; }
+};
+
+// ================== MOIS ==================
+let curYM = (function(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); })();
+const MOIS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+function ymLabel(ym){ const [y,m]=ym.split('-').map(Number); return MOIS_FR[m-1].toUpperCase()+' '+y; }
+function ymShift(ym, delta){ let [y,m]=ym.split('-').map(Number); m+=delta; while(m<1){m+=12;y--;} while(m>12){m-=12;y++;} return y+'-'+String(m).padStart(2,'0'); }
+function isCurrentMonth(ym){ const d=new Date(); return ym === d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+
+// ================== DONNÉES ==================
+// clé : fact:<AAAA-MM>:<ISO>_<uid> — valeur JSON { id, ym, author, deviceId, montant, fournisseur, note, photo{url,path}, ts, statut }
+let factures = [];   // du mois affiché
+let isAdmin = false;
+let openHolders = new Set();
+
+async function loadAdmin(){ try{ const r=await storage.get('inv:isAdmin', false); isAdmin=!!(r&&r.value==='1'); }catch(e){ isAdmin=false; } }
+async function loadMonth(){
+  factures = [];
+  const r = await withTimeout(_sb.from('inv_store').select('key,value').like('key','fact:'+curYM+':%'), 12000, 'factures');
+  if(r && Array.isArray(r.data)){
+    r.data.forEach(row => { try{ const f=JSON.parse(row.value); if(f){ f._key=row.key; factures.push(f); } }catch(e){} });
+  }
+  factures.sort((a,b) => (a.ts||'').localeCompare(b.ts||''));
+}
+
+// ================== AFFICHAGE ==================
+function groupByHolder(){
+  const map = {};
+  factures.forEach(f => {
+    const id = f.deviceId || '?';
+    if(!map[id]) map[id] = { id, nom:f.author||'—', items:[], total:0, nonConf:0 };
+    map[id].items.push(f);
+    const v = parseFloat(f.montant); if(!isNaN(v)) map[id].total += v;
+    if(f.statut!=='confirmee') map[id].nonConf++;
+    if(f.author) map[id].nom = f.author;
+  });
+  return Object.values(map).sort((a,b)=> a.nom.localeCompare(b.nom,'fr'));
+}
+function renderSummary(){
+  const holders = groupByHolder();
+  let total=0, n=factures.length, nonConf=0;
+  factures.forEach(f => { const v=parseFloat(f.montant); if(!isNaN(v)) total+=v; if(f.statut!=='confirmee') nonConf++; });
+  document.getElementById('summary').innerHTML =
+    '<div class="sum-chip"><b>'+fmtMoney(total)+'</b>Total du mois</div>' +
+    '<div class="sum-chip"><b>'+n+'</b>Facture'+(n>1?'s':'')+' · '+holders.length+' carte'+(holders.length>1?'s':'')+'</div>' +
+    '<div class="sum-chip '+(nonConf? 'warn':'ok')+'"><b>'+nonConf+'</b>À confirmer</div>';
+}
+function renderList(){
+  const list = document.getElementById('list');
+  const holders = groupByHolder();
+  const myId = getDeviceId();
+  if(!holders.length){
+    list.innerHTML = '<div class="empty">Aucune facture pour '+escapeHtml(ymLabel(curYM))+'.<br>Touche « 📸 Ajouter une facture » pour publier la première.</div>';
+    return;
+  }
+  list.innerHTML = holders.map(h => {
+    const me = (h.id === myId);
+    const open = openHolders.has(h.id) || me;
+    const allConf = h.nonConf===0;
+    const rows = h.items.map(f => {
+      const conf = f.statut==='confirmee';
+      const canDel = (me && !conf) || isAdmin;
+      const canConf = me && !conf;
+      return '<div class="fact">' +
+        (f.photo && f.photo.url ? '<img src="'+escapeAttr(f.photo.url)+'" loading="lazy" data-full="'+escapeAttr(f.photo.url)+'" data-by="'+escapeAttr(f.author||'')+'" data-ts="'+escapeAttr(f.ts||'')+'">' : '') +
+        '<div class="f-mid">' +
+          '<div class="f-montant">'+fmtMoney(f.montant)+' <span class="tag '+(conf?'green':'orange')+'">'+(conf?'Confirmée':'Publiée')+'</span></div>' +
+          '<div class="f-info">'+escapeHtml(f.fournisseur||'—')+(f.note?' · '+escapeHtml(f.note):'')+' · '+new Date(f.ts).toLocaleDateString('fr-CA')+'</div>' +
+        '</div>' +
+        '<div class="f-actions">' +
+          (canConf ? '<button class="f-btn ok" data-conf="'+escapeAttr(f._key)+'">✔ Confirmer</button>' : '') +
+          (canDel ? '<button class="f-btn danger" data-del="'+escapeAttr(f._key)+'">Suppr.</button>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+    const confirmAll = (me && h.nonConf>0)
+      ? '<button class="confirm-month" data-confall="1">✅ Confirmer toutes mes factures du mois ('+h.nonConf+')</button>'
+      : (me && h.items.length ? '<div class="month-done">✔ Ton mois est confirmé — '+h.items.length+' facture'+(h.items.length>1?'s':'')+'</div>' : '');
+    return '<div class="holder'+(me?' me':'')+(open?' open':'')+(allConf?' edge-green':' edge-yellow')+'" data-holder="'+escapeAttr(h.id)+'">' +
+      '<div class="h-head">' +
+        '<span class="h-name">💳 '+escapeHtml(h.nom)+(me?' <span class="h-you">Toi</span>':'')+'</span>' +
+        '<span class="h-total">'+fmtMoney(h.total)+'</span>' +
+      '</div>' +
+      '<div class="h-sub">'+h.items.length+' facture'+(h.items.length>1?'s':'')+
+        (allConf ? ' <span class="tag green">Mois confirmé</span>' : ' <span class="tag orange">'+h.nonConf+' à confirmer</span>')+'</div>' +
+      '<div class="h-body">'+rows+confirmAll+'</div>' +
+    '</div>';
+  }).join('');
+
+  // interactions
+  list.querySelectorAll('.h-head').forEach(hd => hd.onclick = () => {
+    const el = hd.parentElement, id = el.getAttribute('data-holder');
+    if(openHolders.has(id)) openHolders.delete(id); else openHolders.add(id);
+    el.classList.toggle('open');
+  });
+  list.querySelectorAll('.fact img').forEach(img => img.onclick = () => openViewer(img.getAttribute('data-full'), img.getAttribute('data-by'), img.getAttribute('data-ts')));
+  list.querySelectorAll('[data-conf]').forEach(b => b.onclick = () => confirmOne(b.getAttribute('data-conf')));
+  list.querySelectorAll('[data-del]').forEach(b => b.onclick = () => delOne(b.getAttribute('data-del')));
+  list.querySelectorAll('[data-confall]').forEach(b => b.onclick = confirmAllMine);
+}
+function renderMonth(){ document.getElementById('mLabel').innerHTML = escapeHtml(ymLabel(curYM)) + '<small>' + (isCurrentMonth(curYM) ? 'mois en cours' : 'mois passé') + '</small>'; }
+async function refresh(){ renderMonth(); try{ await loadMonth(); renderSummary(); renderList(); }catch(e){ console.error(e); document.getElementById('list').innerHTML='<div class="empty">Impossible de charger les factures.</div>'; } }
+
+// ================== ACTIONS ==================
+function setSaveStatus(state){
+  const el = document.getElementById('saveStatus'); if(!el) return;
+  if(state==='saving'){ el.className='save-status'; el.textContent='💾 Enregistrement…'; }
+  else if(state==='ok'){ const d=new Date(); el.className='save-status ok'; el.textContent='✔ Enregistré à '+String(d.getHours()).padStart(2,'0')+'h'+String(d.getMinutes()).padStart(2,'0'); }
+  else if(state==='err'){ el.className='save-status err'; el.textContent='⚠ Non enregistré — vérifie la connexion et réessaie'; }
+  else { el.className='save-status'; el.innerHTML='&nbsp;'; }
+}
+async function confirmOne(key){
+  const f = factures.find(x=>x._key===key); if(!f) return;
+  f.statut='confirmee'; f.confirmeeLe=new Date().toISOString();
+  const rec = Object.assign({}, f); delete rec._key;
+  setSaveStatus('saving');
+  const res = await storage.set(key, JSON.stringify(rec), true);
+  setSaveStatus(res ? 'ok' : 'err');
+  renderSummary(); renderList();
+}
+async function confirmAllMine(){
+  const myId=getDeviceId();
+  const mine = factures.filter(f => f.deviceId===myId && f.statut!=='confirmee');
+  setSaveStatus('saving');
+  let allOk = true;
+  for(const f of mine){
+    f.statut='confirmee'; f.confirmeeLe=new Date().toISOString();
+    const rec=Object.assign({},f); delete rec._key;
+    const res = await storage.set(f._key, JSON.stringify(rec), true);
+    if(!res) allOk = false;
+  }
+  setSaveStatus(allOk ? 'ok' : 'err');
+  renderSummary(); renderList();
+}
+async function delOne(key){
+  const f = factures.find(x=>x._key===key); if(!f) return;
+  if(!confirm('Supprimer cette facture ('+fmtMoney(f.montant)+' — '+(f.fournisseur||'sans fournisseur')+') ?')) return;
+  setSaveStatus('saving');
+  const res = await storage.del(key);
+  setSaveStatus(res ? 'ok' : 'err');
+  factures = factures.filter(x=>x._key!==key);
+  renderSummary(); renderList();
+}
+
+// ================== AJOUT (photo + compression, comme le chat) ==================
+let pendingPhoto = null;
+async function compressImage(file){
+  const url = URL.createObjectURL(file);
+  try{
+    const img = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
+    let w=img.naturalWidth, h=img.naturalHeight;
+    const scale=Math.min(1, MAX_DIM/Math.max(w,h)); w=Math.round(w*scale); h=Math.round(h*scale);
+    const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+    canvas.getContext('2d').drawImage(img,0,0,w,h);
+    const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',JPEG_Q));
+    return { blob, w, h };
+  } finally { URL.revokeObjectURL(url); }
+}
+function openAdd(){
+  pendingPhoto=null;
+  document.getElementById('pzImg').style.display='none'; document.getElementById('pzImg').src='';
+  document.getElementById('pzEmpty').style.display='';
+  document.getElementById('pzStatus').textContent='';
+  document.getElementById('fMontant').value=''; document.getElementById('fFournisseur').value=''; document.getElementById('fNote').value='';
+  document.getElementById('fErr').innerHTML='&nbsp;';
+  document.getElementById('overlay').classList.add('show');
+}
+function closeAdd(){ document.getElementById('overlay').classList.remove('show'); if(pendingPhoto && pendingPhoto.url) URL.revokeObjectURL(pendingPhoto.url); pendingPhoto=null; }
+async function onPhotoChosen(file){
+  if(!file) return;
+  try{
+    const {blob,w,h}=await compressImage(file);
+    if(pendingPhoto && pendingPhoto.url) URL.revokeObjectURL(pendingPhoto.url);
+    pendingPhoto={ blob, w, h, url:URL.createObjectURL(blob) };
+    const img=document.getElementById('pzImg'); img.src=pendingPhoto.url; img.style.display='';
+    document.getElementById('pzEmpty').style.display='none';
+    document.getElementById('pzStatus').textContent=Math.round(blob.size/1024)+' Ko · '+w+'×'+h;
+  }catch(e){ console.error(e); document.getElementById('fErr').textContent="Impossible de préparer cette photo."; }
+}
+async function publish(){
+  const err=document.getElementById('fErr');
+  const montant=document.getElementById('fMontant').value.trim().replace(',','.');
+  const fournisseur=document.getElementById('fFournisseur').value.trim();
+  const note=document.getElementById('fNote').value.trim();
+  if(!pendingPhoto){ err.textContent='La photo de la facture est requise.'; return; }
+  if(!montant || isNaN(parseFloat(montant))){ err.textContent='Indique le montant de la facture.'; return; }
+  const btn=document.getElementById('fSend'); btn.disabled=true; err.textContent='Envoi…';
+  try{
+    const ts=new Date().toISOString();
+    const path='factures/'+curYM+'/'+getDeviceId()+'/'+ts.replace(/[:.]/g,'-')+'_'+uid()+'.jpg';
+    const up=await _sb.storage.from(BUCKET).upload(path, pendingPhoto.blob, { contentType:'image/jpeg', upsert:false });
+    if(up && up.error) throw up.error;
+    const pub=_sb.storage.from(BUCKET).getPublicUrl(path);
+    const urlPub=pub && pub.data ? pub.data.publicUrl : '';
+    const key='fact:'+curYM+':'+ts+'_'+uid();
+    const rec={ id:uid(), ym:curYM, author:myName(), deviceId:getDeviceId(), montant:parseFloat(montant).toFixed(2), fournisseur, note, photo:{url:urlPub, path, w:pendingPhoto.w, h:pendingPhoto.h}, ts, statut:'publiee' };
+    const saved=await storage.set(key, JSON.stringify(rec), true);
+    if(!saved) throw new Error('save');
+    closeAdd();
+    rec._key=key; factures.push(rec); factures.sort((a,b)=>(a.ts||'').localeCompare(b.ts||''));
+    setSaveStatus('ok');
+    renderSummary(); renderList();
+  }catch(e){
+    console.error(e);
+    setSaveStatus('err');
+    err.textContent="Envoi impossible. Vérifie la connexion et que le bucket « "+BUCKET+" » existe (voir le guide).";
+  }finally{ btn.disabled=false; }
+}
+
+// ================== VISUALISEUR ZOOM (repris du chat) ==================
+let vState={scale:1,x:0,y:0,natW:0,natH:0};
+function applyV(){ document.getElementById('vImg').style.transform='translate('+vState.x+'px,'+vState.y+'px) scale('+vState.scale+')'; }
+function fitViewer(){ const vw=window.innerWidth,vh=window.innerHeight; const s=Math.min(vw/vState.natW,vh/vState.natH); vState.scale=s; vState.x=(vw-vState.natW*s)/2; vState.y=(vh-vState.natH*s)/2; applyV(); }
+function openViewer(url,by,ts){
+  const img=document.getElementById('vImg');
+  document.getElementById('vMeta').textContent=(by||'')+(ts?' · '+new Date(ts).toLocaleString('fr-CA'):'');
+  document.getElementById('vOpen').href=url;
+  img.onload=()=>{ vState.natW=img.naturalWidth||1; vState.natH=img.naturalHeight||1; fitViewer(); };
+  img.src=url; document.getElementById('viewer').classList.add('show');
+}
+function closeViewer(){ document.getElementById('viewer').classList.remove('show'); document.getElementById('vImg').src=''; }
+function zoomBy(f,cx,cy){ const vw=window.innerWidth/2,vh=window.innerHeight/2; cx=cx==null?vw:cx; cy=cy==null?vh:cy; const ns=Math.max(0.2,Math.min(8,vState.scale*f)); const k=ns/vState.scale; vState.x=cx-(cx-vState.x)*k; vState.y=cy-(cy-vState.y)*k; vState.scale=ns; applyV(); }
+(function(){
+  const v=document.getElementById('viewer');
+  let pts=new Map(), lastDist=0, dragging=false, lx=0, ly=0;
+  v.addEventListener('pointerdown', e=>{ if(e.target.id==='vImg'||e.target===v){ v.setPointerCapture(e.pointerId); pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); dragging=true; lx=e.clientX; ly=e.clientY; } });
+  v.addEventListener('pointermove', e=>{
+    if(!pts.has(e.pointerId)) return; pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    const a=[...pts.values()];
+    if(a.length===2){ const dist=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y); const mid={x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2}; if(lastDist) zoomBy(dist/lastDist,mid.x,mid.y); lastDist=dist; }
+    else if(a.length===1 && dragging){ vState.x+=e.clientX-lx; vState.y+=e.clientY-ly; lx=e.clientX; ly=e.clientY; applyV(); }
+  });
+  function up(e){ pts.delete(e.pointerId); if(pts.size<2) lastDist=0; if(!pts.size) dragging=false; }
+  v.addEventListener('pointerup',up); v.addEventListener('pointercancel',up);
+  v.addEventListener('wheel', e=>{ e.preventDefault(); zoomBy(e.deltaY<0?1.15:0.87,e.clientX,e.clientY); }, {passive:false});
+  document.getElementById('vImg').addEventListener('dblclick', e=>zoomBy(vState.scale<1.5?2.2:0.45,e.clientX,e.clientY));
+})();
+
+// ================== ÉVÉNEMENTS ==================
+document.getElementById('mPrev').onclick = () => { curYM=ymShift(curYM,-1); refresh(); };
+document.getElementById('mNext').onclick = () => { curYM=ymShift(curYM, 1); refresh(); };
+document.getElementById('addBtn').onclick = openAdd;
+document.getElementById('fCancel').onclick = closeAdd;
+document.getElementById('fSend').onclick = publish;
+document.getElementById('overlay').addEventListener('click', e => { if(e.target.id==='overlay') closeAdd(); });
+document.getElementById('photoZone').onclick = () => document.getElementById('camInput').click();
+document.getElementById('camInput').onchange = e => { onPhotoChosen(e.target.files[0]); e.target.value=''; };
+document.getElementById('galInput').onchange = e => { onPhotoChosen(e.target.files[0]); e.target.value=''; };
+// appui long / clic droit sur la zone photo = galerie
+document.getElementById('photoZone').addEventListener('contextmenu', e => { e.preventDefault(); document.getElementById('galInput').click(); });
+document.getElementById('vClose').onclick = closeViewer;
+document.getElementById('vPlus').onclick = () => zoomBy(1.3);
+document.getElementById('vMinus').onclick = () => zoomBy(0.75);
+document.getElementById('vReset').onclick = fitViewer;
+
+/* ============================================================
+   EXPORT EXCEL (Ctrl+X révèle le bouton — même principe que l'inventaire)
+   ============================================================ */
+function xlsSheet(aoa, meta, widths, leftCols){
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = widths.map(w => ({wch:w}));
+  ws['!freeze'] = { xSplit:0, ySplit:1 };
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:aoa.length-1, c:widths.length-1}}) };
+  for(let r=0; r<aoa.length; r++){
+    for(let c=0; c<widths.length; c++){
+      const addr = XLSX.utils.encode_cell({r,c});
+      if(!ws[addr]) ws[addr] = { t:'s', v:'' };
+      const m = meta[r] || {};
+      let fill='FFFFFF', bold=false, fontColor='000000';
+      if(m.header){ fill='232221'; bold=true; fontColor='FFFFFF'; }
+      else if(m.cat){ fill='D9D2C2'; bold=true; }
+      else if(m.couleur==='red') fill='F4CCCC';
+      else if(m.couleur==='yellow') fill='FFF2CC';
+      else if(m.couleur==='green') fill='D9EAD3';
+      ws[addr].s = {
+        fill:{ patternType:'solid', fgColor:{rgb:fill} },
+        font:{ name:'Arial', sz:m.header?11:10, bold:bold, color:{rgb:fontColor} },
+        alignment:{ vertical:'center', horizontal:(leftCols.indexOf(c)!==-1)?'left':'center', wrapText:!!m.header },
+        border:{ top:{style:'thin',color:{rgb:'CCCCCC'}}, bottom:{style:'thin',color:{rgb:'CCCCCC'}},
+                 left:{style:'thin',color:{rgb:'CCCCCC'}}, right:{style:'thin',color:{rgb:'CCCCCC'}} }
+      };
+    }
+  }
+  return ws;
+}
+async function exporterExcel(){
+  const btn = document.getElementById('exportBtn');
+  const old = btn ? btn.textContent : '';
+  if(btn){ btn.textContent='...'; btn.disabled=true; }
+  try{
+    if(typeof XLSX === 'undefined'){ alert('Librairie Excel non chargée. Vérifie ta connexion.'); return; }
+    if(!factures.length){ alert('Aucune facture pour '+ymLabel(curYM)+'.'); return; }
+    const wb = XLSX.utils.book_new();
+    // --- Résumé modifs depuis le dernier export (du même mois) ---
+    const snapNow = {};
+    factures.forEach(f => { snapNow[f._key] = { montant:f.montant||'', statut:f.statut||'', author:f.author||'', fournisseur:f.fournisseur||'' }; });
+    let prevSnap = null;
+    try{ const r = await storage.get('inv:factSnapshot', true); if(r && r.value) prevSnap = JSON.parse(r.value); }catch(e){}
+    if(prevSnap && prevSnap.ym === curYM && prevSnap.data){
+      const diffs = [];
+      Object.keys(snapNow).forEach(k => {
+        const p = prevSnap.data[k], n = snapNow[k];
+        if(!p){ diffs.push({ row:[n.author, 'Nouvelle facture', n.montant+' $ · '+(n.fournisseur||'—'), ''], couleur:'yellow' }); return; }
+        if(p.statut !== n.statut && n.statut==='confirmee') diffs.push({ row:[n.author, 'Confirmée', n.montant+' $ · '+(n.fournisseur||'—'), ''], couleur:'green' });
+        if(p.montant !== n.montant) diffs.push({ row:[n.author, 'Montant modifié', p.montant+' $', n.montant+' $'], couleur:'yellow' });
+      });
+      Object.keys(prevSnap.data).forEach(k => {
+        if(!snapNow[k]){ const p = prevSnap.data[k]; diffs.push({ row:[p.author, 'Supprimée', p.montant+' $ · '+(p.fournisseur||'—'), ''], couleur:'red' }); }
+      });
+      const aoa=[['Détenteur','Changement','Détail','Après']], meta=[{header:true}];
+      const depuis = prevSnap.date ? new Date(prevSnap.date).toLocaleString('fr-CA') : '—';
+      aoa.push(['Depuis le dernier export : '+depuis, '', '', '']); meta.push({cat:true});
+      if(diffs.length){ diffs.forEach(dd => { aoa.push(dd.row); meta.push({couleur:dd.couleur}); }); }
+      else { aoa.push(['Aucune modification.', '', '', '']); meta.push({}); }
+      XLSX.utils.book_append_sheet(wb, xlsSheet(aoa, meta, [28,20,32,18], [0,2]), 'Résumé modifs');
+    }
+    // --- Résumé par détenteur ---
+    const holders = groupByHolder();
+    const aoa1=[['Détenteur','Nb factures','Total ($)','Confirmées','À confirmer']], meta1=[{header:true}];
+    let grandTotal=0;
+    holders.forEach(h => {
+      grandTotal += h.total;
+      aoa1.push([h.nom, h.items.length, h.total.toFixed(2), h.items.length-h.nonConf, h.nonConf]);
+      meta1.push({couleur: h.nonConf===0 ? 'green' : 'yellow'});
+    });
+    aoa1.push(['TOTAL '+ymLabel(curYM), factures.length, grandTotal.toFixed(2), '', '']);
+    meta1.push({cat:true});
+    XLSX.utils.book_append_sheet(wb, xlsSheet(aoa1, meta1, [28,12,14,12,13], [0]), 'Résumé');
+    // --- Détail des factures ---
+    const aoa2=[['Détenteur','Date','Montant ($)','Fournisseur','Note','Statut']], meta2=[{header:true}];
+    factures.slice().sort((a,b)=>(a.author||'').localeCompare(b.author||'','fr') || (a.ts||'').localeCompare(b.ts||'')).forEach(f => {
+      aoa2.push([ f.author||'—', String(f.ts||'').slice(0,10), f.montant||'', f.fournisseur||'', f.note||'',
+                  f.statut==='confirmee'?'Confirmée':'Publiée' ]);
+      meta2.push({couleur: f.statut==='confirmee' ? 'green' : 'yellow'});
+    });
+    XLSX.utils.book_append_sheet(wb, xlsSheet(aoa2, meta2, [28,12,12,20,36,13], [0,3,4]), 'Factures');
+    XLSX.writeFile(wb, 'Factures_DMD_' + curYM + '.xlsx');
+    // Nouvel instantané pour la prochaine comparaison (par mois)
+    try{ await storage.set('inv:factSnapshot', JSON.stringify({ ym:curYM, date:new Date().toISOString(), data:snapNow }), true); }catch(e){}
+    if(btn) btn.style.display='none';
+  }catch(e){ console.error(e); alert("Une erreur est survenue pendant l'export."); }
+  finally{ if(btn){ btn.textContent=old||'⬇ Excel'; btn.disabled=false; } }
+}
+document.getElementById('exportBtn').addEventListener('click', exporterExcel);
+document.addEventListener('keydown', function(e){
+  if((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key==='x' || e.key==='X')){
+    const el = document.activeElement;
+    if(el && (el.tagName==='INPUT' || el.tagName==='TEXTAREA' || el.isContentEditable)) return;
+    e.preventDefault();
+    const btn = document.getElementById('exportBtn');
+    if(btn){ btn.style.display=''; btn.focus(); }
+  }
+});
+
+// ================== DÉMARRAGE ==================
+(async function(){
+  if(!_sb){ document.getElementById('list').innerHTML='<div class="empty">Connexion au serveur impossible (librairie non chargée).</div>'; return; }
+  try{
+    const { data } = await withTimeout(_sb.auth.getSession(), 8000, 'getSession');
+    if(!data || !data.session){ location.replace('./index.html'); return; }
+  }catch(e){ document.getElementById('list').innerHTML='<div class="empty">Serveur injoignable.</div>'; return; }
+  await loadAdmin();
+  await refresh();
+})();
+</script>
+</body>
+</html>

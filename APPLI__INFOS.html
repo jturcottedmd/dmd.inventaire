@@ -65,9 +65,15 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 .list{ padding:8px 14px 20px; display:flex; flex-direction:column; gap:10px; }
 .card{
   background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:14px;
-  padding:14px 14px 12px;
+  padding:14px 14px 12px; border-left-width:5px;
 }
 .card.me{ border-color:var(--safety-yellow); }
+/* Pastille de bord : pire échéance de formation de la personne */
+.card.edge-red{ border-left-color:var(--danger-red); }
+.card.edge-yellow{ border-left-color:var(--safety-yellow); }
+.card.edge-green{ border-left-color:var(--ok-green); }
+.save-status{ padding:2px 18px 0; font-size:11.5px; color:var(--paper-dim); min-height:16px; }
+.save-status.ok{ color:#a9d39a; } .save-status.err{ color:#ff9d8f; font-weight:700; }
 .p-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
 .p-name{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:19px; letter-spacing:0.5px; }
 .p-you{
@@ -120,10 +126,37 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 .m-err{ color:#ff9d8f; font-size:13px; min-height:16px; font-weight:600; }
 .m-btn{ width:100%; padding:11px; font-size:15px; font-weight:700; border:none; border-radius:8px; background:var(--brick); color:var(--paper); cursor:pointer; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px; }
 .m-btn.cancel{ background:var(--asphalt); border:1.5px solid var(--line); text-transform:none; letter-spacing:0; font-weight:600; }
+
+/* ---- Zone admin (mode admin + synchro formations) ---- */
+.admin-wrap{ padding:2px 14px 0; }
+.admin-toggle{
+  width:100%; padding:9px; font-size:13px; font-weight:600; cursor:pointer;
+  border:1.5px solid var(--line); border-radius:10px; background:var(--asphalt-2);
+  color:var(--paper-dim); font-family:'Barlow',sans-serif;
+}
+.admin-zone{ background:rgba(242,183,5,0.08); border:1.5px solid var(--safety-yellow); border-radius:12px; padding:12px; }
+.admin-zone-title{ font-family:'Barlow Condensed',sans-serif; font-weight:700; color:var(--safety-yellow); font-size:15px; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px; }
+.admin-maj{ font-size:12px; color:var(--paper-dim); margin-bottom:9px; }
+.admin-btn{
+  width:100%; padding:11px; font-size:14px; font-weight:700; cursor:pointer;
+  border:1.5px solid var(--line); border-radius:9px; background:var(--asphalt);
+  color:var(--paper); font-family:'Barlow',sans-serif; margin-bottom:6px;
+}
+.admin-btn.primary{ background:var(--brick); border-color:var(--brick-line); color:var(--paper); }
+.admin-btn:last-child{ margin-bottom:0; }
+/* Boutons admin sur chaque fiche */
+.p-admin{ margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
+.p-admin-btn{
+  background:var(--asphalt); color:var(--paper-dim); border:1.5px solid var(--line);
+  border-radius:8px; padding:7px 10px; font-weight:600; font-family:'Barlow',sans-serif;
+  cursor:pointer; font-size:12px;
+}
+.p-admin-btn.danger{ color:#ff9d8f; border-color:#5e2022; }
 </style>
 </head>
 <body>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 
 <div id="app">
   <div class="hdr">
@@ -132,12 +165,15 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
       <h1 class="hdr-title">Infos personnelles</h1>
       <div class="hdr-sub">Répertoire & formations</div>
     </div>
+    <button id="exportBtn" style="display:none;margin-left:auto;background:#4c7a3f;color:#f3efe6;border:none;border-radius:6px;padding:7px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;white-space:nowrap;">⬇ Excel</button>
   </div>
 
   <div class="toolbar">
     <input type="search" id="search" placeholder="🔍 Chercher un nom…">
   </div>
   <div class="count" id="count"></div>
+  <div class="save-status" id="saveStatus">&nbsp;</div>
+  <div id="adminBar" class="admin-wrap"></div>
 
   <div class="list" id="list"><div class="loading">Chargement du répertoire…</div></div>
 
@@ -175,6 +211,175 @@ function withTimeout(promise, ms, label){
 
 function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
+
+// ================== STOCKAGE PARTAGÉ (même logique que l'inventaire) ==================
+// shared=true -> Supabase (partagé entre tous) ; shared=false -> localStorage (cet appareil)
+window.storage = {
+  async get(k, shared = true){
+    if(shared === false){
+      try{ const v = localStorage.getItem(k); return v === null ? null : { key:k, value:v }; }
+      catch(e){ return null; }
+    }
+    try{
+      const res = await withTimeout(_sb.from('inv_store').select('value').eq('key', k).maybeSingle(), 8000, 'get:'+k);
+      const { data, error } = res || {};
+      if(error){ console.error(error); return null; }
+      return data ? { key:k, value:data.value } : null;
+    }catch(e){ console.error(e); return null; }
+  },
+  async set(k, value, shared = true){
+    if(shared === false){
+      try{ localStorage.setItem(k, value); return { key:k, value }; }catch(e){ return null; }
+    }
+    const { error } = await _sb.from('inv_store').upsert({ key:k, value:value, updated_at:new Date().toISOString() });
+    if(error){ console.error(error); return null; }
+    return { key:k, value };
+  },
+  async delete(k, shared = true){
+    if(shared === false){
+      try{ localStorage.removeItem(k); return { key:k, deleted:true }; }catch(e){ return null; }
+    }
+    const { error } = await _sb.from('inv_store').delete().eq('key', k);
+    if(error){ console.error(error); return null; }
+    return { key:k, deleted:true };
+  }
+};
+
+// ================== MODE ADMIN (débloqué par code, mémorisé sur cet appareil) ==================
+let isAdmin = false;
+const ADMIN_CODE = 'DMD-ADMIN';   // même code que l'inventaire (modifiable sur demande)
+async function loadAdmin(){
+  try{ const r = await window.storage.get('inv:isAdmin', false); isAdmin = !!(r && r.value === '1'); }catch(e){ isAdmin = false; }
+}
+async function setAdmin(on){
+  isAdmin = !!on;
+  try{ await window.storage.set('inv:isAdmin', on ? '1' : '0', false); }catch(e){}
+}
+
+// ================== FORMATIONS — IMPORT / SYNCHRO EXCEL (admin) ==================
+function indexFormations(data){
+  data.people = Array.isArray(data.people) ? data.people : [];
+  return data;
+}
+async function saveFormations(data){
+  formationsData = indexFormations(data);
+  try{ await window.storage.set('inv:formations', JSON.stringify({ people:data.people, maj:data.maj }), true); }catch(e){}
+}
+// Lit l'Excel croisé « Liste des formations » : en-têtes sur 2 lignes,
+// blocs de 3 lignes par employé (Date / Attestation reçu / Échéance).
+async function importFormationsFromFile(file){
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type:'array', cellDates:true });
+
+  // Choisir la feuille croisée : celle qui contient « EMPLOYÉ » en haut à gauche
+  // et une ligne « Échéance ».
+  let sheet = null;
+  wb.SheetNames.forEach(sn => {
+    const ws = wb.Sheets[sn];
+    const aoa = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:false });
+    const flat = aoa.slice(0,6).map(r => (r||[]).join(' ')).join(' ').toLowerCase();
+    const hasEmp = /employ/.test(flat);
+    const hasEch = aoa.some(r => (r||[]).some(c => /échéance|echeance/i.test(String(c))));
+    if(hasEmp && hasEch && !sheet){ sheet = { sn, aoa }; }
+  });
+  if(!sheet) return { people:[], maj:new Date().toISOString() };
+
+  const aoa = sheet.aoa;
+  const fmt = v => {
+    if(v == null) return '';
+    if(v instanceof Date){ return v.getFullYear() + '-' + String(v.getMonth()+1).padStart(2,'0') + '-' + String(v.getDate()).padStart(2,'0'); }
+    return String(v).trim();
+  };
+
+  // Ligne d'en-tête des formations = celle qui contient « SECOURISTE » (ou SILICE)
+  let hRow = -1;
+  for(let r=0; r<Math.min(aoa.length, 6); r++){
+    if((aoa[r]||[]).some(c => /secouriste|silice/i.test(String(c)))){ hRow = r; break; }
+  }
+  if(hRow === -1) hRow = 1;
+  // colonnes de formation = à partir de la 3e colonne (index 2)
+  const formCols = [];
+  const headerRow = aoa[hRow] || [];
+  for(let c=2; c<headerRow.length; c++){
+    const nom = fmt(headerRow[c]).replace(/\s+/g,' ').trim();
+    if(nom) formCols.push({ c, nom });
+  }
+
+  // Blocs employés : nom en colonne 0 (1re ligne) ; 3 lignes = Date / Attestation / Échéance.
+  const people = [];
+  let r = hRow + 1;
+  while(r < aoa.length){
+    const nom = fmt((aoa[r]||[])[0]);
+    if(nom){
+      const rowDate = aoa[r] || [], rowAtt = aoa[r+1] || [], rowEch = aoa[r+2] || [];
+      const forms = [];
+      formCols.forEach(({c, nom:fnom}) => {
+        const d = fmt(rowDate[c]), a = fmt(rowAtt[c]), e = fmt(rowEch[c]);
+        if(d || a || e){ forms.push({ formation:fnom, date:d, attestation:a, echeance:e }); }
+      });
+      if(forms.length) people.push({ nom, forms });
+      r += 3;
+    } else {
+      r += 1;
+    }
+  }
+  return { people, maj:new Date().toISOString() };
+}
+
+// ================== BARRE ADMIN (mode admin + synchro formations) ==================
+function renderAdminBar(){
+  const el = document.getElementById('adminBar');
+  if(!el) return;
+  if(!isAdmin){
+    el.innerHTML = '<button type="button" class="admin-toggle" id="adminUnlock">🔑 Mode admin</button>';
+    const unlock = document.getElementById('adminUnlock');
+    if(unlock) unlock.onclick = async () => {
+      const code = prompt('Code admin :');
+      if(code == null) return;
+      if(code.trim() === ADMIN_CODE){ await setAdmin(true); renderAdminBar(); render(); }
+      else alert('Code incorrect.');
+    };
+    return;
+  }
+  const majTxt = (formationsData && formationsData.maj)
+    ? ('Formations à jour : ' + new Date(formationsData.maj).toLocaleDateString('fr-CA'))
+    : 'Aucune formation importée.';
+  el.innerHTML =
+    '<div class="admin-zone">' +
+      '<div class="admin-zone-title">🔑 Mode admin</div>' +
+      '<div class="admin-maj">' + escapeHtml(majTxt) + '</div>' +
+      '<input type="file" id="formFile" accept=".xlsx,.xls,.csv" style="display:none;">' +
+      '<button type="button" class="admin-btn primary" id="importForm">📥 Mettre à jour les formations (Excel)</button>' +
+      '<button type="button" class="admin-btn" id="adminLock">Quitter le mode admin</button>' +
+    '</div>';
+  const lock = document.getElementById('adminLock');
+  if(lock) lock.onclick = async () => { await setAdmin(false); renderAdminBar(); render(); };
+  const importBtn = document.getElementById('importForm');
+  const fileInp = document.getElementById('formFile');
+  if(importBtn && fileInp){
+    importBtn.onclick = () => fileInp.click();
+    fileInp.onchange = async () => {
+      const f = fileInp.files && fileInp.files[0];
+      if(!f) return;
+      try{
+        importBtn.textContent = 'Lecture…'; importBtn.disabled = true;
+        const data = await importFormationsFromFile(f);
+        if(!data.people || !data.people.length){
+          alert('Aucune formation trouvée. Vérifie que la feuille « Liste des formations » est présente (colonne EMPLOYÉ + ligne Échéance).');
+        } else {
+          await saveFormations(data);
+          const total = data.people.reduce((n,p) => n + p.forms.length, 0);
+          alert(data.people.length + ' employé(s) et ' + total + ' formation(s) importés.');
+        }
+      }catch(e){ console.error(e); alert('Impossible de lire ce fichier Excel.'); }
+      finally{
+        importBtn.textContent = '📥 Mettre à jour les formations (Excel)';
+        importBtn.disabled = false;
+        renderAdminBar(); render();
+      }
+    };
+  }
+}
 
 // --- Identité de CET appareil (mêmes clés que l'accueil et l'inventaire) ---
 function getDeviceId(){
@@ -265,6 +470,20 @@ async function loadAll(){
   }
 }
 
+// Pire niveau d'échéance de formation d'une personne (pour la pastille de bord)
+function worstFormationLevel(nom){
+  if(!formationsData || !Array.isArray(formationsData.people)) return null;
+  let match = formationsData.people.find(p => normNom(p.nom) === normNom(nom));
+  if(!match) match = formationsData.people.find(p => nomsProches(p.nom, nom));
+  if(!match || !match.forms || !match.forms.length) return null;
+  let worst = null;
+  const rank = { green:1, orange:2, red:3 };
+  match.forms.forEach(f => {
+    const st = echeanceStatus(f.echeance);
+    if(st && (!worst || rank[st.level] > rank[worst])) worst = st.level;
+  });
+  return worst;
+}
 function formationsHtmlFor(nom){
   if(!formationsData || !Array.isArray(formationsData.people)) return '';
   let match = formationsData.people.find(p => normNom(p.nom) === normNom(nom));
@@ -307,17 +526,70 @@ function render(){
     const equipe = p.equipe ? '<span class="p-team">' + escapeHtml(p.equipe) + '</span>' : '';
     const carte = (p.extra && p.extra.carteUrl)
       ? '<div class="p-carte"><a href="' + escapeAttr(p.extra.carteUrl) + '" target="_blank" rel="noopener">🪪 Voir la carte / certificat</a></div>' : '';
-    return '<div class="card' + (isMe ? ' me' : '') + '">' +
+    const pKey = escapeAttr(p._key || ('inv:person:' + p.id));
+    const adminBtns = isAdmin
+      ? '<div class="p-admin">' +
+          '<button type="button" class="p-admin-btn" data-carte-key="' + pKey + '">🔗 ' + ((p.extra && p.extra.carteUrl) ? 'Modifier' : 'Ajouter') + ' lien carte</button>' +
+          '<button type="button" class="p-admin-btn danger" data-del-key="' + pKey + '" data-del-id="' + escapeAttr(p.id || '') + '" data-del-nom="' + escapeAttr(p.nom || '') + '">🗑️ Supprimer</button>' +
+        '</div>'
+      : '';
+    const wl = worstFormationLevel(p.nom);
+    const edge = wl ? (' edge-' + (wl==='orange' ? 'yellow' : wl)) : '';
+    return '<div class="card' + (isMe ? ' me' : '') + edge + '">' +
       '<div class="p-top"><span class="p-name">' + escapeHtml(p.nom || '(sans nom)') +
         (isMe ? ' <span class="p-you">Toi</span>' : '') + '</span>' + equipe + '</div>' +
       (contact ? '<div class="p-contact">' + contact + '</div>' : '') +
       carte +
       formationsHtmlFor(p.nom) +
       (isMe ? '<button type="button" class="edit-btn" id="editMe">✏️ Modifier mes infos</button>' : '') +
+      adminBtns +
       '</div>';
   }).join('');
   const btn = document.getElementById('editMe');
   if(btn) btn.onclick = openEdit;
+
+  // ---- Actions admin par personne (lien carte + suppression) ----
+  if(isAdmin){
+    list.querySelectorAll('[data-carte-key]').forEach(b => {
+      b.onclick = async () => {
+        const key = b.getAttribute('data-carte-key');
+        const person = people.find(x => (x._key || ('inv:person:' + x.id)) === key);
+        const actuel = (person && person.extra && person.extra.carteUrl) || '';
+        const url = prompt('Lien vers la photo de la carte / certificat (Google Drive, etc.) :', actuel);
+        if(url == null) return;
+        const rec = Object.assign({}, person);
+        delete rec._key; // ne pas enregistrer la clé technique dans la valeur
+        rec.extra = Object.assign({}, (person && person.extra) || {}, { carteUrl: url.trim() });
+        try{ await window.storage.set(key, JSON.stringify(rec), true); }catch(e){}
+        try{ await loadAll(); }catch(e){}
+        render();
+      };
+    });
+    list.querySelectorAll('[data-del-key]').forEach(b => {
+      b.onclick = async () => {
+        const key = b.getAttribute('data-del-key');
+        const pid = b.getAttribute('data-del-id') || key.replace('inv:person:', '');
+        const pnom = b.getAttribute('data-del-nom') || 'cette personne';
+        if(!confirm('Supprimer la fiche de « ' + pnom + ' » ?\n\n' +
+          'Elle disparaîtra du répertoire. La personne devra se réidentifier pour recréer sa fiche.')) return;
+        // 1) retirer la fiche partagée
+        try{ await window.storage.delete(key, true); }catch(e){}
+        // 2) marquer l'appareil comme « supprimé » pour qu'il ne se recrée pas tout seul
+        try{
+          const raw = await window.storage.get('inv:deletedPeople', true);
+          const arr = (raw && raw.value) ? JSON.parse(raw.value) : [];
+          if(arr.indexOf(pid) === -1) arr.push(pid);
+          await window.storage.set('inv:deletedPeople', JSON.stringify(arr), true);
+        }catch(e){}
+        // 3) si c'est CET appareil, effacer l'identité locale -> réidentification forcée
+        if(pid === getDeviceId()){
+          try{ localStorage.removeItem('inv:deviceUser'); }catch(e){}
+        }
+        try{ await loadAll(); }catch(e){}
+        render();
+      };
+    });
+  }
 }
 
 // ================== MODIFIER MES INFOS ==================
@@ -340,18 +612,97 @@ document.getElementById('idSave').onclick = async () => {
   try{ localStorage.setItem('inv:deviceUser', JSON.stringify(obj)); }catch(e){}
   document.getElementById('overlay').classList.remove('show');
   // Met à jour la fiche partagée puis recharge la liste
+  const stEl = document.getElementById('saveStatus');
+  if(stEl){ stEl.className='save-status'; stEl.textContent='💾 Enregistrement…'; }
   try{
     const id = getDeviceId();
     const rec = { id, nom, tel, courriel, equipe:'', equipeId:'', maj:new Date().toISOString(), extra:{} };
     const prev = people.find(x => x.id === id);
     if(prev){ rec.equipe = prev.equipe || ''; rec.equipeId = prev.equipeId || ''; if(prev.extra) rec.extra = prev.extra; }
     await withTimeout(_sb.from('inv_store').upsert({ key:'inv:person:' + id, value:JSON.stringify(rec), updated_at:new Date().toISOString() }), 10000, 'save');
-  }catch(e){ console.error(e); }
+    if(stEl){ const d=new Date(); stEl.className='save-status ok'; stEl.textContent='✔ Enregistré à '+String(d.getHours()).padStart(2,'0')+'h'+String(d.getMinutes()).padStart(2,'0'); }
+  }catch(e){
+    console.error(e);
+    if(stEl){ stEl.className='save-status err'; stEl.textContent='⚠ Non enregistré — vérifie la connexion et réessaie'; }
+  }
   try{ await loadAll(); }catch(e){}
   render();
 };
 
 document.getElementById('search').addEventListener('input', render);
+
+/* ============================================================
+   EXPORT EXCEL (Ctrl+X révèle le bouton — même principe que l'inventaire)
+   ============================================================ */
+function xlsSheet(aoa, meta, widths, leftCols){
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = widths.map(w => ({wch:w}));
+  ws['!freeze'] = { xSplit:0, ySplit:1 };
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:aoa.length-1, c:widths.length-1}}) };
+  for(let r=0; r<aoa.length; r++){
+    for(let c=0; c<widths.length; c++){
+      const addr = XLSX.utils.encode_cell({r,c});
+      if(!ws[addr]) ws[addr] = { t:'s', v:'' };
+      const m = meta[r] || {};
+      let fill='FFFFFF', bold=false, fontColor='000000';
+      if(m.header){ fill='232221'; bold=true; fontColor='FFFFFF'; }
+      else if(m.cat){ fill='D9D2C2'; bold=true; }
+      else if(m.couleur==='red') fill='F4CCCC';
+      else if(m.couleur==='yellow') fill='FFF2CC';
+      else if(m.couleur==='green') fill='D9EAD3';
+      ws[addr].s = {
+        fill:{ patternType:'solid', fgColor:{rgb:fill} },
+        font:{ name:'Arial', sz:m.header?11:10, bold:bold, color:{rgb:fontColor} },
+        alignment:{ vertical:'center', horizontal:(leftCols.indexOf(c)!==-1)?'left':'center', wrapText:!!m.header },
+        border:{ top:{style:'thin',color:{rgb:'CCCCCC'}}, bottom:{style:'thin',color:{rgb:'CCCCCC'}},
+                 left:{style:'thin',color:{rgb:'CCCCCC'}}, right:{style:'thin',color:{rgb:'CCCCCC'}} }
+      };
+    }
+  }
+  return ws;
+}
+async function exporterExcel(){
+  const btn = document.getElementById('exportBtn');
+  const old = btn ? btn.textContent : '';
+  if(btn){ btn.textContent='...'; btn.disabled=true; }
+  try{
+    if(typeof XLSX === 'undefined'){ alert('Librairie Excel non chargée. Vérifie ta connexion.'); return; }
+    if(!people.length && !(formationsData && formationsData.people && formationsData.people.length)){ alert('Aucune donnée à exporter.'); return; }
+    const wb = XLSX.utils.book_new();
+    // --- Répertoire ---
+    if(people.length){
+      const aoa=[['Nom','Téléphone','Courriel','Équipe']], meta=[{header:true}];
+      people.forEach(p => { aoa.push([p.nom||'—', p.tel||'', p.courriel||'', p.equipe||'']); meta.push({}); });
+      XLSX.utils.book_append_sheet(wb, xlsSheet(aoa, meta, [30,16,32,14], [0,2]), 'Répertoire');
+    }
+    // --- Formations (avec échéances colorées, comme à l'écran) ---
+    if(formationsData && Array.isArray(formationsData.people) && formationsData.people.length){
+      const aoa=[['Employé','Formation','Date','Attestation','Échéance','Statut']], meta=[{header:true}];
+      formationsData.people.forEach(pers => {
+        (pers.forms||[]).forEach(f => {
+          const st = echeanceStatus(f.echeance);
+          aoa.push([pers.nom, f.formation||'', f.date||'', f.attestation||'', f.echeance||'', st?st.label:'']);
+          meta.push({couleur: st ? (st.level==='orange'?'yellow':st.level) : null});
+        });
+      });
+      XLSX.utils.book_append_sheet(wb, xlsSheet(aoa, meta, [30,26,12,12,14,16], [0,1]), 'Formations');
+    }
+    const d = new Date();
+    XLSX.writeFile(wb, 'Infos_DMD_' + d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + '.xlsx');
+    if(btn) btn.style.display='none';
+  }catch(e){ console.error(e); alert("Une erreur est survenue pendant l'export."); }
+  finally{ if(btn){ btn.textContent=old||'⬇ Excel'; btn.disabled=false; } }
+}
+document.getElementById('exportBtn').addEventListener('click', exporterExcel);
+document.addEventListener('keydown', function(e){
+  if((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key==='x' || e.key==='X')){
+    const el = document.activeElement;
+    if(el && (el.tagName==='INPUT' || el.tagName==='TEXTAREA' || el.isContentEditable)) return;
+    e.preventDefault();
+    const btn = document.getElementById('exportBtn');
+    if(btn){ btn.style.display=''; btn.focus(); }
+  }
+});
 
 // ================== DÉMARRAGE ==================
 (async function(){
@@ -369,8 +720,10 @@ document.getElementById('search').addEventListener('input', render);
     return;
   }
   try{
+    await loadAdmin();
     await loadAll();
     render();
+    renderAdminBar();
   }catch(e){
     console.error(e);
     list.innerHTML = '<div class="empty">Impossible de charger le répertoire. Vérifie ta connexion et réessaie.</div>';

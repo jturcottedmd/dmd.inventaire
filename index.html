@@ -251,6 +251,30 @@ const APPS = [
     soon:false
   },
   {
+    id:'machinerie',
+    nom:'Machinerie',
+    desc:'Lift · Fraco · Mixeur · Scie',
+    icon:'machinerie',
+    href:'./APPLI__MACHINERIE.html',   // <-- suivi machinerie : vérifs, bris, inspections, réparations, chantier
+    soon:false
+  },
+  {
+    id:'chat',
+    nom:'Chat',
+    desc:'Discussion & photos chantier',
+    icon:'chat',
+    href:'./APPLI__CHAT.html',   // <-- canal de chat + photos live (Supabase Storage)
+    soon:false
+  },
+  {
+    id:'factures',
+    nom:'Factures',
+    desc:'Cartes de crédit · suivi mensuel',
+    icon:'factures',
+    href:'./APPLI__FACTURES.html',   // <-- photos de factures par mois / détenteur de carte
+    soon:false
+  },
+  {
     id:'punch',
     nom:'Punch',
     desc:'Heures & présences',
@@ -305,6 +329,28 @@ const ICONS = {
     <circle cx="18" cy="52" r="3.5" fill="${G}"/>
     <circle cx="46" cy="52" r="3.5" fill="${G}"/>
     <path d="M15 26v-4M25 26v-4" stroke="${Y}" stroke-width="3" stroke-linecap="round"/>
+  </svg>`,
+  // Facture / reçu avec montant
+  factures: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M18 8h28v46l-5-4-5 4-4-4-4 4-5-4-5 4z" stroke="${P}" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M25 20h14M25 28h14M25 36h8" stroke="${G}" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="40" cy="40" r="7" stroke="${Y}" stroke-width="3"/>
+    <path d="M40 36.5v7M38 38h3.4a1.6 1.6 0 010 3H38" stroke="${Y}" stroke-width="2" stroke-linecap="round"/>
+  </svg>`,
+  // Bulle de discussion + photo
+  chat: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M10 14h44v30H30l-12 10V44H10z" stroke="${P}" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="24" cy="28" r="4" stroke="${Y}" stroke-width="3"/>
+    <path d="M18 38l8-7 5 4 7-8 8 11" stroke="${Y}" stroke-width="3" stroke-linejoin="round"/>
+  </svg>`,
+  // Machinerie lourde (téléhandler / flèche)
+  machinerie: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M10 40h22v8H10z" stroke="${P}" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M14 40l6-8" stroke="${P}" stroke-width="3" stroke-linecap="round"/>
+    <path d="M18 34l34-14" stroke="${Y}" stroke-width="3" stroke-linecap="round"/>
+    <path d="M52 20l4 2-2 6" stroke="${Y}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="16" cy="52" r="4" stroke="${G}" stroke-width="3"/>
+    <circle cx="28" cy="52" r="4" stroke="${G}" stroke-width="3"/>
   </svg>`,
   // Bon de commande / presse-papier
   commandes: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">

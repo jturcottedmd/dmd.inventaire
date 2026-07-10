@@ -136,6 +136,7 @@ details[open] summary{ border-bottom:1px solid var(--line); }
 </head>
 <body>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 
 <div id="app">
   <div class="hdr">
@@ -144,6 +145,7 @@ details[open] summary{ border-bottom:1px solid var(--line); }
       <h1 class="hdr-title">Politiques</h1>
       <div class="hdr-sub">Confidentialité & Loi 25</div>
     </div>
+    <button id="exportBtn" style="display:none;margin-left:auto;background:#4c7a3f;color:#f3efe6;border:none;border-radius:6px;padding:7px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;white-space:nowrap;">⬇ Excel</button>
   </div>
 
   <div class="wrap">
@@ -323,6 +325,7 @@ async function loadConsents(){
       });
     }
     rows.sort((a,b) => (b.date||'').localeCompare(a.date||''));
+    window._consentRows = rows;   // pour l'export Excel
     countEl.textContent = rows.length;
     if(!rows.length){
       listEl.innerHTML = '<div class="c-empty">Aucun consentement enregistré pour le moment. Chaque acceptation de l\'avis de collecte apparaîtra ici avec sa date.</div>';
@@ -348,6 +351,69 @@ async function loadConsents(){
     listEl.innerHTML = '<div class="c-empty">Impossible de charger les consentements (connexion). Réessaie plus tard.</div>';
   }
 }
+
+/* ============================================================
+   EXPORT EXCEL (Ctrl+X révèle le bouton — même principe que l'inventaire)
+   Registre des consentements datés (Loi 25).
+   ============================================================ */
+function xlsSheet(aoa, meta, widths, leftCols){
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = widths.map(w => ({wch:w}));
+  ws['!freeze'] = { xSplit:0, ySplit:1 };
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:aoa.length-1, c:widths.length-1}}) };
+  for(let r=0; r<aoa.length; r++){
+    for(let c=0; c<widths.length; c++){
+      const addr = XLSX.utils.encode_cell({r,c});
+      if(!ws[addr]) ws[addr] = { t:'s', v:'' };
+      const m = meta[r] || {};
+      let fill='FFFFFF', bold=false, fontColor='000000';
+      if(m.header){ fill='232221'; bold=true; fontColor='FFFFFF'; }
+      else if(m.couleur==='green') fill='D9EAD3';
+      ws[addr].s = {
+        fill:{ patternType:'solid', fgColor:{rgb:fill} },
+        font:{ name:'Arial', sz:m.header?11:10, bold:bold, color:{rgb:fontColor} },
+        alignment:{ vertical:'center', horizontal:(leftCols.indexOf(c)!==-1)?'left':'center', wrapText:!!m.header },
+        border:{ top:{style:'thin',color:{rgb:'CCCCCC'}}, bottom:{style:'thin',color:{rgb:'CCCCCC'}},
+                 left:{style:'thin',color:{rgb:'CCCCCC'}}, right:{style:'thin',color:{rgb:'CCCCCC'}} }
+      };
+    }
+  }
+  return ws;
+}
+async function exporterExcel(){
+  const btn = document.getElementById('exportBtn');
+  const old = btn ? btn.textContent : '';
+  if(btn){ btn.textContent='...'; btn.disabled=true; }
+  try{
+    if(typeof XLSX === 'undefined'){ alert('Librairie Excel non chargée. Vérifie ta connexion.'); return; }
+    const rows = window._consentRows || [];
+    if(!rows.length){ alert('Aucun consentement à exporter.'); return; }
+    const wb = XLSX.utils.book_new();
+    const aoa=[['Nom','Appareil','Date du consentement','Version de l\'avis']], meta=[{header:true}];
+    rows.forEach(c => {
+      let dateTxt = c.date || '';
+      const dd = new Date(c.date);
+      if(!isNaN(dd)) dateTxt = dd.toLocaleDateString('fr-CA')+' '+String(dd.getHours()).padStart(2,'0')+'h'+String(dd.getMinutes()).padStart(2,'0');
+      aoa.push([ c.nom || ('Appareil '+String(c.deviceId||c._id).slice(-6)), String(c.deviceId||c._id||''), dateTxt, c.version||'' ]);
+      meta.push({couleur:'green'});
+    });
+    XLSX.utils.book_append_sheet(wb, xlsSheet(aoa, meta, [30,26,20,16], [0,1]), 'Consentements');
+    const d = new Date();
+    XLSX.writeFile(wb, 'Consentements_DMD_' + d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + '.xlsx');
+    if(btn) btn.style.display='none';
+  }catch(e){ console.error(e); alert("Une erreur est survenue pendant l'export."); }
+  finally{ if(btn){ btn.textContent=old||'⬇ Excel'; btn.disabled=false; } }
+}
+document.getElementById('exportBtn').addEventListener('click', exporterExcel);
+document.addEventListener('keydown', function(e){
+  if((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key==='x' || e.key==='X')){
+    const el = document.activeElement;
+    if(el && (el.tagName==='INPUT' || el.tagName==='TEXTAREA' || el.isContentEditable)) return;
+    e.preventDefault();
+    const btn = document.getElementById('exportBtn');
+    if(btn){ btn.style.display=''; btn.focus(); }
+  }
+});
 
 // ================== DÉMARRAGE ==================
 (async function(){

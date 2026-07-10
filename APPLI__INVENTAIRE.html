@@ -1707,6 +1707,29 @@ async function saveMachineSel(teamId, cat){
   const v = (machineSel[teamId] && machineSel[teamId][cat]) || { set:true, actifs:[] };
   try{ await window.storage.set('inv:machines:' + teamId + ':' + cat, JSON.stringify(v), true); }catch(e){}
 }
+/* Publie le catalogue des machines lourdes (Lift/Fraco/Mixeur/Scie) dans Supabase
+   (clé inv:machineCatalog) afin que l'app « Machinerie » lise la même liste.
+   Source unique : ajouter/retirer une machine dans l'inventaire se reflète là-bas. */
+async function publishMachineCatalog(){
+  try{
+    const map = { 'LOURD_LIFT':'Lift', 'LOURD_FRACO':'Fraco', 'LOURD_MIXEUR':'Mixeur', 'LOURD_SCIE':'Scie' };
+    const machines = [];
+    Object.keys(map).forEach(cat => {
+      itemsFor(cat).forEach(it => {
+        if(it.header) return;
+        const hasIdent = it.ident && String(it.ident).trim() !== '';
+        if(!isSelectableItem(it) && !hasIdent) return;         // machines seulement (pas les accessoires)
+        if(isItemHidden(cat, it.name)) return;                  // ignorer les articles masqués par l'admin
+        machines.push({
+          ident: (it.ident || '').trim(),
+          nom: (it.name || '').replace(/\n/g, ' ').trim(),
+          cat: map[cat], gas: !!it.gas, vf: !!it.vf
+        });
+      });
+    });
+    await window.storage.set('inv:machineCatalog', JSON.stringify({ machines, maj:new Date().toISOString() }), true);
+  }catch(e){ console.error('publishMachineCatalog', e); }
+}
 // Un article est-il actif (sur le chantier) pour l'équipe courante dans une select-cat ?
 function isMachineActive(teamId, cat, itemName){
   const v = machineSel[teamId] && machineSel[teamId][cat];
@@ -3839,6 +3862,8 @@ async function init(){
       renderTeamBar();
       renderTabs();
       renderList();
+      // Publie le catalogue des machines lourdes pour l'app Machinerie (source unique).
+      publishMachineCatalog();
     }catch(e){ console.error('Chargement arrière-plan', e); }
   })();
 }
@@ -3866,7 +3891,7 @@ async function _doLogin(){
 })();
 document.getElementById('loginBtn').addEventListener('click', _doLogin);
 var _expBtn = document.getElementById('exportBtn'); if(_expBtn) _expBtn.addEventListener('click', exporterExcel);
-var _idDirBtn = document.getElementById('identDirBtn'); if(_idDirBtn) _idDirBtn.addEventListener('click', openPeopleDirectory);
+var _idDirBtn = document.getElementById('identDirBtn'); if(_idDirBtn) _idDirBtn.addEventListener('click', function(){ location.href = './APPLI__INFOS.html'; });
 var _masonryBtn = document.getElementById('masonryBtn'); if(_masonryBtn) _masonryBtn.addEventListener('click', openMasonryStock);
 // Le bouton Export est caché par défaut. Ctrl+X le révèle — mais seulement si on
 // n'est pas en train d'éditer un champ (sinon on laisse le "couper" normal agir).

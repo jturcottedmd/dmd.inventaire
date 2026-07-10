@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#232221">
+<title>DMD — Machinerie</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --asphalt:#232221; --asphalt-2:#2f2d2b; --paper:#f3efe6; --paper-dim:#d9d2c2;
+  --brick:#8a2f31; --brick-line:#5e2022; --logo-grey:#656263;
+  --safety-yellow:#f2b705; --ok-green:#4c7a3f; --danger-red:#c0392b; --line:#46433f;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-family:'Barlow',sans-serif;min-height:100%;}
+#app{min-height:100vh; display:flex; flex-direction:column; max-width:560px; margin:0 auto; background:var(--asphalt);}
+
+.hdr{
+  padding:14px 16px 14px; background-color:#6e2325;
+  background-image:
+    linear-gradient(180deg, rgba(0,0,0,0.10), rgba(0,0,0,0.30)),
+    repeating-linear-gradient(0deg, rgba(48,16,16,0.85) 0px, rgba(48,16,16,0.85) 3px, transparent 3px, transparent 30px),
+    repeating-linear-gradient(90deg, rgba(48,16,16,0.85) 0px, rgba(48,16,16,0.85) 3px, transparent 3px, transparent 62px);
+  border-bottom:3px solid var(--brick-line); display:flex; align-items:center; gap:12px;
+}
+.back{ color:var(--paper); text-decoration:none; font-size:22px; line-height:1; padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.25); border:1px solid rgba(0,0,0,0.3); flex:0 0 auto; }
+.hdr-title{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:21px; letter-spacing:1.5px; text-transform:uppercase; margin:0; }
+.hdr-sub{ font-size:11.5px; letter-spacing:1px; text-transform:uppercase; color:var(--paper-dim); margin-top:1px; }
+
+.summary{ display:flex; gap:8px; padding:10px 14px 2px; flex-wrap:wrap; }
+.sum-chip{ flex:1 1 auto; min-width:120px; background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:10px; padding:8px 11px; font-size:12px; color:var(--paper-dim); }
+.sum-chip b{ display:block; font-family:'Barlow Condensed',sans-serif; font-size:20px; color:var(--paper); }
+.sum-chip.alert{ border-color:var(--danger-red); } .sum-chip.alert b{ color:#ff9d8f; }
+.sum-chip.warn{ border-color:var(--safety-yellow); } .sum-chip.warn b{ color:var(--safety-yellow); }
+
+.tabs{ display:flex; gap:6px; padding:10px 14px 2px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.tab{ flex:0 0 auto; padding:9px 15px; border-radius:20px; border:1.5px solid var(--line); background:var(--asphalt-2); color:var(--paper-dim); font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:15px; letter-spacing:0.7px; text-transform:uppercase; cursor:pointer; }
+.tab.active{ background:var(--brick); border-color:var(--brick-line); color:var(--paper); }
+/* Pastilles d'alerte sur les onglets (comme l'inventaire) */
+.tab .tcount{ margin-left:6px; font-family:'Barlow',sans-serif; font-size:11.5px; font-weight:700; border-radius:10px; padding:1px 7px; background:var(--danger-red); color:#fff; vertical-align:middle; }
+.tab .tcount.orange{ background:var(--safety-yellow); color:#232221; }
+.tab .tdot{ display:inline-block; margin-left:6px; width:9px; height:9px; border-radius:50%; background:var(--ok-green); vertical-align:middle; }
+/* Indicateur d'enregistrement */
+.save-status{ padding:2px 16px 0; font-size:11.5px; color:var(--paper-dim); min-height:16px; }
+.save-status.ok{ color:#a9d39a; } .save-status.err{ color:#ff9d8f; font-weight:700; }
+
+.toolbar{ padding:10px 14px 4px; }
+.toolbar input{ width:100%; padding:11px 14px; font-size:16px; border-radius:10px; border:1.5px solid var(--line); background:var(--asphalt-2); color:var(--paper); }
+.toolbar input:focus{ outline:none; border-color:var(--paper-dim); }
+.count{ padding:4px 16px 0; font-size:12px; color:var(--paper-dim); }
+
+.list{ padding:8px 14px 24px; display:flex; flex-direction:column; gap:10px; }
+.card{ position:relative; background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:14px; padding:12px 13px; cursor:pointer; border-left-width:5px; }
+.card.edge-red{ border-left-color:var(--danger-red); } .card.edge-yellow{ border-left-color:var(--safety-yellow); } .card.edge-green{ border-left-color:var(--ok-green); }
+.c-top{ display:flex; align-items:center; gap:9px; }
+.c-ident{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:15px; letter-spacing:0.5px; background:var(--asphalt); border:1px solid var(--line); color:var(--safety-yellow); border-radius:7px; padding:3px 8px; }
+.c-nom{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:18px; letter-spacing:0.3px; flex:1; }
+.c-cat{ font-size:10px; letter-spacing:0.5px; text-transform:uppercase; font-weight:700; color:var(--paper-dim); border:1px solid var(--line); border-radius:20px; padding:2px 8px; }
+.c-loc{ margin-top:6px; font-size:13px; color:var(--paper); }
+.c-loc .muted{ color:var(--logo-grey); }
+.c-pills{ margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
+.pill{ font-size:11.5px; font-weight:700; border-radius:20px; padding:3px 9px; border:1px solid var(--line); color:var(--paper-dim); background:var(--asphalt); display:inline-flex; align-items:center; gap:5px; }
+.pill .dot{ width:8px; height:8px; border-radius:50%; }
+.dot.green{ background:var(--ok-green); } .dot.orange{ background:var(--safety-yellow); } .dot.red{ background:var(--danger-red); } .dot.grey{ background:var(--logo-grey); }
+.pill.red{ border-color:#5e2022; color:#ff9d8f; } .pill.orange{ border-color:var(--safety-yellow); color:var(--safety-yellow); } .pill.green{ border-color:#345c2a; color:#a9d39a; }
+
+.empty,.loading{ padding:34px 20px; text-align:center; color:var(--paper-dim); font-size:14px; line-height:1.5; }
+
+.foot{ margin-top:auto; padding:14px 18px 20px; color:var(--logo-grey); font-size:11px; text-align:center; border-top:1px solid var(--line); line-height:1.5; }
+
+/* ---- Modale détail ---- */
+.overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.66); display:none; align-items:flex-start; justify-content:center; z-index:500; padding:16px; overflow:auto; }
+.overlay.show{ display:flex; }
+.modal{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:16px; padding:16px; width:100%; max-width:520px; margin:10px 0 30px; }
+.m-head{ display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+.m-head .c-ident{ font-size:16px; }
+.m-title{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:22px; flex:1; }
+.m-close{ background:var(--asphalt); border:1.5px solid var(--line); color:var(--paper); border-radius:8px; padding:6px 11px; font-size:16px; cursor:pointer; }
+.m-catline{ font-size:12px; color:var(--paper-dim); margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px; }
+
+details.sec{ background:var(--asphalt); border:1.5px solid var(--line); border-radius:12px; margin-bottom:9px; overflow:hidden; }
+details.sec>summary{ list-style:none; cursor:pointer; padding:12px 13px; display:flex; align-items:center; gap:9px; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:16px; letter-spacing:0.5px; text-transform:uppercase; }
+details.sec>summary::-webkit-details-marker{ display:none; }
+details.sec>summary .chev{ margin-left:auto; color:var(--paper-dim); transition:transform .15s; }
+details.sec[open]>summary .chev{ transform:rotate(90deg); }
+details.sec[open]>summary{ border-bottom:1px solid var(--line); }
+.sec-body{ padding:12px 13px; }
+
+.field-label{ font-size:12px; text-transform:uppercase; letter-spacing:0.5px; color:var(--paper-dim); font-weight:700; margin:2px 0 4px; }
+.inp{ width:100%; padding:10px 12px; font-size:16px; border-radius:9px; border:1.5px solid var(--line); background:var(--asphalt-2); color:var(--paper); margin-bottom:8px; font-family:'Barlow',sans-serif; }
+.inp:focus{ outline:none; border-color:var(--paper-dim); }
+textarea.inp{ min-height:56px; resize:vertical; }
+.row2{ display:flex; gap:8px; } .row2>*{ flex:1; }
+.btn{ width:100%; padding:11px; font-size:14px; font-weight:700; border:1.5px solid var(--line); border-radius:9px; background:var(--asphalt-2); color:var(--paper); cursor:pointer; font-family:'Barlow',sans-serif; }
+.btn.primary{ background:var(--brick); border-color:var(--brick-line); }
+.btn.mini{ width:auto; padding:6px 10px; font-size:12px; }
+.btn-row{ display:flex; gap:8px; margin-top:2px; }
+
+.entry{ background:var(--asphalt-2); border:1px solid var(--line); border-radius:10px; padding:9px 11px; margin-bottom:7px; font-size:13.5px; line-height:1.45; }
+.entry .e-top{ display:flex; align-items:center; gap:8px; margin-bottom:3px; }
+.entry .e-date{ font-weight:700; color:var(--paper); font-size:13px; }
+.entry .e-by{ color:var(--logo-grey); font-size:11.5px; margin-left:auto; }
+.entry .e-desc{ color:var(--paper); }
+.entry .e-actions{ display:flex; gap:8px; margin-top:6px; }
+.tag{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; border-radius:20px; padding:2px 8px; }
+.tag.red{ background:#3a1516; color:#ff9d8f; } .tag.green{ background:#1f3018; color:#a9d39a; } .tag.orange{ background:#3a2f0a; color:var(--safety-yellow); } .tag.grey{ background:var(--asphalt); color:var(--paper-dim); border:1px solid var(--line); }
+.mini-link{ color:var(--safety-yellow); font-size:12.5px; font-weight:600; cursor:pointer; text-decoration:none; }
+.mini-link.danger{ color:#ff9d8f; }
+.empty-sec{ color:var(--logo-grey); font-size:13px; padding:4px 0 8px; }
+.note{ background:var(--asphalt-2); border:1px dashed var(--line); border-radius:8px; padding:9px 11px; font-size:12.5px; color:var(--paper-dim); margin-bottom:9px; line-height:1.5; }
+.statusline{ font-size:13px; margin-bottom:8px; display:flex; align-items:center; gap:7px; }
+
+/* écran de blocage session */
+.gate{ position:fixed; inset:0; z-index:1000; display:none; align-items:center; justify-content:center; padding:28px; text-align:center; background:var(--asphalt); color:var(--paper-dim); font-size:15px; }
+.gate.show{ display:flex; }
+</style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+
+<div id="app">
+  <div class="hdr">
+    <a class="back" href="./index.html" aria-label="Retour à l'accueil">←</a>
+    <div>
+      <h1 class="hdr-title">Machinerie</h1>
+      <div class="hdr-sub">Lift · Fraco · Mixeur · Scie</div>
+    </div>
+    <button id="exportBtn" style="display:none;margin-left:auto;background:#4c7a3f;color:#f3efe6;border:none;border-radius:6px;padding:7px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;white-space:nowrap;">⬇ Excel</button>
+  </div>
+
+  <div class="summary" id="summary"></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="toolbar"><input type="search" id="search" placeholder="🔍 Chercher (ident, nom)…"></div>
+  <div class="count" id="count"></div>
+  <div class="save-status" id="saveStatus">&nbsp;</div>
+  <div class="list" id="list"><div class="loading">Chargement de la machinerie…</div></div>
+
+  <div class="foot">
+    Suivi de la machinerie · Maçonnerie DMD.<br>
+    Chaque machine : vérif annuelle, bris, inspection quotidienne, réparations et localisation.
+  </div>
+</div>
+
+<div class="overlay" id="overlay"><div class="modal" id="modalBox"></div></div>
+<div class="gate" id="gate">Connexion requise. Redirection vers l'accueil…</div>
+
+<script>
+// ================== CATALOGUE EMBARQUÉ (source de secours, tiré de l'inventaire) ==================
+const EMBEDDED_CATALOG = [
+  {ident:"L01",nom:"Skytrak 6036 2008",cat:"Lift",gas:false,vf:true},
+  {ident:"L02",nom:"Skytrak 6042 2006",cat:"Lift",gas:false,vf:true},
+  {ident:"L03",nom:"Skytrak 10054 2008",cat:"Lift",gas:false,vf:true},
+  {ident:"L04",nom:"Skytrak 10054 2021",cat:"Lift",gas:false,vf:true},
+  {ident:"L05",nom:"Skytrak 10054 2025",cat:"Lift",gas:false,vf:true},
+  {ident:"L06",nom:"JLG 2018",cat:"Lift",gas:false,vf:true},
+  {ident:"L07",nom:"Lift shop 1998",cat:"Lift",gas:false,vf:true},
+  {ident:"L08",nom:"Lift shop 2017",cat:"Lift",gas:false,vf:true},
+  {ident:"JE01",nom:"Jigger élec.",cat:"Lift",gas:false,vf:true},
+  {ident:"JM01",nom:"Jigger man.",cat:"Lift",gas:false,vf:true},
+  {ident:"F01",nom:"20K 2003",cat:"Fraco",gas:false,vf:true},
+  {ident:"F02",nom:"20K 2005",cat:"Fraco",gas:false,vf:true},
+  {ident:"F03",nom:"20K 2014",cat:"Fraco",gas:false,vf:true},
+  {ident:"F04",nom:"20K 2016",cat:"Fraco",gas:false,vf:true},
+  {ident:"F05",nom:"20K 2017 sur essieu",cat:"Fraco",gas:false,vf:true},
+  {ident:"F06",nom:"20k 2025",cat:"Fraco",gas:false,vf:true},
+  {ident:"G01",nom:"Grue FRK 2025",cat:"Fraco",gas:false,vf:true},
+  {ident:"MG01",nom:"Mud hog gaz",cat:"Mixeur",gas:true,vf:false},
+  {ident:"MG02",nom:"Mud hog gaz",cat:"Mixeur",gas:true,vf:false},
+  {ident:"MG03",nom:"Mud hog gaz",cat:"Mixeur",gas:true,vf:false},
+  {ident:"MG04",nom:"Mud hog gaz",cat:"Mixeur",gas:true,vf:false},
+  {ident:"MG05",nom:"Gros Mathieu gaz",cat:"Mixeur",gas:true,vf:false},
+  {ident:"MG06",nom:"Petit Mathieu gaz",cat:"Mixeur",gas:true,vf:false},
+  {ident:"MG07",nom:"Mathieu gaz",cat:"Mixeur",gas:true,vf:false},
+  {ident:"MG08",nom:"Mathieu gaz",cat:"Mixeur",gas:true,vf:false},
+  {ident:"MG09",nom:"Vieux gros mixeur rouge",cat:"Mixeur",gas:true,vf:false},
+  {ident:"ME01",nom:"Mud hog élec.",cat:"Mixeur",gas:true,vf:false},
+  {ident:"ME02",nom:"Mathieu élec.",cat:"Mixeur",gas:true,vf:false},
+  {ident:"S01",nom:"Scie dépoussiéreur A.B.L.",cat:"Scie",gas:true,vf:false},
+  {ident:"S02",nom:"Scie dépoussiéreur Mathieu élec.",cat:"Scie",gas:true,vf:false},
+  {ident:"S03",nom:"Scie dépoussiéreur Mathieu gaz",cat:"Scie",gas:true,vf:false},
+  {ident:"S04",nom:"Scie clipper 20po sur pied",cat:"Scie",gas:true,vf:false},
+  {ident:"S05",nom:"Scie clipper 20po sur pied",cat:"Scie",gas:true,vf:false},
+  {ident:"S06",nom:"Scie clipper 20po",cat:"Scie",gas:true,vf:false},
+  {ident:"S07",nom:"Scie clipper 14po",cat:"Scie",gas:true,vf:false},
+  {ident:"S08",nom:"Scie IQ",cat:"Scie",gas:true,vf:false},
+  {ident:"S09",nom:"Scie IQ",cat:"Scie",gas:true,vf:false},
+  {ident:"S10",nom:"Scie Mathieu",cat:"Scie",gas:true,vf:false},
+  {ident:"S11",nom:"Scie Mathieu",cat:"Scie",gas:true,vf:false},
+  {ident:"S12",nom:"Scie Mathieu",cat:"Scie",gas:true,vf:false},
+  {ident:"S13",nom:"Scie Mathieu",cat:"Scie",gas:true,vf:false},
+  {ident:"S14",nom:"Cut Quick STIHL",cat:"Scie",gas:true,vf:false},
+  {ident:"S15",nom:"Cut Quick STIHL",cat:"Scie",gas:true,vf:false},
+  {ident:"S16",nom:"Cut Quick STIHL",cat:"Scie",gas:true,vf:false},
+  {ident:"S17",nom:"Cut Quick STIHL",cat:"Scie",gas:true,vf:false},
+  {ident:"S18",nom:"Scie 9po DEWALT",cat:"Scie",gas:true,vf:false},
+  {ident:"S19",nom:"Chainsaw HUSQVARNA",cat:"Scie",gas:true,vf:false},
+  {ident:"S20",nom:"Chainsaw HUSQVARNA",cat:"Scie",gas:true,vf:false}
+];
+const CATS = ['Lift','Fraco','Mixeur','Scie'];
+const DEFAULT_TEAMS = [1,2,3,4,5,6].map(n => ({id:'team_'+n, label:'Équipe '+n})).concat([{id:'entrepot', label:'Entrepôt'}]);
+
+// ================== CONNEXION SUPABASE (partagée avec les autres apps) ==================
+const SUPABASE_URL = "https://toajegeqsqulnhdwkajm.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvYWplZ2Vxc3F1bG5oZHdrYWptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1OTY1OTQsImV4cCI6MjA5OTE3MjU5NH0.LBLVG--c1d9V_ZRw-h_ATZE2SUX3OAP7lf0SxMqPqNE";
+let _sb = null;
+try{ if(window.supabase && window.supabase.createClient){ _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } }catch(e){ console.error(e); }
+function withTimeout(p, ms, label){ return Promise.race([Promise.resolve(p), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout:'+(label||''))), ms))]); }
+
+const storage = {
+  async get(k, shared=true){
+    if(shared===false){ try{ const v=localStorage.getItem(k); return v===null?null:{key:k,value:v}; }catch(e){ return null; } }
+    try{ const res=await withTimeout(_sb.from('inv_store').select('value').eq('key',k).maybeSingle(),8000,'get'); const {data,error}=res||{}; if(error){console.error(error);return null;} return data?{key:k,value:data.value}:null; }
+    catch(e){ console.error(e); return null; }
+  },
+  async set(k, value, shared=true){
+    if(shared===false){ try{ localStorage.setItem(k,value); return {key:k,value}; }catch(e){ return null; } }
+    const {error}=await _sb.from('inv_store').upsert({key:k,value:value,updated_at:new Date().toISOString()}); if(error){console.error(error);return null;} return {key:k,value};
+  }
+};
+
+// ================== HELPERS ==================
+function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
+function normNom(s){ return (s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[.,\-]/g,' ').replace(/\s+/g,' ').trim(); }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function todayInput(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function fmtDateFR(v){ if(!v) return '—'; const d=new Date(v); if(isNaN(d)) return String(v); return d.toLocaleDateString('fr-CA'); }
+function fmtDateTimeFR(iso){ const d=new Date(iso); if(isNaN(d)) return ''; return d.toLocaleDateString('fr-CA')+' '+String(d.getHours()).padStart(2,'0')+'h'+String(d.getMinutes()).padStart(2,'0'); }
+
+// Vérif annuelle AAAA/MM (même logique que l'inventaire)
+function formatVerif(val){ const d=(val||'').replace(/[^\d]/g,'').slice(0,6); if(d.length<=4) return d; return d.slice(0,4)+'/'+d.slice(4); }
+function verifStatus(val){
+  const s=(val||'').trim();
+  const m=s.match(/^(\d{4})[\/\-. ]?(\d{1,2})$/);
+  if(!m) return {level:'red', label: s?'Format AAAA/MM attendu':'Aucune date'};
+  const y=parseInt(m[1],10), mo=parseInt(m[2],10);
+  if(mo<1||mo>12) return {level:'red', label:'Mois invalide'};
+  const now=new Date(); const months=(now.getFullYear()-y)*12+(now.getMonth()+1-mo);
+  if(months<0) return {level:'green', label:'Date future'};
+  if(months>=12) return {level:'red', label:'Expirée ('+months+' mois)'};
+  if(months>=9) return {level:'orange', label:'Bientôt due ('+months+' mois)'};
+  return {level:'green', label:'À jour ('+months+' mois)'};
+}
+// Entretien libre (huile / tune-up) pour machines à moteur
+function entretienStatus(val){
+  const s=(val||'').trim();
+  if(!s) return {level:'grey', label:'À faire'};
+  const m=s.match(/(\d{4})[\/\-. ]?(\d{1,2})/);
+  if(!m) return {level:'orange', label:'Date à préciser'};
+  const y=parseInt(m[1],10), mo=parseInt(m[2],10);
+  if(mo<1||mo>12) return {level:'orange', label:'Date à préciser'};
+  const now=new Date(); const months=(now.getFullYear()-y)*12+(now.getMonth()+1-mo);
+  if(months<0) return {level:'green', label:'Date future'};
+  if(months>=12) return {level:'red', label:'Expiré ('+months+' mois)'};
+  if(months>=9) return {level:'orange', label:'Bientôt dû ('+months+' mois)'};
+  return {level:'green', label:'À jour ('+months+' mois)'};
+}
+
+function getDeviceId(){ try{ let v=localStorage.getItem('inv:deviceId'); if(!v){ v='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); localStorage.setItem('inv:deviceId',v); } return v; }catch(e){ return 'dev_'+Math.random().toString(36).slice(2,10); } }
+function parLabel(){ try{ const v=localStorage.getItem('inv:deviceUser'); if(v){ const u=JSON.parse(v); if(u && u.nom) return u.nom; } }catch(e){} return 'Appareil '+getDeviceId().slice(-4); }
+
+// ================== DONNÉES ==================
+let catalog = [];               // [{ident,nom,cat,gas,vf}]
+let records = {};               // key -> record de suivi
+let teams = DEFAULT_TEAMS.slice();
+let currentCat = 'Lift';
+
+function machineKey(m){ return (m.ident && m.ident.trim()) ? m.ident.trim() : 'nom:'+normNom(m.nom); }
+function recFor(m){ return records[machineKey(m)] || {}; }
+function blankRec(m){ return { ident:m.ident||'', nom:m.nom, cat:m.cat, verif:'', huile:'', tuneup:'', loc:null, histoLoc:[], bris:[], reparations:[], inspections:[] }; }
+function setSaveStatus(state){
+  const el = document.getElementById('saveStatus'); if(!el) return;
+  if(state==='saving'){ el.className='save-status'; el.textContent='💾 Enregistrement…'; }
+  else if(state==='ok'){ const d=new Date(); el.className='save-status ok'; el.textContent='✔ Enregistré à '+String(d.getHours()).padStart(2,'0')+'h'+String(d.getMinutes()).padStart(2,'0'); }
+  else if(state==='err'){ el.className='save-status err'; el.textContent='⚠ Non enregistré — vérifie la connexion et réessaie'; }
+  else { el.className='save-status'; el.innerHTML='&nbsp;'; }
+}
+async function saveMachine(m, rec){
+  const key = machineKey(m);
+  rec.ident = m.ident||''; rec.nom = m.nom; rec.cat = m.cat;
+  records[key] = rec;
+  setSaveStatus('saving');
+  const res = await storage.set('inv:machine:'+key, JSON.stringify(rec), true);
+  setSaveStatus(res ? 'ok' : 'err');
+}
+
+async function loadTeams(){
+  try{ const r=await storage.get('inv:teams', true); if(r&&r.value){ const p=JSON.parse(r.value); if(Array.isArray(p)&&p.length) teams=p; } }catch(e){}
+}
+async function loadCatalog(){
+  // Base embarquée, fusionnée avec le catalogue publié par l'inventaire (ajouts éventuels)
+  const byKey = {};
+  EMBEDDED_CATALOG.forEach(m => { byKey[machineKey(m)] = Object.assign({}, m); });
+  try{
+    const r = await storage.get('inv:machineCatalog', true);
+    if(r && r.value){
+      const p = JSON.parse(r.value);
+      if(p && Array.isArray(p.machines)){
+        p.machines.forEach(m => {
+          if(!m || !m.nom) return;
+          if(CATS.indexOf(m.cat) === -1) return;
+          const k = machineKey(m);
+          if(!byKey[k]) byKey[k] = { ident:m.ident||'', nom:m.nom, cat:m.cat, gas:!!m.gas, vf:!!m.vf };
+        });
+      }
+    }
+  }catch(e){}
+  catalog = Object.values(byKey);
+}
+async function loadRecords(){
+  records = {};
+  try{
+    const res = await withTimeout(_sb.from('inv_store').select('key,value').like('key','inv:machine:%'), 12000, 'machines');
+    if(res && Array.isArray(res.data)){
+      res.data.forEach(r => { try{ const rec=JSON.parse(r.value); if(rec) records[r.key.replace('inv:machine:','')]=rec; }catch(e){} });
+    }
+  }catch(e){ console.error(e); }
+}
+
+// ================== STATUT / AFFICHAGE ==================
+function machineStatus(m){
+  const rec = recFor(m);
+  const verif = verifStatus(rec.verif);
+  const verifActive = !!(m.vf || (rec.verif && rec.verif.trim()));  // couleur seulement si pertinent
+  const openBris = (rec.bris||[]).filter(b => b.statut !== 'resolu').length;
+  const openRepar = (rec.reparations||[]).filter(r => r.statut !== 'fait').length;
+  const insps = rec.inspections||[];
+  const lastInsp = insps.length ? insps[0] : null;
+  let maint = null;
+  if(m.gas){
+    const h=entretienStatus(rec.huile), t=entretienStatus(rec.tuneup);
+    const rank={grey:0,green:1,orange:2,red:3};
+    maint = (rank[h.level]>=rank[t.level]) ? h : t;
+  }
+  // couleur de bord : pire de (verif si actif), bris ouverts, maintenance
+  let edge='';
+  const levels=[];
+  if(verifActive) levels.push(verif.level);
+  if(openBris>0) levels.push('red');
+  if(maint) levels.push(maint.level);
+  if(levels.indexOf('red')!==-1) edge=' edge-red';
+  else if(levels.indexOf('orange')!==-1) edge=' edge-yellow';
+  else if(levels.indexOf('green')!==-1) edge=' edge-green';
+  return { rec, verif, verifActive, openBris, openRepar, lastInsp, maint, edge };
+}
+function locText(rec){
+  const l = rec && rec.loc;
+  if(!l || (!l.chantier && !l.equipe)) return '<span class="muted">Localisation non renseignée</span>';
+  const bits=[];
+  if(l.chantier) bits.push('🏗 '+escapeHtml(l.chantier));
+  if(l.equipe) bits.push('👷 '+escapeHtml(l.equipe));
+  let s = '📍 ' + bits.join(' · ');
+  if(l.depuis) s += ' <span class="muted">(depuis '+fmtDateFR(l.depuis)+')</span>';
+  return s;
+}
+function pill(level, text){ return '<span class="pill '+(level||'')+'"><span class="dot '+(level||'grey')+'"></span>'+escapeHtml(text)+'</span>'; }
+
+function renderSummary(){
+  let verifDue=0, brisOpen=0, insp0=0;
+  catalog.forEach(m => {
+    const st = machineStatus(m);
+    if(st.verifActive && (st.verif.level==='red' || st.verif.level==='orange')) verifDue++;
+    if(st.openBris>0) brisOpen++;
+    if(!st.lastInsp) insp0++;
+  });
+  document.getElementById('summary').innerHTML =
+    '<div class="sum-chip'+(verifDue?' warn':'')+'"><b>'+verifDue+'</b>Vérif. à faire / dues</div>' +
+    '<div class="sum-chip'+(brisOpen?' alert':'')+'"><b>'+brisOpen+'</b>Machines avec bris</div>' +
+    '<div class="sum-chip"><b>'+catalog.length+'</b>Machines suivies</div>';
+}
+// Pastilles par onglet : rouge = machines en alerte, jaune = à surveiller, vert = tout est beau
+function catAlert(cat){
+  let red=0, orange=0, green=0;
+  catalog.filter(m => m.cat===cat).forEach(m => {
+    const e = machineStatus(m).edge;
+    if(e===' edge-red') red++; else if(e===' edge-yellow') orange++; else if(e===' edge-green') green++;
+  });
+  return { red, orange, green };
+}
+function renderTabs(){
+  document.getElementById('tabs').innerHTML = CATS.map(c => {
+    const a = catAlert(c);
+    const badge = a.red ? '<span class="tcount">'+a.red+'</span>'
+                : (a.orange ? '<span class="tcount orange">'+a.orange+'</span>'
+                : (a.green ? '<span class="tdot"></span>' : ''));
+    return '<button type="button" class="tab'+(c===currentCat?' active':'')+'" data-cat="'+c+'">'+c+badge+'</button>';
+  }).join('');
+  document.querySelectorAll('#tabs .tab').forEach(t => t.onclick = () => { currentCat=t.getAttribute('data-cat'); document.getElementById('search').value=''; renderTabs(); renderList(); });
+}
+function renderList(){
+  const list = document.getElementById('list');
+  const q = normNom(document.getElementById('search').value);
+  let shown;
+  if(q){ shown = catalog.filter(m => normNom(m.nom).includes(q) || normNom(m.ident).includes(q)); }
+  else { shown = catalog.filter(m => m.cat === currentCat); }
+  document.getElementById('count').textContent = shown.length + ' machine' + (shown.length>1?'s':'') + (q ? ' trouvée'+(shown.length>1?'s':'') : ' — ' + currentCat);
+  if(!shown.length){ list.innerHTML = '<div class="empty">Aucune machine.</div>'; return; }
+  list.innerHTML = shown.map(m => {
+    const st = machineStatus(m);
+    const pills = [];
+    pills.push(pill(st.verifActive ? st.verif.level : 'grey', 'Vérif : ' + (st.verifActive ? st.verif.label : 'n/a')));
+    if(st.openBris>0) pills.push(pill('red', '⚠️ '+st.openBris+' bris'));
+    if(st.openRepar>0) pills.push(pill('orange', '🛠 '+st.openRepar+' répar.'));
+    pills.push(pill(st.lastInsp?'green':'grey', 'Insp : ' + (st.lastInsp ? fmtDateFR(st.lastInsp.date) : 'aucune')));
+    if(st.maint) pills.push(pill(st.maint.level, '🛢 '+st.maint.label));
+    return '<div class="card'+st.edge+'" data-key="'+escapeAttr(machineKey(m))+'">' +
+      '<div class="c-top"><span class="c-ident">'+escapeHtml(m.ident||'—')+'</span>' +
+        '<span class="c-nom">'+escapeHtml(m.nom)+'</span>' + (q?'<span class="c-cat">'+escapeHtml(m.cat)+'</span>':'') + '</div>' +
+      '<div class="c-loc">'+locText(st.rec)+'</div>' +
+      '<div class="c-pills">'+pills.join('')+'</div>' +
+    '</div>';
+  }).join('');
+  list.querySelectorAll('.card').forEach(c => c.onclick = () => openDetail(c.getAttribute('data-key')));
+}
+
+// ================== DÉTAIL D'UNE MACHINE ==================
+let activeKey = null;
+function findMachineByKey(key){ return catalog.find(m => machineKey(m) === key); }
+function closeModal(){ document.getElementById('overlay').classList.remove('show'); activeKey=null; }
+
+function openDetail(key){
+  activeKey = key;
+  const m = findMachineByKey(key);
+  if(!m) return;
+  const rec = records[key] || blankRec(m);
+  records[key] = rec;
+  const st = machineStatus(m);
+
+  const box = document.getElementById('modalBox');
+
+  // --- Localisation & déplacements ---
+  const hist = (rec.histoLoc||[]);
+  const histHtml = hist.length ? hist.map(h =>
+    '<div class="entry"><div class="e-top"><span class="e-date">'+fmtDateFR(h.date)+'</span><span class="e-by">'+escapeHtml(h.par||'')+'</span></div>' +
+    '<div class="e-desc">'+ (h.chantier?('🏗 '+escapeHtml(h.chantier)):'') + (h.chantier&&h.equipe?' · ':'') + (h.equipe?('👷 '+escapeHtml(h.equipe)):'') + (!h.chantier&&!h.equipe?'<span class="muted">—</span>':'') + (h.note?('<br><span class="muted">'+escapeHtml(h.note)+'</span>'):'') + '</div></div>'
+  ).join('') : '<div class="empty-sec">Aucun déplacement enregistré.</div>';
+  const teamOpts = '<option value="">— Équipe (optionnel) —</option>' + teams.map(t => '<option value="'+escapeAttr(t.label)+'">'+escapeHtml(t.label)+'</option>').join('');
+  const locSection =
+    '<details class="sec" open><summary>📍 Localisation & déplacements<span class="chev">▶</span></summary><div class="sec-body">' +
+      '<div class="statusline">'+locText(rec)+'</div>' +
+      '<div class="field-label">Nouveau chantier / emplacement</div>' +
+      '<input class="inp" id="mvChantier" placeholder="ex : Rue Principale, Chambly — ou Cour / Atelier">' +
+      '<div class="field-label">Équipe (facultatif — sans incidence sur les onglets)</div>' +
+      '<select class="inp" id="mvEquipe">'+teamOpts+'</select>' +
+      '<input class="inp" id="mvNote" placeholder="Note (facultatif)">' +
+      '<button type="button" class="btn primary" id="mvSave">📍 Enregistrer le déplacement</button>' +
+      '<div class="field-label" style="margin-top:12px;">Historique</div>' + histHtml +
+    '</div></details>';
+
+  // --- Vérification annuelle ---
+  const verifSection =
+    '<details class="sec"><summary>🗓 Vérification annuelle <span class="pill '+(st.verifActive?st.verif.level:'grey')+'" style="margin-left:6px;"><span class="dot '+(st.verifActive?st.verif.level:'grey')+'"></span>'+escapeHtml(st.verifActive?st.verif.label:'n/a')+'</span><span class="chev">▶</span></summary><div class="sec-body">' +
+      '<div class="field-label">Date de la dernière vérification (AAAA/MM)</div>' +
+      '<div class="row2"><input class="inp" id="vfInput" inputmode="numeric" placeholder="2026/07" value="'+escapeAttr(rec.verif||'')+'"><button type="button" class="btn primary" id="vfSave" style="max-width:120px;">Enregistrer</button></div>' +
+      '<div class="note">Rouge = expirée ou manquante · Jaune = arrive à échéance (≤ 3 mois) · Vert = à jour. Même règle que l\'inventaire.</div>' +
+    '</div></details>';
+
+  // --- Bris ---
+  const bris = (rec.bris||[]);
+  const brisHtml = bris.length ? bris.map(b => {
+    const resolu = b.statut==='resolu';
+    return '<div class="entry"><div class="e-top"><span class="e-date">'+fmtDateFR(b.date)+'</span>' +
+      '<span class="tag '+(resolu?'green':'red')+'">'+(resolu?'Résolu':'Ouvert')+'</span>' +
+      '<span class="e-by">'+escapeHtml(b.par||'')+'</span></div>' +
+      '<div class="e-desc">'+escapeHtml(b.desc||'')+'</div>' +
+      '<div class="e-actions">' + (resolu?'':'<span class="mini-link" data-bris-res="'+b.id+'">✔ Marquer résolu</span>') +
+      '<span class="mini-link danger" data-bris-del="'+b.id+'">Supprimer</span></div></div>';
+  }).join('') : '<div class="empty-sec">Aucun bris signalé.</div>';
+  const brisSection =
+    '<details class="sec"><summary>⚠️ Bris '+(st.openBris?'<span class="tag red" style="margin-left:6px;">'+st.openBris+' ouvert'+(st.openBris>1?'s':'')+'</span>':'')+'<span class="chev">▶</span></summary><div class="sec-body">' +
+      '<div class="row2"><input class="inp" type="date" id="brisDate" value="'+todayInput()+'"><span></span></div>' +
+      '<textarea class="inp" id="brisDesc" placeholder="Décrire le bris (pièce, symptôme…)"></textarea>' +
+      '<button type="button" class="btn primary" id="brisAdd">➕ Signaler un bris</button>' +
+      '<div class="field-label" style="margin-top:12px;">Historique des bris</div>' + brisHtml +
+    '</div></details>';
+
+  // --- Réparations ---
+  const reps = (rec.reparations||[]);
+  const repStatutTag = s => s==='fait'?'green':(s==='en_cours'?'orange':'grey');
+  const repStatutLbl = s => s==='fait'?'Fait':(s==='en_cours'?'En cours':'À faire');
+  const repsHtml = reps.length ? reps.map(r =>
+    '<div class="entry"><div class="e-top"><span class="e-date">'+fmtDateFR(r.date)+'</span>' +
+    '<span class="tag '+repStatutTag(r.statut)+'">'+repStatutLbl(r.statut)+'</span>' +
+    '<span class="e-by">'+escapeHtml(r.par||'')+'</span></div>' +
+    '<div class="e-desc">'+escapeHtml(r.desc||'')+ (r.cout?(' <span class="muted">· '+escapeHtml(r.cout)+' $</span>'):'') +'</div>' +
+    '<div class="e-actions"><span class="mini-link" data-rep-cyc="'+r.id+'">↻ Changer statut</span><span class="mini-link danger" data-rep-del="'+r.id+'">Supprimer</span></div></div>'
+  ).join('') : '<div class="empty-sec">Aucune réparation enregistrée.</div>';
+  const repSection =
+    '<details class="sec"><summary>🛠 Réparations '+(st.openRepar?'<span class="tag orange" style="margin-left:6px;">'+st.openRepar+' en cours</span>':'')+'<span class="chev">▶</span></summary><div class="sec-body">' +
+      '<div class="row2"><input class="inp" type="date" id="repDate" value="'+todayInput()+'"><input class="inp" id="repCout" inputmode="decimal" placeholder="Coût $ (optionnel)"></div>' +
+      '<textarea class="inp" id="repDesc" placeholder="Décrire la réparation / le travail à faire"></textarea>' +
+      '<button type="button" class="btn primary" id="repAdd">➕ Ajouter une réparation</button>' +
+      '<div class="field-label" style="margin-top:12px;">Historique des réparations</div>' + repsHtml +
+    '</div></details>';
+
+  // --- Inspection quotidienne ---
+  const insps = (rec.inspections||[]);
+  const inspHtml = insps.length ? insps.map(i =>
+    '<div class="entry"><div class="e-top"><span class="e-date">'+fmtDateFR(i.date)+'</span>' +
+    '<span class="tag '+(i.conforme==='non'?'red':(i.conforme==='oui'?'green':'grey'))+'">'+(i.conforme==='non'?'Non conforme':(i.conforme==='oui'?'Conforme':'N/A'))+'</span>' +
+    '<span class="e-by">'+escapeHtml(i.par||'')+'</span></div>' +
+    (i.note?'<div class="e-desc">'+escapeHtml(i.note)+'</div>':'') +
+    '<div class="e-actions"><span class="mini-link danger" data-insp-del="'+i.id+'">Supprimer</span></div></div>'
+  ).join('') : '<div class="empty-sec">Aucune inspection enregistrée.</div>';
+  const inspSection =
+    '<details class="sec"><summary>✅ Inspection quotidienne<span class="chev">▶</span></summary><div class="sec-body">' +
+      '<div class="note">📄 Le formulaire d\'inspection officiel sera intégré ici quand tu me fourniras le document. En attendant, tu peux consigner les inspections faites.</div>' +
+      '<div class="row2"><input class="inp" type="date" id="inspDate" value="'+todayInput()+'">' +
+      '<select class="inp" id="inspConf"><option value="oui">Conforme</option><option value="non">Non conforme</option><option value="na">N/A</option></select></div>' +
+      '<textarea class="inp" id="inspNote" placeholder="Note / anomalie constatée (optionnel)"></textarea>' +
+      '<button type="button" class="btn primary" id="inspAdd">➕ Consigner l\'inspection</button>' +
+      '<div class="field-label" style="margin-top:12px;">Historique des inspections</div>' + inspHtml +
+    '</div></details>';
+
+  // --- Entretien moteur (machines à essence) ---
+  let entretienSection = '';
+  if(m.gas){
+    const h=entretienStatus(rec.huile), t=entretienStatus(rec.tuneup);
+    entretienSection =
+      '<details class="sec"><summary>🛢 Entretien moteur<span class="chev">▶</span></summary><div class="sec-body">' +
+        '<div class="field-label">Huile <span class="pill '+h.level+'" style="margin-left:6px;"><span class="dot '+h.level+'"></span>'+escapeHtml(h.label)+'</span></div>' +
+        '<input class="inp" id="entHuile" placeholder="ex : fait 2026-05" value="'+escapeAttr(rec.huile||'')+'">' +
+        '<div class="field-label">Tune-up <span class="pill '+t.level+'" style="margin-left:6px;"><span class="dot '+t.level+'"></span>'+escapeHtml(t.label)+'</span></div>' +
+        '<input class="inp" id="entTune" placeholder="ex : fait 2026-03" value="'+escapeAttr(rec.tuneup||'')+'">' +
+        '<button type="button" class="btn primary" id="entSave">Enregistrer l\'entretien</button>' +
+      '</div></details>';
+  }
+
+  box.innerHTML =
+    '<div class="m-head"><span class="c-ident">'+escapeHtml(m.ident||'—')+'</span><span class="m-title">'+escapeHtml(m.nom)+'</span><button type="button" class="m-close" id="mClose">✕</button></div>' +
+    '<div class="m-catline">'+escapeHtml(m.cat)+(m.gas?' · moteur':'')+'</div>' +
+    locSection + verifSection + inspSection + brisSection + repSection + entretienSection;
+
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('mClose').onclick = closeModal;
+  wireDetail(m, key);
+}
+
+function wireDetail(m, key){
+  const rec = records[key];
+  const reopen = () => { renderSummary(); renderTabs(); renderList(); openDetail(key); };
+
+  // Déplacement
+  const mv = document.getElementById('mvSave');
+  if(mv) mv.onclick = async () => {
+    const chantier = document.getElementById('mvChantier').value.trim();
+    const equipe = document.getElementById('mvEquipe').value.trim();
+    const note = document.getElementById('mvNote').value.trim();
+    if(!chantier && !equipe){ alert('Indique au moins un chantier ou une équipe.'); return; }
+    const entry = { chantier, equipe, note, date:new Date().toISOString(), par:parLabel() };
+    rec.histoLoc = rec.histoLoc || []; rec.histoLoc.unshift(entry);
+    rec.loc = { chantier, equipe, depuis:entry.date };
+    await saveMachine(m, rec); reopen();
+  };
+  // Vérif annuelle
+  const vfIn = document.getElementById('vfInput');
+  if(vfIn) vfIn.addEventListener('input', () => { const p=vfIn.selectionStart; vfIn.value=formatVerif(vfIn.value); });
+  const vfSave = document.getElementById('vfSave');
+  if(vfSave) vfSave.onclick = async () => { rec.verif = formatVerif(document.getElementById('vfInput').value); await saveMachine(m, rec); reopen(); };
+  // Bris
+  const brisAdd = document.getElementById('brisAdd');
+  if(brisAdd) brisAdd.onclick = async () => {
+    const desc=document.getElementById('brisDesc').value.trim(); const date=document.getElementById('brisDate').value;
+    if(!desc){ alert('Décris le bris.'); return; }
+    rec.bris = rec.bris||[]; rec.bris.unshift({ id:uid(), date, desc, statut:'ouvert', par:parLabel() });
+    await saveMachine(m, rec); reopen();
+  };
+  document.querySelectorAll('[data-bris-res]').forEach(el => el.onclick = async () => { const id=el.getAttribute('data-bris-res'); const b=(rec.bris||[]).find(x=>x.id===id); if(b){ b.statut='resolu'; b.resoluDate=new Date().toISOString(); } await saveMachine(m, rec); reopen(); });
+  document.querySelectorAll('[data-bris-del]').forEach(el => el.onclick = async () => { if(!confirm('Supprimer ce bris ?')) return; const id=el.getAttribute('data-bris-del'); rec.bris=(rec.bris||[]).filter(x=>x.id!==id); await saveMachine(m, rec); reopen(); });
+  // Réparations
+  const repAdd = document.getElementById('repAdd');
+  if(repAdd) repAdd.onclick = async () => {
+    const desc=document.getElementById('repDesc').value.trim(); const date=document.getElementById('repDate').value; const cout=document.getElementById('repCout').value.trim();
+    if(!desc){ alert('Décris la réparation.'); return; }
+    rec.reparations = rec.reparations||[]; rec.reparations.unshift({ id:uid(), date, desc, cout, statut:'a_faire', par:parLabel() });
+    await saveMachine(m, rec); reopen();
+  };
+  document.querySelectorAll('[data-rep-cyc]').forEach(el => el.onclick = async () => { const id=el.getAttribute('data-rep-cyc'); const r=(rec.reparations||[]).find(x=>x.id===id); if(r){ r.statut = r.statut==='a_faire'?'en_cours':(r.statut==='en_cours'?'fait':'a_faire'); } await saveMachine(m, rec); reopen(); });
+  document.querySelectorAll('[data-rep-del]').forEach(el => el.onclick = async () => { if(!confirm('Supprimer cette réparation ?')) return; const id=el.getAttribute('data-rep-del'); rec.reparations=(rec.reparations||[]).filter(x=>x.id!==id); await saveMachine(m, rec); reopen(); });
+  // Inspections
+  const inspAdd = document.getElementById('inspAdd');
+  if(inspAdd) inspAdd.onclick = async () => {
+    const date=document.getElementById('inspDate').value; const conforme=document.getElementById('inspConf').value; const note=document.getElementById('inspNote').value.trim();
+    rec.inspections = rec.inspections||[]; rec.inspections.unshift({ id:uid(), date, conforme, note, par:parLabel() });
+    await saveMachine(m, rec); reopen();
+  };
+  document.querySelectorAll('[data-insp-del]').forEach(el => el.onclick = async () => { if(!confirm('Supprimer cette inspection ?')) return; const id=el.getAttribute('data-insp-del'); rec.inspections=(rec.inspections||[]).filter(x=>x.id!==id); await saveMachine(m, rec); reopen(); });
+  // Entretien moteur
+  const entSave = document.getElementById('entSave');
+  if(entSave) entSave.onclick = async () => { rec.huile=document.getElementById('entHuile').value.trim(); rec.tuneup=document.getElementById('entTune').value.trim(); await saveMachine(m, rec); reopen(); };
+}
+
+document.getElementById('overlay').addEventListener('click', e => { if(e.target.id==='overlay') closeModal(); });
+document.getElementById('search').addEventListener('input', renderList);
+
+/* ============================================================
+   EXPORT EXCEL (Ctrl+X révèle le bouton — même principe que l'inventaire)
+   ============================================================ */
+function xlsSheet(aoa, meta, widths, leftCols){
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = widths.map(w => ({wch:w}));
+  ws['!freeze'] = { xSplit:0, ySplit:1 };
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:aoa.length-1, c:widths.length-1}}) };
+  for(let r=0; r<aoa.length; r++){
+    for(let c=0; c<widths.length; c++){
+      const addr = XLSX.utils.encode_cell({r,c});
+      if(!ws[addr]) ws[addr] = { t:'s', v:'' };
+      const m = meta[r] || {};
+      let fill='FFFFFF', bold=false, fontColor='000000';
+      if(m.header){ fill='232221'; bold=true; fontColor='FFFFFF'; }
+      else if(m.cat){ fill='D9D2C2'; bold=true; }
+      else if(m.couleur==='red') fill='F4CCCC';
+      else if(m.couleur==='yellow') fill='FFF2CC';
+      else if(m.couleur==='green') fill='D9EAD3';
+      ws[addr].s = {
+        fill:{ patternType:'solid', fgColor:{rgb:fill} },
+        font:{ name:'Arial', sz:m.header?11:10, bold:bold, color:{rgb:fontColor} },
+        alignment:{ vertical:'center', horizontal:(leftCols.indexOf(c)!==-1)?'left':'center', wrapText:!!m.header },
+        border:{ top:{style:'thin',color:{rgb:'CCCCCC'}}, bottom:{style:'thin',color:{rgb:'CCCCCC'}},
+                 left:{style:'thin',color:{rgb:'CCCCCC'}}, right:{style:'thin',color:{rgb:'CCCCCC'}} }
+      };
+    }
+  }
+  return ws;
+}
+// Instantané de l'état des machines, pour la feuille « Résumé modifs » (comme l'inventaire)
+function machSnapshotNow(){
+  const snap = {};
+  catalog.forEach(m => {
+    const r = recFor(m) || {}; const loc = r.loc || {};
+    snap[machineKey(m)] = {
+      nom:m.nom, verif:r.verif||'', chantier:loc.chantier||'', equipe:loc.equipe||'',
+      huile:r.huile||'', tuneup:r.tuneup||'',
+      brisOuverts:(r.bris||[]).filter(b=>b.statut!=='resolu').length,
+      bris:(r.bris||[]).length,
+      rep:(r.reparations||[]).length,
+      repFaites:(r.reparations||[]).filter(x=>x.statut==='fait').length,
+      insp:(r.inspections||[]).length
+    };
+  });
+  return snap;
+}
+function machDiffRows(prev, now){
+  const rows = [];
+  const push = (k, changement, avant, apres, couleur) => {
+    const ident = k.indexOf('nom:')===0 ? '—' : k;
+    const nom = (now[k]||prev[k]||{}).nom || '';
+    rows.push({ row:[ident, nom, changement, avant, apres], couleur });
+  };
+  Object.keys(now).forEach(k => {
+    const p = prev[k], n = now[k];
+    if(!p){ push(k, 'Nouvelle machine', '', '', 'yellow'); return; }
+    if(p.verif !== n.verif){ const vs = verifStatus(n.verif); push(k, 'Vérif annuelle', p.verif||'—', n.verif||'—', vs?vs.level.replace('orange','yellow'):null); }
+    if(p.chantier !== n.chantier || p.equipe !== n.equipe){
+      push(k, 'Déplacement', [p.chantier,p.equipe].filter(Boolean).join(' · ')||'—', [n.chantier,n.equipe].filter(Boolean).join(' · ')||'—', 'yellow');
+    }
+    if(n.brisOuverts > p.brisOuverts) push(k, 'Nouveau bris', p.brisOuverts+' ouvert(s)', n.brisOuverts+' ouvert(s)', 'red');
+    if(n.brisOuverts < p.brisOuverts) push(k, 'Bris résolu', p.brisOuverts+' ouvert(s)', n.brisOuverts+' ouvert(s)', 'green');
+    if(n.rep > p.rep) push(k, 'Réparation ajoutée', p.rep, n.rep, 'yellow');
+    if(n.repFaites > p.repFaites) push(k, 'Réparation faite', p.repFaites, n.repFaites, 'green');
+    if(n.insp > p.insp) push(k, 'Inspection(s) +'+(n.insp-p.insp), p.insp, n.insp, 'green');
+    if(p.huile !== n.huile) push(k, 'Huile', p.huile||'—', n.huile||'—', 'green');
+    if(p.tuneup !== n.tuneup) push(k, 'Tune-up', p.tuneup||'—', n.tuneup||'—', 'green');
+  });
+  return rows;
+}
+async function exporterExcel(){
+  const btn = document.getElementById('exportBtn');
+  const old = btn ? btn.textContent : '';
+  if(btn){ btn.textContent='...'; btn.disabled=true; }
+  try{
+    if(typeof XLSX === 'undefined'){ alert('Librairie Excel non chargée. Vérifie ta connexion.'); return; }
+    const wb = XLSX.utils.book_new();
+    const edgeToCouleur = e => e===' edge-red' ? 'red' : (e===' edge-yellow' ? 'yellow' : (e===' edge-green' ? 'green' : null));
+    // --- Résumé modifs depuis le dernier export ---
+    const snapNow = machSnapshotNow();
+    let prevSnap = null;
+    try{ const r = await storage.get('inv:machSnapshot', true); if(r && r.value) prevSnap = JSON.parse(r.value); }catch(e){}
+    if(prevSnap && prevSnap.data){
+      const diffs = machDiffRows(prevSnap.data, snapNow);
+      const aoa=[['Ident','Machine','Changement','Avant','Après']], meta=[{header:true}];
+      const depuis = prevSnap.meta && prevSnap.meta.date ? new Date(prevSnap.meta.date).toLocaleString('fr-CA') : '—';
+      aoa.push(['Depuis le dernier export : '+depuis, '', '', '', '']); meta.push({cat:true});
+      if(diffs.length){ diffs.forEach(dd => { aoa.push(dd.row); meta.push({couleur:dd.couleur}); }); }
+      else { aoa.push(['Aucune modification.', '', '', '', '']); meta.push({}); }
+      XLSX.utils.book_append_sheet(wb, xlsSheet(aoa, meta, [10,28,22,26,26], [1,3,4]), 'Résumé modifs');
+    }
+    // --- Une feuille par type de machine ---
+    const H = ['Ident','Machine','Chantier','Équipe','Depuis','Vérif annuelle','Statut vérif','Bris ouverts','Répar. en cours','Dern. inspection','Huile','Tune-up'];
+    const W = [8,30,26,13,12,14,24,12,15,15,15,15];
+    CATS.forEach(cat => {
+      const machines = catalog.filter(m => m.cat===cat);
+      if(!machines.length) return;
+      const aoa=[H], meta=[{header:true}];
+      machines.forEach(m => {
+        const st = machineStatus(m); const rec = st.rec || {};
+        const loc = rec.loc || {};
+        aoa.push([
+          m.ident||'—', m.nom, loc.chantier||'', loc.equipe||'',
+          loc.depuis ? String(loc.depuis).slice(0,10) : '',
+          rec.verif||'', st.verifActive ? st.verif.label : 'n/a',
+          st.openBris||0, st.openRepar||0,
+          st.lastInsp ? String(st.lastInsp.date).slice(0,10) : '',
+          m.gas ? (rec.huile||'') : 'n/a', m.gas ? (rec.tuneup||'') : 'n/a'
+        ]);
+        meta.push({couleur:edgeToCouleur(st.edge)});
+      });
+      wb.SheetNames.length; XLSX.utils.book_append_sheet(wb, xlsSheet(aoa, meta, W, [1,2,10,11]), cat.substring(0,31));
+    });
+    // --- Feuille Historique : tous les événements ---
+    const HH = ['Ident','Machine','Type','Date','Description','Statut','Par'];
+    const HW = [8,28,14,12,52,14,22];
+    const events = [];
+    catalog.forEach(m => {
+      const rec = recFor(m); if(!rec) return;
+      (rec.histoLoc||[]).forEach(h => events.push({ d:h.date||'', row:[m.ident||'—', m.nom, 'Déplacement', String(h.date||'').slice(0,10), [h.chantier, h.equipe, h.note].filter(Boolean).join(' · '), '', h.par||''], couleur:null }));
+      (rec.bris||[]).forEach(b => events.push({ d:b.date||'', row:[m.ident||'—', m.nom, 'Bris', String(b.date||'').slice(0,10), b.desc||'', b.statut==='resolu'?'Résolu':'Ouvert', b.par||''], couleur:b.statut==='resolu'?'green':'red' }));
+      (rec.reparations||[]).forEach(x => events.push({ d:x.date||'', row:[m.ident||'—', m.nom, 'Réparation', String(x.date||'').slice(0,10), (x.desc||'')+(x.cout?(' ('+x.cout+' $)'):''), x.statut==='fait'?'Fait':(x.statut==='en_cours'?'En cours':'À faire'), x.par||''], couleur:x.statut==='fait'?'green':'yellow' }));
+      (rec.inspections||[]).forEach(i => events.push({ d:i.date||'', row:[m.ident||'—', m.nom, 'Inspection', String(i.date||'').slice(0,10), i.note||'', i.conforme==='non'?'Non conforme':(i.conforme==='oui'?'Conforme':'N/A'), i.par||''], couleur:i.conforme==='non'?'red':(i.conforme==='oui'?'green':null) }));
+    });
+    if(events.length){
+      events.sort((a,b) => String(b.d).localeCompare(String(a.d)));
+      const aoa=[HH], meta=[{header:true}];
+      events.forEach(ev => { aoa.push(ev.row); meta.push({couleur:ev.couleur}); });
+      XLSX.utils.book_append_sheet(wb, xlsSheet(aoa, meta, HW, [1,4]), 'Historique');
+    }
+    if(!wb.SheetNames.length){ alert('Aucune donnée à exporter.'); return; }
+    const d = new Date();
+    XLSX.writeFile(wb, 'Machinerie_DMD_' + d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + '.xlsx');
+    // Nouvel instantané pour la prochaine comparaison
+    try{ await storage.set('inv:machSnapshot', JSON.stringify({ meta:{ date:d.toISOString() }, data:snapNow }), true); }catch(e){}
+    if(btn) btn.style.display='none';
+  }catch(e){ console.error(e); alert("Une erreur est survenue pendant l'export."); }
+  finally{ if(btn){ btn.textContent=old||'⬇ Excel'; btn.disabled=false; } }
+}
+document.getElementById('exportBtn').addEventListener('click', exporterExcel);
+// Ctrl+X révèle le bouton (pas pendant l'édition d'un champ) — inaccessible sans clavier
+document.addEventListener('keydown', function(e){
+  if((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key==='x' || e.key==='X')){
+    const el = document.activeElement;
+    if(el && (el.tagName==='INPUT' || el.tagName==='TEXTAREA' || el.isContentEditable)) return;
+    e.preventDefault();
+    const btn = document.getElementById('exportBtn');
+    if(btn){ btn.style.display=''; btn.focus(); }
+  }
+});
+
+// ================== DÉMARRAGE ==================
+(async function(){
+  if(!_sb){ document.getElementById('list').innerHTML = '<div class="empty">Connexion au serveur impossible (librairie non chargée).</div>'; return; }
+  try{
+    const { data } = await withTimeout(_sb.auth.getSession(), 8000, 'getSession');
+    if(!data || !data.session){ document.getElementById('gate').classList.add('show'); location.replace('./index.html'); return; }
+  }catch(e){
+    document.getElementById('list').innerHTML = '<div class="empty">Serveur injoignable. Vérifie ta connexion.</div>'; return;
+  }
+  try{
+    await Promise.all([ loadTeams(), loadCatalog(), loadRecords() ]);
+    renderSummary(); renderTabs(); renderList();
+  }catch(e){
+    console.error(e);
+    document.getElementById('list').innerHTML = '<div class="empty">Impossible de charger la machinerie. Réessaie.</div>';
+  }
+})();
+</script>
+</body>
+</html>
