@@ -89,6 +89,24 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 .p-carte{ margin-top:7px; font-size:13.5px; }
 .p-carte a{ color:var(--safety-yellow); text-decoration:none; }
 
+/* ---- Contact d'urgence : caché derrière un bouton, révélé seulement au besoin ---- */
+.p-urgence{ margin-top:9px; }
+.urg-btn{
+  width:100%; padding:9px; font-size:13px; font-weight:700; cursor:pointer;
+  border:1.5px solid var(--brick-line); border-radius:9px;
+  background:rgba(192,57,43,0.15); color:#ff9d8f;
+  font-family:'Barlow',sans-serif; letter-spacing:0.4px; text-transform:uppercase;
+}
+.urg-btn:active{ background:rgba(192,57,43,0.28); }
+.urg-box{ display:none; margin-top:8px; padding:11px 12px;
+  background:rgba(192,57,43,0.12); border:1.5px solid var(--brick-line); border-radius:9px; }
+.urg-box.show{ display:block; }
+.urg-box .urg-name{ font-weight:700; font-size:15px; }
+.urg-box .urg-lien{ color:var(--paper-dim); font-size:12.5px; font-weight:600; }
+.urg-box a.urg-call{ display:inline-block; margin-top:6px; color:#ffb3a7; text-decoration:none; font-size:16px; font-weight:700; }
+.urg-box .urg-hint{ margin-top:8px; font-size:11px; color:var(--paper-dim); line-height:1.4; }
+.urg-none{ margin-top:9px; font-size:12px; color:var(--logo-grey); line-height:1.4; }
+
 .pf{ margin-top:10px; border-top:1px dashed var(--line); padding-top:8px; }
 .pf-title{ font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--paper-dim); margin-bottom:4px; }
 .f-line{ font-size:12.5px; color:var(--paper); padding:5px 8px; line-height:1.4; border-radius:7px; margin:3px 0; border-left:4px solid transparent; }
@@ -191,6 +209,13 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
     <input type="text" id="idNom" placeholder="Prénom Nom" autocomplete="name">
     <input type="tel" id="idTel" placeholder="Téléphone" autocomplete="tel">
     <input type="email" id="idCourriel" placeholder="Courriel" autocomplete="email">
+    <div style="margin-top:9px; border-top:1px dashed var(--line); padding-top:9px;">
+      <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:#ff9d8f; margin-bottom:3px;">🆘 Contact d'urgence <span style="color:var(--paper-dim); font-weight:600; text-transform:none; letter-spacing:0;">— obligatoire</span></div>
+      <input type="text" id="idUrgNom" placeholder="Contact d'urgence — Prénom Nom" autocomplete="off">
+      <input type="tel" id="idUrgTel" placeholder="Contact d'urgence — Téléphone" autocomplete="off">
+      <input type="text" id="idUrgLien" placeholder="Lien (conjoint, parent, ami…) — optionnel" autocomplete="off">
+      <div style="font-size:11px; color:var(--paper-dim); line-height:1.4; margin-top:3px;">Visible par tes collègues <b style="color:var(--paper-dim);">seulement</b> en cas d'incident sur un chantier. Avise cette personne que son numéro est enregistré à cette fin.</div>
+    </div>
     <div class="m-err" id="idError">&nbsp;</div>
     <button class="m-btn" id="idSave">Enregistrer</button>
     <button class="m-btn cancel" id="idCancel">Annuler</button>
@@ -265,6 +290,13 @@ function indexFormations(data){
 async function saveFormations(data){
   formationsData = indexFormations(data);
   try{ await window.storage.set('inv:formations', JSON.stringify({ people:data.people, maj:data.maj }), true); }catch(e){}
+}
+// Liste des employés autorisés ajoutés manuellement (portier d'accès de l'app d'accueil)
+async function loadRosterAdded(){
+  try{ const r = await window.storage.get('inv:roster:added', true); const v = (r && r.value) ? JSON.parse(r.value) : []; rosterAdded = Array.isArray(v) ? v : []; }catch(e){ rosterAdded = []; }
+}
+async function saveRosterAdded(){
+  try{ await window.storage.set('inv:roster:added', JSON.stringify(rosterAdded), true); }catch(e){}
 }
 // Lit l'Excel croisé « Liste des formations » : en-têtes sur 2 lignes,
 // blocs de 3 lignes par employé (Date / Attestation reçu / Échéance).
@@ -352,7 +384,12 @@ function renderAdminBar(){
       '<div class="admin-maj">' + escapeHtml(majTxt) + '</div>' +
       '<input type="file" id="formFile" accept=".xlsx,.xls,.csv" style="display:none;">' +
       '<button type="button" class="admin-btn primary" id="importForm">📥 Mettre à jour les formations (Excel)</button>' +
-      '<button type="button" class="admin-btn" id="adminLock">Quitter le mode admin</button>' +
+      '<div style="margin-top:10px; border-top:1px solid rgba(242,183,5,0.3); padding-top:9px;">' +
+        '<div style="font-size:12.5px; color:var(--paper-dim); margin-bottom:6px; line-height:1.45;">👷 Employés autorisés à accéder à l\'application. La liste principale vient du fichier de formations; les ajouts ci-dessous s\'y fusionnent au prochain import Excel. Ajoutés via l\'app : <b style="color:var(--paper);">' + rosterAdded.length + '</b></div>' +
+        '<button type="button" class="admin-btn" id="addEmp">➕ Ajouter un employé (accès)</button>' +
+        (rosterAdded.length ? '<div style="margin-top:6px;">' + rosterAdded.map(function(n,i){ return '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12.5px; padding:5px 2px; border-bottom:1px dashed var(--line);"><span>'+escapeHtml(n)+'</span><button type="button" class="p-admin-btn danger" data-rm-emp="'+i+'">Retirer</button></div>'; }).join('') + '</div>' : '') +
+      '</div>' +
+      '<button type="button" class="admin-btn" id="adminLock" style="margin-top:8px;">Quitter le mode admin</button>' +
     '</div>';
   const lock = document.getElementById('adminLock');
   if(lock) lock.onclick = async () => { await setAdmin(false); renderAdminBar(); render(); };
@@ -370,6 +407,12 @@ function renderAdminBar(){
           alert('Aucune formation trouvée. Vérifie que la feuille « Liste des formations » est présente (colonne EMPLOYÉ + ligne Échéance).');
         } else {
           await saveFormations(data);
+          // Retire de la liste d'ajout manuel les noms maintenant présents dans l'Excel (fusion)
+          if(rosterAdded.length){
+            const before = rosterAdded.length;
+            rosterAdded = rosterAdded.filter(n => !data.people.some(p => normNom(p.nom) === normNom(n) || nomsProches(p.nom, n)));
+            if(rosterAdded.length !== before) await saveRosterAdded();
+          }
           const total = data.people.reduce((n,p) => n + p.forms.length, 0);
           alert(data.people.length + ' employé(s) et ' + total + ' formation(s) importés.');
         }
@@ -381,6 +424,31 @@ function renderAdminBar(){
       }
     };
   }
+  // --- Ajout / retrait d'employés autorisés (portier d'accès) ---
+  const addEmp = document.getElementById('addEmp');
+  if(addEmp) addEmp.onclick = async () => {
+    const saisie = prompt('Nom de l\'employé à autoriser (Prénom Nom) :');
+    if(saisie == null) return;
+    const clean = saisie.trim();
+    if(!clean) return;
+    const dupAdded = rosterAdded.some(n => normNom(n) === normNom(clean));
+    const dupForm = formationsData && Array.isArray(formationsData.people) && formationsData.people.some(p => normNom(p.nom) === normNom(clean));
+    if(dupAdded || dupForm){ alert('Cet employé est déjà dans la liste des accès.'); return; }
+    rosterAdded.push(clean);
+    await saveRosterAdded();
+    renderAdminBar();
+    alert('« ' + clean + ' » peut maintenant accéder à l\'application.');
+  };
+  document.querySelectorAll('[data-rm-emp]').forEach(b => {
+    b.onclick = async () => {
+      const i = parseInt(b.getAttribute('data-rm-emp'), 10);
+      if(isNaN(i) || i < 0 || i >= rosterAdded.length) return;
+      if(!confirm('Retirer « ' + (rosterAdded[i]||'') + ' » de la liste des accès ?\n\nCette personne ne pourra plus se connecter (sauf si elle est dans le fichier de formations).')) return;
+      rosterAdded.splice(i, 1);
+      await saveRosterAdded();
+      renderAdminBar();
+    };
+  });
 }
 
 // --- Identité de CET appareil (mêmes clés que l'accueil et l'inventaire) ---
@@ -450,6 +518,7 @@ function echeanceStatus(dateStr){
 // ================== DONNÉES ==================
 let people = [];          // fiches inv:person:*
 let formationsData = null; // { people:[{nom, forms:[{formation,date,attestation,echeance}]}], maj }
+let rosterAdded = [];      // employés autorisés ajoutés via l'app (inv:roster:added)
 
 async function loadAll(){
   // Une seule requête pour toutes les fiches + une pour les formations
@@ -518,25 +587,53 @@ function render(){
     const carte = (p.extra && p.extra.carteUrl)
       ? '<div class="p-carte"><a href="' + escapeAttr(p.extra.carteUrl) + '" target="_blank" rel="noopener">🪪 Voir la carte / certificat</a></div>' : '';
     const pKey = escapeAttr(p._key || ('inv:person:' + p.id));
+    // Contact d'urgence : caché par défaut, révélé au tap (accès intentionnel)
+    const uid = escapeAttr(p.id || '');
+    const urg = p.urgence || {};
+    const hasUrg = !!(urg.nom || urg.tel);
+    const urgBlock = hasUrg
+      ? '<div class="p-urgence">' +
+          '<button type="button" class="urg-btn" data-urg-toggle="' + uid + '">🆘 En cas d\'urgence</button>' +
+          '<div class="urg-box" id="urg-' + uid + '">' +
+            '<div class="urg-name">' + escapeHtml(urg.nom || '—') +
+              (urg.lien ? ' <span class="urg-lien">(' + escapeHtml(urg.lien) + ')</span>' : '') + '</div>' +
+            (urg.tel ? '<a class="urg-call" href="tel:' + escapeAttr(urg.tel) + '">📞 ' + escapeHtml(urg.tel) + '</a>' : '') +
+            '<div class="urg-hint">Réservé aux situations d\'urgence sur un chantier.</div>' +
+          '</div>' +
+        '</div>'
+      : (isMe ? '<div class="urg-none">🆘 Ajoute ton contact d\'urgence via « Modifier mes infos ».</div>' : '');
     const adminBtns = isAdmin
       ? '<div class="p-admin">' +
           '<button type="button" class="p-admin-btn" data-carte-key="' + pKey + '">🔗 ' + ((p.extra && p.extra.carteUrl) ? 'Modifier' : 'Ajouter') + ' lien carte</button>' +
           '<button type="button" class="p-admin-btn danger" data-del-key="' + pKey + '" data-del-id="' + escapeAttr(p.id || '') + '" data-del-nom="' + escapeAttr(p.nom || '') + '">🗑️ Supprimer</button>' +
         '</div>'
       : '';
-    // Formations : visibles par les admins seulement (lignes colorées, pas de pastille de bord)
+    // Formations : chacun voit les siennes, l'admin voit toutes (lignes colorées selon l'échéance)
     return '<div class="card' + (isMe ? ' me' : '') + '">' +
       '<div class="p-top"><span class="p-name">' + escapeHtml(p.nom || '(sans nom)') +
         (isMe ? ' <span class="p-you">Toi</span>' : '') + '</span>' + equipe + '</div>' +
       (contact ? '<div class="p-contact">' + contact + '</div>' : '') +
       carte +
-      (isAdmin ? formationsHtmlFor(p.nom) : '') +
+      urgBlock +
+      /* Formations : chaque personne voit LES SIENNES; l'admin voit celles de tout le monde. */
+      ((isAdmin || isMe) ? formationsHtmlFor(p.nom) : '') +
       (isMe ? '<button type="button" class="edit-btn" id="editMe">✏️ Modifier mes infos</button>' : '') +
       adminBtns +
       '</div>';
   }).join('');
   const btn = document.getElementById('editMe');
   if(btn) btn.onclick = openEdit;
+
+  // ---- Révéler / masquer le contact d'urgence (accès intentionnel) ----
+  list.querySelectorAll('[data-urg-toggle]').forEach(b => {
+    b.onclick = () => {
+      const box = document.getElementById('urg-' + b.getAttribute('data-urg-toggle'));
+      if(box){
+        const open = box.classList.toggle('show');
+        b.textContent = open ? '🆘 Masquer le contact d\'urgence' : '🆘 En cas d\'urgence';
+      }
+    };
+  });
 
   // ---- Actions admin par personne (lien carte + suppression) ----
   if(isAdmin){
@@ -588,6 +685,10 @@ function openEdit(){
   document.getElementById('idNom').value = u.nom || '';
   document.getElementById('idTel').value = u.tel || '';
   document.getElementById('idCourriel').value = u.courriel || '';
+  const urg = u.urgence || {};
+  document.getElementById('idUrgNom').value = urg.nom || '';
+  document.getElementById('idUrgTel').value = urg.tel || '';
+  document.getElementById('idUrgLien').value = urg.lien || '';
   document.getElementById('idError').innerHTML = '&nbsp;';
   document.getElementById('overlay').classList.add('show');
 }
@@ -597,8 +698,14 @@ document.getElementById('idSave').onclick = async () => {
   const nom = document.getElementById('idNom').value.trim();
   const tel = document.getElementById('idTel').value.trim();
   const courriel = document.getElementById('idCourriel').value.trim();
+  const urgNom = document.getElementById('idUrgNom').value.trim();
+  const urgTel = document.getElementById('idUrgTel').value.trim();
+  const urgLien = document.getElementById('idUrgLien').value.trim();
   if(!nom){ document.getElementById('idError').textContent = 'Le nom est requis.'; return; }
-  const obj = { nom, tel, courriel };
+  if(!tel){ document.getElementById('idError').textContent = 'Le numéro de téléphone est obligatoire.'; return; }
+  if(!urgNom || !urgTel){ document.getElementById('idError').textContent = "Le contact d'urgence (nom et téléphone) est obligatoire."; return; }
+  const urgence = { nom:urgNom, tel:urgTel, lien:urgLien };
+  const obj = { nom, tel, courriel, urgence };
   try{ localStorage.setItem('inv:deviceUser', JSON.stringify(obj)); }catch(e){}
   document.getElementById('overlay').classList.remove('show');
   // Met à jour la fiche partagée puis recharge la liste
@@ -606,7 +713,7 @@ document.getElementById('idSave').onclick = async () => {
   if(stEl){ stEl.className='save-status'; stEl.textContent='💾 Enregistrement…'; }
   try{
     const id = getDeviceId();
-    const rec = { id, nom, tel, courriel, equipe:'', equipeId:'', maj:new Date().toISOString(), extra:{} };
+    const rec = { id, nom, tel, courriel, urgence, equipe:'', equipeId:'', maj:new Date().toISOString(), extra:{} };
     const prev = people.find(x => x.id === id);
     if(prev){ rec.equipe = prev.equipe || ''; rec.equipeId = prev.equipeId || ''; if(prev.extra) rec.extra = prev.extra; }
     await withTimeout(_sb.from('inv_store').upsert({ key:'inv:person:' + id, value:JSON.stringify(rec), updated_at:new Date().toISOString() }), 10000, 'save');
@@ -726,6 +833,7 @@ document.addEventListener('keydown', function(e){
   try{
     await loadAdmin();
     await loadAll();
+    await loadRosterAdded();
     render();
     renderAdminBar();
   }catch(e){

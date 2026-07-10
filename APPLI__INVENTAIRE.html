@@ -901,9 +901,46 @@ window.storage = {
   }
 };
 
-/* Ordre d'affichage des onglets voulu : S.S.T., Lift, Fraco, Mixeur juste après Base.
+/* ===== FUSION : Lift + Fraco + Mixeur + Scie regroupés dans un seul onglet « Machinerie ».
+   Les sous-sections restent visibles par en-tête (Lift, Fraco, Accessoires Fraco, Mixeur, Scie).
+   Chaque machine conserve son type dans it.mtype (pour le catalogue publié et l'app Machinerie). */
+(function mergeMachinerie(){
+  const parts = [
+    { key:'LOURD_LIFT',   type:'Lift',   titre:'LIFT' },
+    { key:'LOURD_FRACO',  type:'Fraco',  titre:'FRACO' },
+    { key:'LOURD_MIXEUR', type:'Mixeur', titre:'MIXEUR' },
+    { key:'LOURD_SCIE',   type:'Scie',   titre:'SCIE' }
+  ];
+  if(!parts.some(p => RAW_DATA[p.key])) return; // déjà fusionné ou catégories absentes
+  const items = [];
+  parts.forEach(p => {
+    const src = RAW_DATA[p.key];
+    if(!src || !Array.isArray(src.items)) return;
+    const firstIsHeader = src.items.length && src.items[0].header;
+    if(!firstIsHeader){ items.push({ name:p.titre, header:true }); } // en-tête de sous-section
+    let fracoStopped = false;   // pour Fraco : machines avant « ACCESSOIRES FRACO », accessoires après
+    src.items.forEach(it => {
+      const copy = Object.assign({}, it);
+      if(it.header){
+        if(/ACCESSOIRES/i.test(it.name || '')) fracoStopped = true;
+      } else {
+        copy.mtype = p.type;
+        if(p.type === 'Fraco'){
+          if(!fracoStopped){ copy.noQty = true; copy.selectable = true; }
+        } else {
+          copy.noQty = true; copy.selectable = true;
+        }
+      }
+      items.push(copy);
+    });
+  });
+  RAW_DATA['MACHINERIE'] = { label:'Machinerie', items: items };
+  parts.forEach(p => { delete RAW_DATA[p.key]; });
+})();
+
+/* Ordre d'affichage des onglets voulu : S.S.T., Machinerie juste après Base.
    On part de l'ordre souhaité, puis on ajoute toute catégorie oubliée pour ne rien perdre. */
-const CAT_ORDER = ['BASE','S.S.T.','NÉCÉSSAIRE','OUTILS','LOURD_LIFT','LOURD_FRACO','LOURD_MIXEUR','LOURD_SCIE',
+const CAT_ORDER = ['BASE','S.S.T.','NÉCÉSSAIRE','OUTILS','MACHINERIE',
                    'HIVER','SHACK',
                    'LOURD_ECHAFAUDAGE','LOURD_DIVERS'];
 const BASE_CAT_KEYS = CAT_ORDER.filter(k => RAW_DATA[k])
@@ -970,7 +1007,7 @@ let currentTeam = teams[0].id; // or 'TOTAL'
 let currentCat = BASE_CAT_KEYS[0];
 let myTeam = null; // équipe de CET appareil (mémorisée localement), pour l'alerte "bonne équipe ?"
 // Catégories où chaque équipe choisit quelles machines elle a sur son chantier
-const SELECT_CATS = ['LOURD_LIFT','LOURD_FRACO','LOURD_MIXEUR','LOURD_SCIE'];
+const SELECT_CATS = ['MACHINERIE'];
 // machineSel[teamId][cat] = { set:true/false, actifs:[noms...] }
 let machineSel = {};
 // Identité de l'appareil (qui modifie) — mémorisée localement, demandée à la 1re connexion
@@ -1714,19 +1751,17 @@ async function saveMachineSel(teamId, cat){
    Source unique : ajouter/retirer une machine dans l'inventaire se reflète là-bas. */
 async function publishMachineCatalog(){
   try{
-    const map = { 'LOURD_LIFT':'Lift', 'LOURD_FRACO':'Fraco', 'LOURD_MIXEUR':'Mixeur', 'LOURD_SCIE':'Scie' };
     const machines = [];
-    Object.keys(map).forEach(cat => {
-      itemsFor(cat).forEach(it => {
-        if(it.header) return;
-        const hasIdent = it.ident && String(it.ident).trim() !== '';
-        if(!isSelectableItem(it) && !hasIdent) return;         // machines seulement (pas les accessoires)
-        if(isItemHidden(cat, it.name)) return;                  // ignorer les articles masqués par l'admin
-        machines.push({
-          ident: (it.ident || '').trim(),
-          nom: (it.name || '').replace(/\n/g, ' ').trim(),
-          cat: map[cat], gas: !!it.gas, vf: !!it.vf
-        });
+    // Onglet unique « Machinerie » : le type (Lift/Fraco/Mixeur/Scie) est conservé par machine dans it.mtype
+    itemsFor('MACHINERIE').forEach(it => {
+      if(it.header) return;
+      const hasIdent = it.ident && String(it.ident).trim() !== '';
+      if(!isSelectableItem(it) && !hasIdent) return;         // machines seulement (pas les accessoires)
+      if(isItemHidden('MACHINERIE', it.name)) return;         // ignorer les articles masqués par l'admin
+      machines.push({
+        ident: (it.ident || '').trim(),
+        nom: (it.name || '').replace(/\n/g, ' ').trim(),
+        cat: it.mtype || 'Machinerie', gas: !!it.gas, vf: !!it.vf
       });
     });
     await window.storage.set('inv:machineCatalog', JSON.stringify({ machines, maj:new Date().toISOString() }), true);
@@ -1737,6 +1772,17 @@ function isMachineActive(teamId, cat, itemName){
   const v = machineSel[teamId] && machineSel[teamId][cat];
   if(!v || !v.set) return true;           // pas encore configuré -> tout visible
   return v.actifs.indexOf(itemName) !== -1;
+}
+// Localisation AUTOMATIQUE d'une machine = chantier de l'équipe qui la détient (n° projet + adresse).
+// Alimentée par les infos de chantier de l'équipe (et plus tard par la future fonction Transport).
+// Non modifiable manuellement dans l'onglet Machinerie.
+function autoLocLabel(teamId){
+  const ti = (typeof teamInfo !== 'undefined' && teamInfo && teamInfo[teamId]) ? teamInfo[teamId] : null;
+  if(!ti) return '';
+  const bits = [];
+  if(ti.projet && String(ti.projet).trim()) bits.push('Projet ' + String(ti.projet).trim());
+  if(ti.adresse && String(ti.adresse).trim()) bits.push(String(ti.adresse).trim());
+  return bits.join(' — ');
 }
 // Passe à l'équipe teamId, avec confirmation si ce n'est pas "mon équipe".
 // Retourne true si le changement a lieu, false s'il est annulé.
@@ -2033,6 +2079,7 @@ function renderTeamList(){
     const hst = it.gas ? entretienStatus(s.huile) : null;   // huile
     const tst = it.gas ? entretienStatus(s.tuneup) : null;  // tune-up
     const qst = qtyStatus(s.qte, s.qteReel);
+    const autoLoc = it.loc ? autoLocLabel(currentTeam) : '';   // localisation automatique (chantier de l'équipe)
     const card = document.createElement('div');
     const etatBorder = edgeClassFor(s, it);
     card.className = 'card' + (openIndex === i ? ' open' : '') + etatBorder;
@@ -2040,7 +2087,7 @@ function renderTeamList(){
     const subParts = [];
     if(s.ident) subParts.push(s.ident);
     if(Array.isArray(s.opts) && s.opts.length) subParts.push('🔩 ' + s.opts.join(' + '));
-    if(s.localisation) subParts.push('📍 ' + s.localisation);
+    if(it.loc){ if(autoLoc) subParts.push('📍 ' + autoLoc); } else if(s.localisation){ subParts.push('📍 ' + s.localisation); }
     if(est) subParts.push('🔧 ' + est.label);
     if(s.comment) subParts.push(s.comment);
 
@@ -2116,8 +2163,9 @@ function renderTeamList(){
       ${it.loc ? `
       <div class="field-row">
         <div class="field">
-          <label>📍 Localisation</label>
-          <input type="text" data-field="localisation" value="${escapeAttr(s.localisation)}" placeholder="ex: Machine 3, camion, cour...">
+          <label>📍 Localisation (automatique)</label>
+          <div class="loc-auto" style="padding:10px 12px; background:var(--asphalt); border:1px solid var(--line); border-radius:8px; color:var(--paper-dim); font-size:14px;">${autoLoc ? escapeHtml(autoLoc) : "Selon le chantier de l'équipe — mise à jour automatique"}</div>
+          <div class="verif-hint">Se met à jour selon l'équipe qui a la machine sur son chantier. Non modifiable ici.</div>
         </div>
       </div>` : ''}
       ${it.vf ? `
@@ -2153,7 +2201,7 @@ function renderTeamList(){
           <div class="verif-hint ${tst.level}">${escapeHtml(tst.label)}</div>
         </div>
       </div>` : ''}
-      ${currentCat === 'LOURD_SCIE' ? `
+      ${it.mtype === 'Scie' ? `
       <div class="field-row">
         <div class="field">
           <label>🪚 État de la lame</label>

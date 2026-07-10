@@ -170,16 +170,25 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
     <div class="gate-title">Avant de commencer</div>
     <div class="gate-sub">Protection de tes renseignements personnels</div>
     <div class="consent-box">
-      <b>Maçonnerie DMD inc.</b> recueille ton nom, tes coordonnées (téléphone, courriel), ton équipe
-      et tes renseignements de formation afin de gérer les équipes, l'inventaire et le suivi des compétences.
+      <b>Maçonnerie DMD inc.</b> recueille uniquement les renseignements nécessaires pour gérer les équipes,
+      l'inventaire, la sécurité et le suivi des compétences sur ses chantiers&nbsp;:
       <br><br>
-      Ces renseignements sont <b>visibles par les autres utilisateurs</b> de la plateforme,
-      sont hébergés <b>au Canada</b> et sont protégés conformément à notre politique de confidentialité.
+      • <b>Ton identité et tes coordonnées</b> (nom, téléphone, courriel) et ton équipe;<br>
+      • <b>Un contact d'urgence</b> — le nom et le numéro d'une personne à joindre s'il t'arrive un incident sur un chantier;<br>
+      • <b>Tes formations et compétences</b> — visibles par toi et par l'administration, jamais par les autres employés;<br>
+      • <b>L'appareil photo</b> — en mode direct seulement, si tu envoies une photo dans la messagerie (aucun accès à ta galerie);<br>
+      • <b>La localisation</b> — seulement si un pointage de chantier est activé&nbsp;: elle est <b>désactivée par défaut</b>,
+        c'est toi qui l'actives, et elle sert uniquement au moment du pointage (aucun suivi en continu).
       <br><br>
-      Tu peux en tout temps accéder à tes renseignements ou les faire corriger en t'adressant au
+      Ton nom et tes coordonnées sont <b>visibles par les autres utilisateurs</b> pour que vous puissiez vous joindre.
+      Ton contact d'urgence <b>n'apparaît pas</b> dans le répertoire&nbsp;: il est accessible seulement via le bouton
+      « En cas d'urgence » en cas d'incident. <b>Avise cette personne</b> que son numéro est enregistré à cette fin.
+      <br><br>
+      Les données sont hébergées <b>au Canada</b> et protégées conformément à notre politique de confidentialité.
+      Tu peux en tout temps <b>accéder à tes renseignements, les corriger ou retirer ton consentement</b> en écrivant au
       responsable de la protection des renseignements personnels&nbsp;:
       <b>Jason Turcotte</b> — jturcotte@maconneriedmd.com · 450&nbsp;502-7273.
-      <div class="consent-ver">Avis de collecte · version du 9 juillet 2026</div>
+      <div class="consent-ver">Avis de collecte · version du 10 juillet 2026</div>
     </div>
     <button class="gate-btn" id="consentOk">J'accepte et je continue</button>
     <button class="gate-btn secondary" id="consentNo">Je refuse</button>
@@ -203,9 +212,17 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
   <div class="gate-panel" id="identPanel" style="display:none;">
     <div class="gate-title">Qui es-tu&nbsp;?</div>
     <div class="gate-hint">Ton identité sert à savoir qui utilise les applications. Elle est mémorisée sur cet appareil et partagée avec les autres apps (inventaire, etc.).</div>
+    <div class="gate-hint" style="background:rgba(242,183,5,0.10); border:1px solid rgba(242,183,5,0.4); border-radius:8px; padding:9px 11px; color:var(--paper); font-size:12.5px; text-align:left;">🔒 L'identification empêche l'accès à l'application par une personne <b>extérieure à l'organisation</b>. Le <b>nom et le numéro de téléphone sont obligatoires</b>, et ton nom doit figurer dans la liste des employés de Maçonnerie DMD.</div>
     <input type="text" id="idNom" placeholder="Prénom Nom" autocomplete="name">
     <input type="tel" id="idTel" placeholder="Téléphone (ex : 514-555-1234)" autocomplete="tel">
     <input type="email" id="idCourriel" placeholder="Courriel" autocomplete="email">
+    <div style="width:100%; max-width:320px; margin:8px auto 2px; text-align:left; border-top:1px solid var(--line); padding-top:8px;">
+      <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:#ffb3a7; margin-bottom:2px;">🆘 Contact d'urgence — obligatoire</div>
+      <div style="font-size:12px; color:var(--paper-dim); line-height:1.4; margin-bottom:4px;">La personne à joindre s'il t'arrive un incident sur un chantier. Visible par tes collègues seulement en cas d'urgence. Avise-la que son numéro est enregistré.</div>
+    </div>
+    <input type="text" id="idUrgNom" placeholder="Contact d'urgence — Prénom Nom" autocomplete="off">
+    <input type="tel" id="idUrgTel" placeholder="Contact d'urgence — Téléphone" autocomplete="off">
+    <input type="text" id="idUrgLien" placeholder="Lien (conjoint, parent, ami…) — optionnel" autocomplete="off">
     <div class="gate-err" id="idError">&nbsp;</div>
     <button class="gate-btn" id="idSave">C'est moi</button>
     <button class="gate-btn secondary" id="idChantier">📱 C'est une tablette de chantier</button>
@@ -430,6 +447,68 @@ function getDeviceId(){
 function getDeviceUser(){
   try{ const v = localStorage.getItem('inv:deviceUser'); return v ? JSON.parse(v) : null; }catch(e){ return null; }
 }
+
+// ================== CONTRÔLE D'ACCÈS : liste des employés autorisés ==================
+// La liste des noms autorisés vient du fichier de formations (inv:formations) et des
+// employés ajoutés via l'app en mode admin (inv:roster:added). Si aucune liste n'existe
+// encore, aucune restriction n'est appliquée (évite de verrouiller tout le monde avant
+// le premier import). L'appareil admin garde toujours l'accès.
+function normNom(s){
+  return (s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[.,\-]/g,' ').replace(/\s+/g,' ').trim();
+}
+function levenshtein(a, b){
+  if(a === b) return 0;
+  if(!a || !b) return (a.length + b.length);
+  let prev = Array.from({length:b.length+1}, (_,i)=>i);
+  for(let i=0;i<a.length;i++){
+    let cur = [i+1];
+    for(let j=0;j<b.length;j++){ cur.push(Math.min(prev[j+1]+1, cur[j]+1, prev[j] + (a[i]!==b[j] ? 1 : 0))); }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+function motsProches(m1, m2){
+  const d = levenshtein(m1, m2), L = Math.max(m1.length, m2.length);
+  if(L >= 6) return d <= 2;
+  if(L >= 4) return d <= 1;
+  return d === 0;
+}
+function nomsProches(n1, n2){
+  const w1 = normNom(n1).split(' ').filter(Boolean);
+  const w2 = normNom(n2).split(' ').filter(Boolean);
+  if(w1.length !== w2.length || w1.length === 0) return false;
+  const used = new Array(w2.length).fill(false);
+  for(const a of w1){
+    let ok = false;
+    for(let i=0;i<w2.length;i++){ if(!used[i] && motsProches(a, w2[i])){ used[i] = true; ok = true; break; } }
+    if(!ok) return false;
+  }
+  return true;
+}
+let _rosterNames = null, _rosterLoaded = false;
+async function loadRoster(){
+  const names = [];
+  try{
+    if(_sb){
+      const [fRes, aRes] = await Promise.all([
+        withTimeout(_sb.from('inv_store').select('value').eq('key','inv:formations').maybeSingle(), 8000, 'formations'),
+        withTimeout(_sb.from('inv_store').select('value').eq('key','inv:roster:added').maybeSingle(), 8000, 'added')
+      ]);
+      if(fRes && fRes.data && fRes.data.value){ try{ const f=JSON.parse(fRes.data.value); if(f && Array.isArray(f.people)) f.people.forEach(p=>{ if(p && p.nom) names.push(p.nom); }); }catch(e){} }
+      if(aRes && aRes.data && aRes.data.value){ try{ const a=JSON.parse(aRes.data.value); if(Array.isArray(a)) a.forEach(n=>{ if(n) names.push(n); }); }catch(e){} }
+    }
+  }catch(e){ console.error('Roster:', e); }
+  _rosterNames = names; _rosterLoaded = true;
+  return names;
+}
+function isOnRoster(nom){
+  if(!_rosterNames || _rosterNames.length === 0) return true; // aucune liste => pas de restriction (bootstrap)
+  const t = normNom(nom);
+  for(const rn of _rosterNames){ if(normNom(rn) === t || nomsProches(rn, nom)) return true; }
+  return false;
+}
+function isDeviceAdmin(){ try{ return localStorage.getItem('inv:isAdmin') === '1'; }catch(e){ return false; } }
 // Enregistre l'identité — MÊME format que l'app d'inventaire (localStorage partagé + fiche Supabase)
 // Écrit l'identité LOCALEMENT (instantané) puis synchronise la fiche partagée
 // en arrière-plan — on n'attend jamais le réseau pour laisser entrer l'utilisateur.
@@ -442,10 +521,10 @@ function saveDeviceUser(obj){
 async function _syncPersonRecord(obj){
   try{
     const id = getDeviceId();
-    const rec = { id, nom:obj.nom||'', tel:obj.tel||'', courriel:obj.courriel||'', equipe:'', equipeId:'', maj:new Date().toISOString(), extra:{} };
+    const rec = { id, nom:obj.nom||'', tel:obj.tel||'', courriel:obj.courriel||'', urgence:obj.urgence||{}, equipe:'', equipeId:'', maj:new Date().toISOString(), extra:{} };
     try{
       const prev = await withTimeout(_sb.from('inv_store').select('value').eq('key','inv:person:'+id).maybeSingle(), 8000, 'person');
-      if(prev && prev.data && prev.data.value){ const p = JSON.parse(prev.data.value); if(p && p.extra) rec.extra = p.extra; }
+      if(prev && prev.data && prev.data.value){ const p = JSON.parse(prev.data.value); if(p && p.extra) rec.extra = p.extra; if((!rec.urgence || !rec.urgence.nom) && p.urgence) rec.urgence = p.urgence; }
     }catch(e){}
     try{ await withTimeout(_sb.from('inv_store').upsert({ key:'inv:person:'+id, value:JSON.stringify(rec), updated_at:new Date().toISOString() }), 8000, 'upsert'); }catch(e){}
     try{
@@ -456,7 +535,7 @@ async function _syncPersonRecord(obj){
 }
 
 // --- Consentement (Loi 25) : demandé une fois par appareil, preuve datée conservée ---
-const CONSENT_VERSION = '2026-07-09';   // à changer si l'avis de collecte est modifié (le consentement sera redemandé)
+const CONSENT_VERSION = '2026-07-10';   // à changer si l'avis de collecte est modifié (le consentement sera redemandé)
 function hasConsent(){
   try{
     const c = JSON.parse(localStorage.getItem('inv:consentement') || 'null');
@@ -492,14 +571,36 @@ function enterApp(){
 function showIdentity(){
   document.getElementById('loginPanel').style.display = 'none';
   document.getElementById('identPanel').style.display = '';
+  try{ loadRoster(); }catch(e){}   // précharge la liste des employés en arrière-plan
   const u = getDeviceUser() || {};
   document.getElementById('idNom').value      = u.nom || '';
   document.getElementById('idTel').value      = u.tel || '';
   document.getElementById('idCourriel').value = u.courriel || '';
+  const _urg = u.urgence || {};
+  document.getElementById('idUrgNom').value  = _urg.nom || '';
+  document.getElementById('idUrgTel').value  = _urg.tel || '';
+  document.getElementById('idUrgLien').value = _urg.lien || '';
   setTimeout(() => { try{ document.getElementById('idNom').focus(); }catch(e){} }, 60);
 }
 // Après connexion : identité déjà connue ? on entre. Sinon on la demande.
-function afterAuth(){ if(getDeviceUser()) enterApp(); else showIdentity(); }
+async function afterAuth(){
+  const u = getDeviceUser();
+  if(!u){ showIdentity(); return; }
+  if(!u.chantier && !u.tel){ showIdentity(); return; }
+  // Contact d'urgence obligatoire pour une identité personnelle (pas pour une tablette de chantier)
+  if(!u.chantier && !(u.urgence && u.urgence.nom && u.urgence.tel)){ showIdentity(); return; }
+  // Contrôle d'accès au lancement : le nom doit rester dans la liste des employés (sauf admin / tablette)
+  if(!u.chantier && !isDeviceAdmin()){
+    if(!_rosterLoaded) await loadRoster();
+    if(!isOnRoster(u.nom)){
+      showIdentity();
+      const idErr = document.getElementById('idError');
+      if(idErr) idErr.innerHTML = "Ton nom n'apparaît plus dans la liste des employés de Maçonnerie DMD. Communique avec ton administrateur.";
+      return;
+    }
+  }
+  enterApp();
+}
 
 async function doLogin(){
   const err = document.getElementById('loginError');
@@ -541,12 +642,27 @@ document.getElementById('togglePass').addEventListener('click', function(){
   this.textContent = show ? '🙈' : '👁';
   pf.focus();
 });
-document.getElementById('idSave').addEventListener('click', () => {
+document.getElementById('idSave').addEventListener('click', async () => {
+  const idErr = document.getElementById('idError');
   const nom = document.getElementById('idNom').value.trim();
   const tel = document.getElementById('idTel').value.trim();
   const courriel = document.getElementById('idCourriel').value.trim();
-  if(!nom){ document.getElementById('idError').textContent = 'Le nom est requis (ou choisis « tablette de chantier »).'; return; }
-  saveIdentity({ nom, tel, courriel });
+  const urgNom = document.getElementById('idUrgNom').value.trim();
+  const urgTel = document.getElementById('idUrgTel').value.trim();
+  const urgLien = document.getElementById('idUrgLien').value.trim();
+  if(!nom){ idErr.textContent = 'Le nom est requis (ou choisis « tablette de chantier »).'; return; }
+  if(!tel){ idErr.textContent = 'Le numéro de téléphone est obligatoire.'; return; }
+  if(!urgNom || !urgTel){ idErr.textContent = "Le contact d'urgence (nom et téléphone) est obligatoire."; return; }
+  // Contrôle d'accès : le nom doit figurer dans la liste des employés (sauf appareil admin)
+  if(!isDeviceAdmin()){
+    if(!_rosterLoaded){ idErr.textContent = 'Vérification de la liste des employés…'; await loadRoster(); }
+    if(!isOnRoster(nom)){
+      idErr.innerHTML = "Ton nom n'apparaît pas dans la liste des employés de Maçonnerie DMD. Vérifie l'orthographe (Prénom Nom) ou demande à ton administrateur de t'ajouter.";
+      return;
+    }
+  }
+  idErr.innerHTML = '&nbsp;';
+  saveIdentity({ nom, tel, courriel, urgence:{ nom:urgNom, tel:urgTel, lien:urgLien } });
 });
 document.getElementById('idChantier').addEventListener('click', () => saveIdentity({ chantier:true }));
 document.getElementById('idCourriel').addEventListener('keydown', e => { if(e.key === 'Enter') document.getElementById('idSave').click(); });
