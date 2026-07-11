@@ -246,6 +246,22 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
   </div>
 </div>
 
+<!-- ================== POP-UP RAPPEL DE FORMATION ================== -->
+<div id="formPopOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.74);z-index:80;align-items:center;justify-content:center;padding:22px;">
+  <div style="background:#2f2d2b;border:1.5px solid #45423f;border-radius:18px;max-width:440px;width:100%;padding:22px 22px 18px;box-shadow:0 12px 40px rgba(0,0,0,0.5);">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+      <span style="font-size:26px;">🎓</span>
+      <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;margin:0;color:#f3efe6;letter-spacing:0.5px;">Rappel de formation</h3>
+    </div>
+    <p style="font-size:14px;color:#d9d2c2;margin:2px 0 12px;line-height:1.5;">Tu es inscrit(e) à une ou plusieurs formations :</p>
+    <div id="formPopList"></div>
+    <div style="display:flex;gap:9px;margin-top:16px;flex-wrap:wrap;">
+      <a id="formPopGo" href="./APPLI__FORMATIONS.html" style="flex:1;min-width:150px;text-align:center;text-decoration:none;background:#f2b705;color:#232221;border-radius:10px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:0.5px;">Voir la formation</a>
+      <button id="formPopDismiss" style="flex:1;min-width:150px;background:#232221;color:#d9d2c2;border:1.5px solid #45423f;border-radius:10px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;">Ne plus afficher aujourd'hui</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ================== CONFIGURATION DES APPLICATIONS ==================
 // Pour AJOUTER une app plus tard : ajoute un objet ici avec son lien (href),
@@ -265,6 +281,14 @@ const APPS = [
     desc:'Répertoire & formations',
     icon:'infos',
     href:'./APPLI__INFOS.html',   // <-- répertoire des personnes + formations
+    soon:false
+  },
+  {
+    id:'formations',
+    nom:'Formations',
+    desc:'En cours & en attente',
+    icon:'formations',
+    href:'./APPLI__FORMATIONS.html',   // <-- planification des formations (admin) + rappels employés
     soon:false
   },
   {
@@ -330,6 +354,13 @@ const ICONS = {
     <circle cx="18" cy="52" r="3.5" fill="${G}"/>
     <circle cx="46" cy="52" r="3.5" fill="${G}"/>
     <path d="M15 26v-4M25 26v-4" stroke="${Y}" stroke-width="3" stroke-linecap="round"/>
+  </svg>`,
+  // Chapeau de graduation (formation)
+  formations: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M32 14 8 24l24 10 24-10-24-10z" stroke="${P}" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M18 29v11c0 3.3 6.3 6 14 6s14-2.7 14-6V29" stroke="${Y}" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M56 24v12" stroke="${G}" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="56" cy="39" r="2.5" fill="${G}"/>
   </svg>`,
   // Facture / reçu avec montant
   factures: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -487,7 +518,18 @@ function nomsProches(n1, n2){
   return true;
 }
 let _rosterNames = null, _rosterLoaded = false;
+// Cache court (60 s) de la liste des employés : évite de retaper la base à chaque
+// connexion/rafraîchissement pendant une période de forte affluence.
+const ROSTER_CACHE_MS = 60000;
 async function loadRoster(){
+  // 1) Cache mémoire (déjà chargé dans cette page)
+  if(_rosterLoaded && _rosterNames) return _rosterNames;
+  // 2) Cache de session (survit à un rafraîchissement de page, pas à la fermeture)
+  try{
+    const raw = sessionStorage.getItem('inv:rosterCache');
+    if(raw){ const c = JSON.parse(raw); if(c && Array.isArray(c.names) && (Date.now() - c.t) < ROSTER_CACHE_MS){ _rosterNames = c.names; _rosterLoaded = true; return _rosterNames; } }
+  }catch(e){}
+  // 3) Lecture réseau (deux clés ciblées, en parallèle)
   const names = [];
   try{
     if(_sb){
@@ -500,6 +542,7 @@ async function loadRoster(){
     }
   }catch(e){ console.error('Roster:', e); }
   _rosterNames = names; _rosterLoaded = true;
+  try{ sessionStorage.setItem('inv:rosterCache', JSON.stringify({ t:Date.now(), names })); }catch(e){}
   return names;
 }
 function isOnRoster(nom){
@@ -564,6 +607,74 @@ function syncConsent(){
   }catch(e){ return Promise.resolve(); }
 }
 
+// ================== RAPPEL DE FORMATION (pop-up d'accueil) ==================
+function _formTodayStr(){
+  const d = new Date(); const z = n => String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate());
+}
+function _formDismissedToday(){
+  try{ return localStorage.getItem('inv:formPopDismissed') === _formTodayStr(); }catch(e){ return false; }
+}
+function _formFrDate(s){
+  if(!s) return '—'; const [y,m,d] = s.split('-'); if(!y) return s;
+  const mois=['janv.','févr.','mars','avr.','mai','juin','juill.','août','sept.','oct.','nov.','déc.'];
+  return parseInt(d,10)+' '+(mois[parseInt(m,10)-1]||'')+' '+y;
+}
+// Formations actives (de l'inscription jusqu'à la date de fin incluse) qui visent l'utilisateur courant
+async function checkFormationReminder(){
+  try{
+    if(_formDismissedToday()) return;
+    const u = getDeviceUser();
+    if(!u || u.chantier || !u.nom) return;           // pas de rappel pour une tablette de chantier
+    if(!_sb) return;
+    // Cache court (60 s) du plan de formation : allège la base quand beaucoup d'appareils
+    // ouvrent l'accueil en même temps. Les mises à jour admin apparaissent au tour suivant.
+    let planRaw = null;
+    try{
+      const c = JSON.parse(sessionStorage.getItem('inv:formPlanCache') || 'null');
+      if(c && (Date.now() - c.t) < 60000){ planRaw = c.v; }
+    }catch(e){}
+    if(planRaw === null){
+      const res = await withTimeout(_sb.from('inv_store').select('value').eq('key','inv:formationsPlan').maybeSingle(), 8000, 'formplan');
+      if(!res || !res.data || !res.data.value) return;
+      planRaw = res.data.value;
+      try{ sessionStorage.setItem('inv:formPlanCache', JSON.stringify({ t:Date.now(), v:planRaw })); }catch(e){}
+    }
+    const plan = JSON.parse(planRaw);
+    const items = (plan && Array.isArray(plan.items)) ? plan.items : [];
+    const today = _formTodayStr();
+    const mine = items.filter(it => {
+      const fin = it.fin || it.debut || '';
+      if(fin && fin < today) return false;           // terminée -> plus de rappel
+      return (it.employes||[]).some(n => normNom(n) === normNom(u.nom) || nomsProches(n, u.nom));
+    });
+    if(!mine.length) return;
+    mine.sort((a,b)=>(a.debut||'').localeCompare(b.debut||''));
+    const list = document.getElementById('formPopList');
+    list.innerHTML = mine.map(it => {
+      const enCours = (it.debut||'') <= today;
+      const badge = enCours
+        ? '<span style="background:#6fae5d;color:#1c2417;border-radius:16px;padding:2px 9px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">En cours</span>'
+        : '<span style="background:#e0952b;color:#2a1c07;border-radius:16px;padding:2px 9px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">À venir</span>';
+      return '<div style="background:#232221;border:1px solid #45423f;border-radius:12px;padding:11px 13px;margin:8px 0;">'+
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:700;font-size:18px;color:#f3efe6;">'+escapeHtml(it.type||'Formation')+' '+badge+'</div>'+
+        '<div style="font-size:13px;color:#d9d2c2;margin-top:5px;line-height:1.5;">📍 <b style="color:#f3efe6;">'+escapeHtml(it.lieu||'—')+'</b><br>'+
+        '🗓️ Du <b style="color:#f3efe6;">'+_formFrDate(it.debut)+'</b> au <b style="color:#f3efe6;">'+_formFrDate(it.fin)+'</b>'+
+        (it.notes ? '<br>📝 '+escapeHtml(it.notes) : '')+'</div></div>';
+    }).join('');
+    document.getElementById('formPopOverlay').style.display = 'flex';
+  }catch(e){ console.error('Rappel formation:', e); }
+}
+(function initFormPop(){
+  const dismiss = document.getElementById('formPopDismiss');
+  if(dismiss) dismiss.onclick = () => {
+    try{ localStorage.setItem('inv:formPopDismissed', _formTodayStr()); }catch(e){}
+    document.getElementById('formPopOverlay').style.display = 'none';
+  };
+  const ov = document.getElementById('formPopOverlay');
+  if(ov) ov.addEventListener('click', e => { if(e.target.id==='formPopOverlay') ov.style.display='none'; });
+})();
+
 // --- Affichage ---
 function enterApp(){
   gate.style.display = 'none';
@@ -571,6 +682,7 @@ function enterApp(){
   render();
   renderMe();
   syncConsent();   // preuve de consentement vers la base (non bloquant)
+  checkFormationReminder();   // rappel formation si l'employé est inscrit (non bloquant)
 }
 function showIdentity(){
   document.getElementById('loginPanel').style.display = 'none';

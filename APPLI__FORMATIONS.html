@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Formations — Maçonnerie DMD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --asphalt: #232221;
+  --asphalt-2: #2f2d2b;
+  --paper: #f3efe6;
+  --paper-dim: #d9d2c2;
+  --line: #45423f;
+  --safety-yellow: #f2b705;
+  --brick-line: #4e1a1c;
+  --logo-grey: #9b948a;
+  --green: #4c7a3f;
+  --green-soft: #6fae5d;
+  --amber: #e0952b;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-family:'Barlow',sans-serif;min-height:100%;-webkit-text-size-adjust:100%;}
+#app{min-height:100vh; display:flex; flex-direction:column; max-width:560px; margin:0 auto; background:var(--asphalt);}
+.hdr{
+  display:flex; align-items:center; gap:10px; padding:14px 16px;
+  background-color:#6e2325;
+  background-image:
+    linear-gradient(rgba(0,0,0,0.12) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(0,0,0,0.12) 2px, transparent 2px);
+  background-size:38px 20px;
+  border-bottom:3px solid var(--brick-line);
+}
+.back{
+  color:var(--paper); text-decoration:none; font-size:22px; line-height:1;
+  padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.25);
+}
+.hdr-txt{display:flex; flex-direction:column;}
+.hdr-title{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:23px; letter-spacing:0.5px; margin:0; color:var(--paper); line-height:1.05; }
+.hdr-sub{ font-size:11.5px; letter-spacing:1px; text-transform:uppercase; color:var(--paper-dim); margin-top:1px; }
+
+.section-title{
+  font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:15px;
+  text-transform:uppercase; letter-spacing:1px; color:var(--paper-dim);
+  padding:16px 18px 6px; display:flex; align-items:center; gap:8px;
+}
+.section-title .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+.dot.encours{ background:var(--green-soft); }
+.dot.attente{ background:var(--amber); }
+.list{ padding:0 14px 8px; }
+.empty{ color:var(--logo-grey); font-size:14px; padding:4px 6px 10px; font-style:italic; }
+
+.card{
+  background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:14px;
+  padding:13px 15px; margin:9px 0;
+}
+.card .type{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:19px; letter-spacing:0.4px; color:var(--paper); }
+.card .badge{
+  font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;
+  border-radius:20px; padding:2px 9px; vertical-align:middle; margin-left:7px;
+}
+.badge.encours{ background:var(--green-soft); color:#1c2417; }
+.badge.attente{ background:var(--amber); color:#2a1c07; }
+.card .meta{ font-size:13.5px; color:var(--paper-dim); margin-top:6px; line-height:1.5; }
+.card .meta b{ color:var(--paper); font-weight:600; }
+.card .emps{ margin-top:8px; display:flex; flex-wrap:wrap; gap:5px; }
+.emp-chip{ background:var(--asphalt); border:1px solid var(--line); color:var(--paper); border-radius:16px; padding:3px 10px; font-size:12.5px; }
+.card .actions{ margin-top:10px; display:flex; gap:8px; }
+.card .actions button{
+  flex:1; border:none; border-radius:8px; padding:7px 10px; cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:0.5px;
+}
+.btn-edit{ background:var(--asphalt); color:var(--paper); border:1.5px solid var(--line)!important; }
+.btn-del{ background:#5a2a2a; color:#ffd7d7; }
+
+.fab{
+  position:fixed; right:calc(50% - 280px + 18px); bottom:20px;
+  background:var(--safety-yellow); color:#232221; border:none; border-radius:30px;
+  padding:14px 20px; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:16px;
+  letter-spacing:0.5px; text-transform:uppercase; cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,0.4);
+  display:none;
+}
+@media(max-width:596px){ .fab{ right:18px; } }
+
+.foot{ margin-top:auto; padding:18px; font-size:11.5px; color:var(--logo-grey); line-height:1.5; text-align:center; }
+.loading{ color:var(--paper-dim); padding:24px 18px; text-align:center; }
+
+/* Overlay / modale admin */
+.overlay{ display:none; position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:50; align-items:flex-start; justify-content:center; padding:24px 14px; overflow-y:auto; }
+.modal{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:16px; padding:20px; width:100%; max-width:460px; }
+.modal h3{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:21px; margin:0 0 14px; color:var(--paper); letter-spacing:0.5px; }
+.modal label{ display:block; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--paper-dim); margin:11px 0 3px; }
+.modal input, .modal textarea{
+  width:100%; padding:11px 12px; border-radius:9px; font-size:15px; font-family:'Barlow',sans-serif;
+  border:1.5px solid var(--line); background:var(--asphalt); color:var(--paper);
+}
+.modal input:focus, .modal textarea:focus{ outline:none; border-color:var(--paper-dim); }
+.modal textarea{ resize:vertical; min-height:52px; }
+.dates-row{ display:flex; gap:10px; }
+.dates-row > div{ flex:1; }
+.emp-picker{ margin-top:4px; }
+.emp-input-row{ display:flex; gap:8px; }
+.emp-input-row input{ flex:1; }
+.emp-input-row button{ background:var(--green); color:var(--paper); border:none; border-radius:9px; padding:0 16px; font-weight:700; cursor:pointer; font-size:20px; }
+.emp-selected{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.emp-selected .chip{ background:var(--asphalt); border:1px solid var(--line); border-radius:16px; padding:4px 8px 4px 11px; font-size:13px; display:flex; align-items:center; gap:6px; }
+.emp-selected .chip span.x{ cursor:pointer; color:#ff9d8f; font-weight:700; }
+.suggest{ background:var(--asphalt); border:1px solid var(--line); border-radius:9px; margin-top:5px; max-height:150px; overflow-y:auto; }
+.suggest div{ padding:8px 11px; cursor:pointer; font-size:14px; border-bottom:1px solid var(--line); }
+.suggest div:last-child{ border-bottom:none; }
+.suggest div:active{ background:var(--asphalt-2); }
+.m-err{ color:#ff9d8f; font-size:13px; min-height:17px; margin-top:8px; }
+.m-btn{ width:100%; padding:12px; border:none; border-radius:10px; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:16px; text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; margin-top:9px; }
+.m-btn.save{ background:var(--safety-yellow); color:#232221; }
+.m-btn.cancel{ background:var(--asphalt); color:var(--paper-dim); border:1.5px solid var(--line); }
+.notice{ background:rgba(242,183,5,0.09); border:1px solid rgba(242,183,5,0.35); border-radius:10px; padding:10px 12px; font-size:13px; color:var(--paper-dim); margin:12px 18px 0; line-height:1.5; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="hdr">
+    <a class="back" href="./index.html" aria-label="Retour à l'accueil">←</a>
+    <div class="hdr-txt">
+      <h1 class="hdr-title">Formations</h1>
+      <div class="hdr-sub">En cours &amp; en attente</div>
+    </div>
+  </div>
+
+  <div id="notice" class="notice" style="display:none;"></div>
+
+  <div id="content">
+    <div class="loading">Chargement des formations…</div>
+  </div>
+
+  <div class="foot">
+    Planification des formations — usage interne Maçonnerie DMD.
+  </div>
+</div>
+
+<button class="fab" id="addBtn">＋ Nouvelle formation</button>
+
+<!-- Modale admin : ajouter / modifier une formation -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3 id="modalTitle">Nouvelle formation</h3>
+
+    <label>Type de formation</label>
+    <input type="text" id="fType" placeholder="Ex. : Cariste / Nacelle, SIMDUT, Secourisme…" autocomplete="off">
+
+    <label>Endroit</label>
+    <input type="text" id="fLieu" placeholder="Ex. : Centre de formation, chantier, en ligne…" autocomplete="off">
+
+    <div class="dates-row">
+      <div>
+        <label>Date de début</label>
+        <input type="date" id="fDebut">
+      </div>
+      <div>
+        <label>Date de fin</label>
+        <input type="date" id="fFin">
+      </div>
+    </div>
+
+    <label>Employé(s) inscrit(s)</label>
+    <div class="emp-picker">
+      <div class="emp-input-row">
+        <input type="text" id="fEmpInput" placeholder="Chercher ou saisir un nom…" autocomplete="off">
+        <button type="button" id="fEmpAdd" title="Ajouter">＋</button>
+      </div>
+      <div class="suggest" id="fSuggest" style="display:none;"></div>
+      <div class="emp-selected" id="fEmpSelected"></div>
+    </div>
+
+    <label>Notes (optionnel)</label>
+    <textarea id="fNotes" placeholder="Heure, horaire, matériel à apporter, personne-ressource…"></textarea>
+
+    <div class="m-err" id="fError">&nbsp;</div>
+    <button class="m-btn save" id="fSave">Enregistrer</button>
+    <button class="m-btn cancel" id="fCancel">Annuler</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ================== CONNEXION (partagée avec l'accueil et l'inventaire) ==================
+const SUPABASE_URL = "https://toajegeqsqulnhdwkajm.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvYWplZ2Vxc3F1bG5oZHdrYWptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1OTY1OTQsImV4cCI6MjA5OTE3MjU5NH0.LBLVG--c1d9V_ZRw-h_ATZE2SUX3OAP7lf0SxMqPqNE";
+let _sb = null;
+try{ if(window.supabase && window.supabase.createClient){ _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } }catch(e){ console.error(e); }
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout:' + (label||''))), ms))
+  ]);
+}
+function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ================== STOCKAGE (clé partagée Supabase inv_store) ==================
+const FORM_KEY = 'inv:formationsPlan'; // { items:[...] }
+async function loadPlan(){
+  try{
+    const res = await withTimeout(_sb.from('inv_store').select('value').eq('key', FORM_KEY).maybeSingle(), 10000, 'plan');
+    if(res && res.data && res.data.value){ const p = JSON.parse(res.data.value); if(p && Array.isArray(p.items)) return p.items; }
+  }catch(e){ console.error(e); }
+  return [];
+}
+async function savePlan(items){
+  try{
+    await withTimeout(_sb.from('inv_store').upsert({ key:FORM_KEY, value:JSON.stringify({ items }), updated_at:new Date().toISOString() }), 10000, 'saveplan');
+    return true;
+  }catch(e){ console.error(e); return false; }
+}
+
+// ================== IDENTITÉ / ADMIN (même logique que le reste de l'app) ==================
+function getDeviceUser(){ try{ const v = localStorage.getItem('inv:deviceUser'); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
+function isDeviceAdmin(){ try{ return localStorage.getItem('inv:isAdmin') === '1'; }catch(e){ return false; } }
+
+// ================== CORRESPONDANCE DES NOMS (identique à l'inventaire/infos) ==================
+function normNom(s){
+  return String(s==null?'':s).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+}
+function nomsProches(n1, n2){
+  const w1 = normNom(n1).split(' ').filter(Boolean);
+  const w2 = normNom(n2).split(' ').filter(Boolean);
+  if(!w1.length || !w2.length) return false;
+  const common = w1.filter(w => w2.includes(w));
+  return common.length >= Math.min(2, Math.min(w1.length, w2.length));
+}
+
+// ================== STATUT SELON LES DATES ==================
+// attente = début dans le futur ; encours = aujourd'hui entre début et fin (inclus) ;
+// terminé = date de fin passée (retiré des listes actives)
+function todayStr(){
+  const d = new Date(); const z = n => String(n).padStart(2,'0');
+  return d.getFullYear() + '-' + z(d.getMonth()+1) + '-' + z(d.getDate());
+}
+function statutOf(item){
+  const t = todayStr();
+  const deb = item.debut || '';
+  const fin = item.fin || deb;
+  if(fin && fin < t) return 'termine';
+  if(deb && deb > t) return 'attente';
+  return 'encours';
+}
+function frDate(s){
+  if(!s) return '—';
+  const [y,m,d] = s.split('-'); if(!y) return s;
+  const mois = ['janv.','févr.','mars','avr.','mai','juin','juill.','août','sept.','oct.','nov.','déc.'];
+  return parseInt(d,10) + ' ' + (mois[parseInt(m,10)-1]||'') + ' ' + y;
+}
+
+// ================== RÉPERTOIRE (pour suggérer des noms à l'admin) ==================
+let _repNames = [];
+async function loadRepNames(){
+  try{
+    const res = await withTimeout(_sb.from('inv_store').select('key,value').like('key','inv:person:%'), 10000, 'people');
+    const rows = (res && res.data) ? res.data : [];
+    const names = [];
+    rows.forEach(r => { try{ const p = JSON.parse(r.value); if(p && p.nom) names.push(p.nom); }catch(e){} });
+    // + employés du fichier de formations (roster) si présent
+    try{
+      const f = await withTimeout(_sb.from('inv_store').select('value').eq('key','inv:formations').maybeSingle(), 8000, 'form');
+      if(f && f.data && f.data.value){ const fp = JSON.parse(f.data.value); if(fp && Array.isArray(fp.people)) fp.people.forEach(p => { if(p.nom) names.push(p.nom); }); }
+    }catch(e){}
+    _repNames = Array.from(new Set(names)).sort((a,b)=>a.localeCompare(b,'fr'));
+  }catch(e){ _repNames = []; }
+}
+
+// ================== RENDU DES LISTES ==================
+let _items = [];
+function render(){
+  const admin = isDeviceAdmin();
+  document.getElementById('addBtn').style.display = admin ? '' : 'none';
+
+  const notice = document.getElementById('notice');
+  if(admin){ notice.style.display=''; notice.innerHTML = '🔑 <b>Mode admin</b> — tu peux ajouter, modifier ou retirer des formations. Chaque employé inscrit verra un rappel à l\'ouverture de l\'application jusqu\'à la fin de sa formation.'; }
+  else{ notice.style.display='none'; }
+
+  const active = _items.filter(it => statutOf(it) !== 'termine');
+  const encours = active.filter(it => statutOf(it) === 'encours');
+  const attente = active.filter(it => statutOf(it) === 'attente');
+  encours.sort((a,b)=>(a.fin||'').localeCompare(b.fin||''));
+  attente.sort((a,b)=>(a.debut||'').localeCompare(b.debut||''));
+
+  const c = document.getElementById('content');
+  let html = '';
+
+  html += '<div class="section-title"><span class="dot encours"></span>En cours</div><div class="list">';
+  html += encours.length ? encours.map(cardHtml).join('') : '<div class="empty">Aucune formation en cours.</div>';
+  html += '</div>';
+
+  html += '<div class="section-title"><span class="dot attente"></span>En attente</div><div class="list">';
+  html += attente.length ? attente.map(cardHtml).join('') : '<div class="empty">Aucune formation en attente.</div>';
+  html += '</div>';
+
+  c.innerHTML = html;
+
+  if(admin){
+    c.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openModal(b.getAttribute('data-edit')));
+    c.querySelectorAll('[data-del]').forEach(b => b.onclick = () => removeItem(b.getAttribute('data-del')));
+  }
+}
+function cardHtml(it){
+  const st = statutOf(it);
+  const admin = isDeviceAdmin();
+  const emps = (it.employes||[]).map(n => '<span class="emp-chip">'+escapeHtml(n)+'</span>').join('');
+  return '<div class="card">' +
+    '<div><span class="type">'+escapeHtml(it.type||'Formation')+'</span>' +
+      '<span class="badge '+st+'">'+(st==='encours'?'En cours':'En attente')+'</span></div>' +
+    '<div class="meta">📍 <b>'+escapeHtml(it.lieu||'—')+'</b><br>' +
+      '🗓️ Du <b>'+frDate(it.debut)+'</b> au <b>'+frDate(it.fin)+'</b>' +
+      (it.notes ? '<br>📝 '+escapeHtml(it.notes) : '') + '</div>' +
+    (emps ? '<div class="emps">'+emps+'</div>' : '<div class="meta" style="font-style:italic;color:var(--logo-grey);">Aucun employé inscrit.</div>') +
+    (admin ? '<div class="actions"><button class="btn-edit" data-edit="'+it.id+'">✎ Modifier</button><button class="btn-del" data-del="'+it.id+'">🗑 Retirer</button></div>' : '') +
+    '</div>';
+}
+
+// ================== MODALE ADMIN ==================
+let _editing = null;
+let _selEmps = [];
+function openModal(id){
+  _editing = id || null;
+  _selEmps = [];
+  const it = id ? _items.find(x => x.id === id) : null;
+  document.getElementById('modalTitle').textContent = it ? 'Modifier la formation' : 'Nouvelle formation';
+  document.getElementById('fType').value  = it ? (it.type||'')  : '';
+  document.getElementById('fLieu').value  = it ? (it.lieu||'')  : '';
+  document.getElementById('fDebut').value = it ? (it.debut||'') : '';
+  document.getElementById('fFin').value   = it ? (it.fin||'')   : '';
+  document.getElementById('fNotes').value = it ? (it.notes||'') : '';
+  _selEmps = it ? (it.employes||[]).slice() : [];
+  document.getElementById('fEmpInput').value = '';
+  document.getElementById('fSuggest').style.display = 'none';
+  document.getElementById('fError').textContent = '\u00a0';
+  renderSelEmps();
+  document.getElementById('overlay').style.display = 'flex';
+}
+function closeModal(){ document.getElementById('overlay').style.display = 'none'; }
+function renderSelEmps(){
+  document.getElementById('fEmpSelected').innerHTML = _selEmps.map((n,i) =>
+    '<span class="chip">'+escapeHtml(n)+' <span class="x" data-rm="'+i+'">✕</span></span>').join('');
+  document.querySelectorAll('#fEmpSelected .x').forEach(x => x.onclick = () => {
+    _selEmps.splice(parseInt(x.getAttribute('data-rm'),10),1); renderSelEmps();
+  });
+}
+function addEmp(name){
+  const clean = String(name||'').replace(/\s+/g,' ').trim();
+  if(!clean) return;
+  if(_selEmps.some(n => normNom(n) === normNom(clean))) return;
+  _selEmps.push(clean); renderSelEmps();
+  document.getElementById('fEmpInput').value = '';
+  document.getElementById('fSuggest').style.display = 'none';
+}
+function showSuggest(q){
+  const box = document.getElementById('fSuggest');
+  const t = normNom(q);
+  if(!t){ box.style.display='none'; return; }
+  const matches = _repNames.filter(n => normNom(n).includes(t) && !_selEmps.some(s => normNom(s)===normNom(n))).slice(0,8);
+  if(!matches.length){ box.style.display='none'; return; }
+  box.innerHTML = matches.map(n => '<div data-n="'+escapeHtml(n)+'">'+escapeHtml(n)+'</div>').join('');
+  box.style.display='';
+  box.querySelectorAll('div').forEach(d => d.onclick = () => addEmp(d.getAttribute('data-n')));
+}
+async function saveItem(){
+  const type  = document.getElementById('fType').value.replace(/\s+/g,' ').trim();
+  const lieu  = document.getElementById('fLieu').value.replace(/\s+/g,' ').trim();
+  const debut = document.getElementById('fDebut').value;
+  const fin   = document.getElementById('fFin').value;
+  const notes = document.getElementById('fNotes').value.trim();
+  const err = document.getElementById('fError');
+
+  if(!type){ err.textContent = 'Indique le type de formation.'; return; }
+  if(!debut){ err.textContent = 'La date de début est obligatoire.'; return; }
+  if(!fin){ err.textContent = 'La date de fin est obligatoire.'; return; }
+  if(fin < debut){ err.textContent = 'La date de fin doit être après la date de début.'; return; }
+  if(!_selEmps.length){ err.textContent = 'Ajoute au moins un employé inscrit.'; return; }
+
+  const rec = { id:_editing || ('f_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)),
+    type, lieu, debut, fin, notes, employes:_selEmps.slice() };
+
+  if(_editing){ const i = _items.findIndex(x => x.id === _editing); if(i>=0) _items[i] = rec; }
+  else{ _items.push(rec); }
+
+  const btn = document.getElementById('fSave'); btn.textContent = 'Enregistrement…'; btn.disabled = true;
+  const ok = await savePlan(_items);
+  btn.textContent = 'Enregistrer'; btn.disabled = false;
+  if(!ok){ err.textContent = 'Échec de l\'enregistrement. Réessaie.'; return; }
+  closeModal(); render();
+}
+async function removeItem(id){
+  const it = _items.find(x => x.id === id); if(!it) return;
+  if(!confirm('Retirer la formation « '+(it.type||'')+' » ?\nElle disparaîtra pour tous et les rappels associés cesseront.')) return;
+  _items = _items.filter(x => x.id !== id);
+  await savePlan(_items); render();
+}
+
+// ================== INIT ==================
+document.getElementById('addBtn').onclick = () => openModal(null);
+document.getElementById('fCancel').onclick = closeModal;
+document.getElementById('fSave').onclick = saveItem;
+document.getElementById('fEmpAdd').onclick = () => addEmp(document.getElementById('fEmpInput').value);
+document.getElementById('fEmpInput').addEventListener('input', e => showSuggest(e.target.value));
+document.getElementById('fEmpInput').addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); addEmp(e.target.value); } });
+document.getElementById('overlay').addEventListener('click', e => { if(e.target.id==='overlay') closeModal(); });
+
+(async function init(){
+  if(!_sb){ document.getElementById('content').innerHTML = '<div class="loading">Connexion indisponible. Réessaie plus tard.</div>'; return; }
+  _items = await loadPlan();
+  if(isDeviceAdmin()) await loadRepNames();
+  render();
+})();
+</script>
+</body>
+</html>

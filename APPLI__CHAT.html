@@ -122,7 +122,7 @@ const SUPABASE_URL = "https://toajegeqsqulnhdwkajm.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvYWplZ2Vxc3F1bG5oZHdrYWptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1OTY1OTQsImV4cCI6MjA5OTE3MjU5NH0.LBLVG--c1d9V_ZRw-h_ATZE2SUX3OAP7lf0SxMqPqNE";
 const ADMIN_CODE = "DMD-ADMIN";
 const PAGE = 40;                          // messages chargés par page
-const POLL_MS = 4000;                     // rafraîchissement du fil
+const POLL_MS = 7000;                     // rafraîchissement du fil (allégé pour la charge multi-utilisateurs)
 
 let _sb = null;
 try{ if(window.supabase && window.supabase.createClient){ _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } }catch(e){ console.error(e); }
@@ -278,6 +278,7 @@ async function loadOlder(){
   feed.scrollTop = feed.scrollHeight - prevH + prevTop;
   if(!added){ const b=document.getElementById('loadMoreBtn'); if(b) b.remove(); }
 }
+let _pollTick = 0;
 async function poll(){
   if(document.hidden) return;
   try{
@@ -296,7 +297,9 @@ async function poll(){
       renderFeed(nearBottom && added);
       if(nearBottom && added) markCurrentRead();
     }
-    await loadLastMsgIndex();   // rafraîchit les pastilles non lu des autres canaux
+    // Pastilles « non lu » des AUTRES canaux : moins urgent -> 1 tour sur 3 (allège la charge DB)
+    _pollTick = (_pollTick + 1) % 3;
+    if(_pollTick === 0){ await loadLastMsgIndex(); }
   }catch(e){}
 }
 
@@ -540,7 +543,14 @@ document.addEventListener('keydown', function(e){
   try{
     await Promise.all([ loadTeams(), loadChannels(), loadAdmin(), loadLastMsgIndex() ]);
     await switchChannel('general');
-    pollTimer = setInterval(poll, POLL_MS);
+    // Démarre/suspend le polling selon la visibilité de l'onglet : rien ne tourne en arrière-plan.
+    function startPoll(){ if(!pollTimer) pollTimer = setInterval(poll, POLL_MS); }
+    function stopPoll(){ if(pollTimer){ clearInterval(pollTimer); pollTimer = null; } }
+    document.addEventListener('visibilitychange', () => {
+      if(document.hidden){ stopPoll(); }
+      else{ poll(); startPoll(); }   // au retour : rafraîchit tout de suite, puis reprend le cycle
+    });
+    startPoll();
   }catch(e){ console.error(e); document.getElementById('feed').innerHTML='<div class="empty">Impossible de démarrer le chat.</div>'; }
 })();
 </script>
