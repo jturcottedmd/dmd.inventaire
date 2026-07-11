@@ -912,6 +912,7 @@ window.storage = {
   ];
   if(!parts.some(p => RAW_DATA[p.key])) return; // déjà fusionné ou catégories absentes
   const items = [];
+  const accFraco = [];   // accessoires Fraco + rack gris -> onglet séparé « Accessoire Fraco »
   parts.forEach(p => {
     const src = RAW_DATA[p.key];
     if(!src || !Array.isArray(src.items)) return;
@@ -930,16 +931,20 @@ window.storage = {
           copy.noQty = true; copy.selectable = true;
         }
       }
-      items.push(copy);
+      // Fraco : tout ce qui suit l'en-tête « ACCESSOIRES FRACO » (accessoires + rack gris)
+      // part dans l'onglet séparé au lieu de rester dans Machinerie.
+      if(p.type === 'Fraco' && fracoStopped){ accFraco.push(copy); }
+      else { items.push(copy); }
     });
   });
   RAW_DATA['MACHINERIE'] = { label:'Machinerie', items: items };
+  if(accFraco.length){ RAW_DATA['ACC_FRACO'] = { label:'Accessoire Fraco', items: accFraco }; }
   parts.forEach(p => { delete RAW_DATA[p.key]; });
 })();
 
 /* Ordre d'affichage des onglets voulu : S.S.T., Machinerie juste après Base.
    On part de l'ordre souhaité, puis on ajoute toute catégorie oubliée pour ne rien perdre. */
-const CAT_ORDER = ['BASE','S.S.T.','NÉCÉSSAIRE','OUTILS','MACHINERIE',
+const CAT_ORDER = ['BASE','S.S.T.','NÉCÉSSAIRE','OUTILS','MACHINERIE','ACC_FRACO',
                    'HIVER','SHACK',
                    'LOURD_ECHAFAUDAGE','LOURD_DIVERS'];
 const BASE_CAT_KEYS = CAT_ORDER.filter(k => RAW_DATA[k])

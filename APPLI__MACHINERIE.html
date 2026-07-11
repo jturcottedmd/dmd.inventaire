@@ -420,7 +420,8 @@ function pill(level, text){ return '<span class="pill '+(level||'')+'"><span cla
 
 function renderSummary(){
   let verifDue=0, brisOpen=0, insp0=0;
-  catalog.forEach(m => {
+  const vis = visibleCatalog();
+  vis.forEach(m => {
     const st = machineStatus(m);
     if(st.verifActive && (st.verif.level==='red' || st.verif.level==='orange')) verifDue++;
     if(st.openBris>0) brisOpen++;
@@ -429,12 +430,12 @@ function renderSummary(){
   document.getElementById('summary').innerHTML =
     '<div class="sum-chip'+(verifDue?' warn':'')+'"><b>'+verifDue+'</b>Vérif. à faire / dues</div>' +
     '<div class="sum-chip'+(brisOpen?' alert':'')+'"><b>'+brisOpen+'</b>Machines avec bris</div>' +
-    '<div class="sum-chip"><b>'+catalog.length+'</b>Machines suivies</div>';
+    '<div class="sum-chip"><b>'+vis.length+'</b>Machines suivies</div>';
 }
 // Pastilles par onglet : rouge = machines en alerte, jaune = à surveiller, vert = tout est beau
 function catAlert(cat){
   let red=0, orange=0, green=0;
-  catalog.filter(m => m.cat===cat).forEach(m => {
+  visibleCatalog().filter(m => m.cat===cat).forEach(m => {
     const e = machineStatus(m).edge;
     if(e===' edge-red') red++; else if(e===' edge-yellow') orange++; else if(e===' edge-green') green++;
   });
@@ -450,14 +451,40 @@ function renderTabs(){
   }).join('');
   document.querySelectorAll('#tabs .tab').forEach(t => t.onclick = () => { currentCat=t.getAttribute('data-cat'); document.getElementById('search').value=''; renderTabs(); renderList(); });
 }
+// ================== FILTRAGE PAR ÉQUIPE / CHANTIER ==================
+// L'utilisateur ne voit que la machinerie de SON équipe (celle choisie dans l'inventaire,
+// stockée dans inv:myTeam). En mode admin, on voit toutes les machines.
+function isDeviceAdmin(){ try{ return localStorage.getItem('inv:isAdmin') === '1'; }catch(e){ return false; } }
+function getMyTeam(){ try{ return localStorage.getItem('inv:myTeam') || null; }catch(e){ return null; } }
+// Une machine est-elle sur le chantier de l'équipe donnée ? (cochée par cette équipe dans l'inventaire)
+function machineInTeam(m, teamId){
+  const target = normNom(m.nom);
+  return (teamMachines[teamId]||[]).some(n => normNom(n) === target);
+}
+// Catalogue visible pour l'utilisateur courant : tout si admin, sinon la machinerie de son équipe.
+function visibleCatalog(){
+  if(isDeviceAdmin()) return catalog;
+  const myTeam = getMyTeam();
+  if(!myTeam) return [];   // pas d'équipe choisie -> rien (message d'invitation affiché ailleurs)
+  return catalog.filter(m => machineInTeam(m, myTeam));
+}
+
 function renderList(){
   const list = document.getElementById('list');
   const q = normNom(document.getElementById('search').value);
+  const base = visibleCatalog();
+  // Non-admin sans équipe choisie : on invite à sélectionner son équipe dans l'inventaire.
+  if(!isDeviceAdmin() && !getMyTeam()){
+    document.getElementById('count').textContent = '';
+    list.innerHTML = '<div class="empty" style="line-height:1.6;">👷 Choisis d\'abord ton équipe pour voir la machinerie de ton chantier.<br><br>' +
+      'Ouvre l\'app <b>Inventaire</b>, onglet <b>Machinerie</b>, et sélectionne ton équipe (le marteau 🔨 apparaît). Tu verras ensuite ici les machines de ton chantier.</div>';
+    return;
+  }
   let shown;
-  if(q){ shown = catalog.filter(m => normNom(m.nom).includes(q) || normNom(m.ident).includes(q)); }
-  else { shown = catalog.filter(m => m.cat === currentCat); }
+  if(q){ shown = base.filter(m => normNom(m.nom).includes(q) || normNom(m.ident).includes(q)); }
+  else { shown = base.filter(m => m.cat === currentCat); }
   document.getElementById('count').textContent = shown.length + ' machine' + (shown.length>1?'s':'') + (q ? ' trouvée'+(shown.length>1?'s':'') : ' — ' + currentCat);
-  if(!shown.length){ list.innerHTML = '<div class="empty">Aucune machine.</div>'; return; }
+  if(!shown.length){ list.innerHTML = '<div class="empty">Aucune machine' + (isDeviceAdmin()?'':' sur ton chantier') + ' dans cette catégorie.</div>'; return; }
   list.innerHTML = shown.map(m => {
     const st = machineStatus(m);
     const pills = [];
