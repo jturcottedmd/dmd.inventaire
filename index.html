@@ -320,8 +320,8 @@ const APPS = [
     nom:'Punch',
     desc:'Heures & présences',
     icon:'punch',
-    href:'#',   // <-- app de pointage des employés
-    soon:true
+    href:'./APPLI__PUNCH.html',   // <-- pointage géolocalisé des employés
+    soon:false
   },
   {
     id:'materiel',
@@ -771,13 +771,17 @@ document.getElementById('togglePass').addEventListener('click', function(){
   this.textContent = show ? '🙈' : '👁';
   pf.focus();
 });
+// ---- Formatage uniforme des noms et téléphones ----
+function _fmtOnlyDigits(s){ return String(s==null?'':s).replace(/\D/g,''); }
+function formatTel(s){ const d=_fmtOnlyDigits(s); let n=d; if(n.length===11 && n[0]==='1') n=n.slice(1); if(n.length===10) return '('+n.slice(0,3)+')'+n.slice(3,6)+'-'+n.slice(6); return String(s==null?'':s).trim(); }
+function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
 document.getElementById('idSave').addEventListener('click', async () => {
   const idErr = document.getElementById('idError');
-  const nom = document.getElementById('idNom').value.trim();
-  const tel = document.getElementById('idTel').value.trim();
+  const nom = formatNom(document.getElementById('idNom').value);
+  const tel = formatTel(document.getElementById('idTel').value);
   const courriel = document.getElementById('idCourriel').value.trim();
-  const urgNom = document.getElementById('idUrgNom').value.trim();
-  const urgTel = document.getElementById('idUrgTel').value.trim();
+  const urgNom = formatNom(document.getElementById('idUrgNom').value);
+  const urgTel = formatTel(document.getElementById('idUrgTel').value);
   const urgLien = document.getElementById('idUrgLien').value.trim();
   if(!nom){ idErr.textContent = 'Le nom est requis (ou choisis « tablette de chantier »).'; return; }
   if(!tel){ idErr.textContent = 'Le numéro de téléphone est obligatoire.'; return; }

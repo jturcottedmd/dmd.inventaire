@@ -161,7 +161,7 @@ details[open] summary{ border-bottom:1px solid var(--line); }
         <b>Responsable de la protection des renseignements personnels</b><br>
         Jason Turcotte<br>
         ✉️ <a href="mailto:jturcotte@maconneriedmd.com">jturcotte@maconneriedmd.com</a><br>
-        📞 <a href="tel:450-502-7273">450 502-7273</a><br>
+        📞 <a href="tel:450-502-7273">(450)502-7273</a><br>
         Maçonnerie DMD inc. · 906, avenue Simard, Chambly (Québec) J3L 4X2
       </div>
     </div>
@@ -183,7 +183,7 @@ details[open] summary{ border-bottom:1px solid var(--line); }
         <p>Chez <b>Maçonnerie DMD inc.</b>, nous accordons une grande importance à la protection de vos renseignements personnels. La présente politique explique quels renseignements nous recueillons, pourquoi, comment nous les protégeons et les droits dont vous disposez. Elle est adoptée conformément à la <i>Loi sur la protection des renseignements personnels dans le secteur privé</i> du Québec, telle que modifiée par la Loi 25.</p>
 
         <h4>1. Responsable de la protection des renseignements personnels</h4>
-        <p>Jason Turcotte — courriel : jturcotte@maconneriedmd.com · téléphone : 450 502-7273 · 906, avenue Simard, Chambly (Québec) J3L 4X2.</p>
+        <p>Jason Turcotte — courriel : jturcotte@maconneriedmd.com · téléphone : (450)502-7273 · 906, avenue Simard, Chambly (Québec) J3L 4X2.</p>
 
         <h4>2. Renseignements que nous recueillons</h4>
         <p>Identité (nom et prénom); coordonnées (courriel, téléphone); renseignements liés à l'emploi (équipe et chantier d'affectation, fonction); formations et compétences (dossiers de formation, cartes de compétence, certifications); <b>contact d'urgence</b> (nom, numéro et lien d'une personne à joindre en cas d'incident — voir la section 5.1); <b>photos</b> transmises dans la messagerie interne; <b>données de localisation ponctuelles</b> si une fonction de pointage de chantier est activée; renseignements techniques (identifiant d'appareil servant au fonctionnement de l'application). Nous ne recueillons que le nécessaire.</p>
@@ -282,7 +282,7 @@ details[open] summary{ border-bottom:1px solid var(--line); }
       <div class="sec-body">
         <p>Un incident de confidentialité, c'est un accès, une utilisation ou une communication <b>non autorisés</b> d'un renseignement personnel, sa perte, ou toute autre atteinte à sa protection (ex. : téléphone perdu avec la session ouverte, mot de passe partagé à l'extérieur, fiche consultée sans raison).</p>
         <div class="steps">
-          <div class="step">Signale l'incident <b>immédiatement</b> à Jason Turcotte — 450 502-7273 · jturcotte@maconneriedmd.com.</div>
+          <div class="step">Signale l'incident <b>immédiatement</b> à Jason Turcotte — (450)502-7273 · jturcotte@maconneriedmd.com.</div>
           <div class="step">On contient l'incident : changement de mot de passe, révocation d'accès, récupération des données.</div>
           <div class="step">L'incident est consigné au <b>registre des incidents</b> (obligatoire, conservé au moins 5 ans).</div>
           <div class="step">On évalue le <b>risque de préjudice sérieux</b> : sensibilité, conséquences, probabilité d'utilisation malveillante.</div>
@@ -315,6 +315,7 @@ function withTimeout(promise, ms, label){
   ]);
 }
 function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
 function getDeviceId(){
   try{ return localStorage.getItem('inv:deviceId') || ''; }catch(e){ return ''; }
 }
@@ -344,7 +345,7 @@ async function loadConsents(){
     const myId = getDeviceId();
     listEl.innerHTML = rows.map(c => {
       const isMe = (c._id === myId || c.deviceId === myId);
-      const nom = c.nom || ('Appareil ' + String(c.deviceId||c._id).slice(-6));
+      const nom = formatNom(c.nom) || ('Appareil ' + String(c.deviceId||c._id).slice(-6));
       let dateTxt = '—';
       if(c.date){
         const d = new Date(c.date);
@@ -418,7 +419,7 @@ async function exporterExcel(){
       let dateTxt = c.date || '';
       const dd = new Date(c.date);
       if(!isNaN(dd)) dateTxt = dd.toLocaleDateString('fr-CA')+' '+String(dd.getHours()).padStart(2,'0')+'h'+String(dd.getMinutes()).padStart(2,'0');
-      aoa.push([ c.nom || ('Appareil '+String(c.deviceId||c._id).slice(-6)), String(c.deviceId||c._id||''), dateTxt, c.version||'' ]);
+      aoa.push([ formatNom(c.nom) || ('Appareil '+String(c.deviceId||c._id).slice(-6)), String(c.deviceId||c._id||''), dateTxt, c.version||'' ]);
       meta.push({couleur:'green'});
     });
     XLSX.utils.book_append_sheet(wb, xlsSheet(aoa, meta, [30,26,20,16], [0,1]), 'Consentements');

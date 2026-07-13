@@ -1192,10 +1192,10 @@ function edgeClassFor(s, it){
   const qst = noQty ? null : qtyStatus(s.qte, s.qteReel);
   if(qst) levels.push(qst.level);
   // Dates : vérif annuelle (vf/ext) + huile & tune-up (moteurs gas)
-  if(it && (it.vf || it.ext)){ const vs = verifStatus(s.verif); if(vs) levels.push(vs.level); }
+  if(it && (it.vf || it.ext)){ const vs = verifStatus(effVerif(s, it)); if(vs) levels.push(vs.level); }
   if(it && it.gas){
-    const hs = entretienStatus(s.huile);  if(hs) levels.push(hs.level);
-    const ts = entretienStatus(s.tuneup); if(ts) levels.push(ts.level);
+    const hs = entretienStatus(effHuile(s, it));  if(hs) levels.push(hs.level);
+    const ts = entretienStatus(effTuneup(s, it)); if(ts) levels.push(ts.level);
   }
   if(levels.indexOf('red') !== -1) return ' edge-red';
   if(levels.indexOf('orange') !== -1) return ' edge-yellow';
@@ -1211,10 +1211,10 @@ function itemPriority(it, s){
   if(est) best = Math.min(best, levelRank(est.level));
   const qst = (it && it.noQty) ? null : qtyStatus(s.qte, s.qteReel);
   if(qst) best = Math.min(best, levelRank(qst.level));
-  if(it.vf || it.ext){ const vst = verifStatus(s.verif); if(vst) best = Math.min(best, levelRank(vst.level)); }
+  if(it.vf || it.ext){ const vst = verifStatus(effVerif(s, it)); if(vst) best = Math.min(best, levelRank(vst.level)); }
   if(it.gas){
-    const hst = entretienStatus(s.huile);  if(hst) best = Math.min(best, levelRank(hst.level));
-    const tst = entretienStatus(s.tuneup); if(tst) best = Math.min(best, levelRank(tst.level));
+    const hst = entretienStatus(effHuile(s, it));  if(hst) best = Math.min(best, levelRank(hst.level));
+    const tst = entretienStatus(effTuneup(s, it)); if(tst) best = Math.min(best, levelRank(tst.level));
   }
   return best;
 }
@@ -1599,6 +1599,11 @@ function normNom(s){
   return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/[.,\-]/g,' ').replace(/\s+/g,' ').trim();
 }
+// ---- Affichage uniforme des noms et t\u00e9l\u00e9phones ----
+function onlyDigits(s){ return String(s==null?'':s).replace(/\D/g,''); }
+function formatTel(s){ const d=onlyDigits(s); let n=d; if(n.length===11 && n[0]==='1') n=n.slice(1); if(n.length===10) return '('+n.slice(0,3)+')'+n.slice(3,6)+'-'+n.slice(6); return String(s==null?'':s).trim(); }
+function telHref(s){ const d=onlyDigits(s); return 'tel:'+(d||String(s==null?'':s).trim()); }
+function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
 // Distance d'édition (Levenshtein) entre deux mots
 function levenshtein(a, b){
   if(a === b) return 0;
@@ -1730,8 +1735,8 @@ function deviceUserLabel(){
   if(!deviceUser) return '';
   if(deviceUser.chantier) return 'Tablette de chantier';
   const bits = [];
-  if(deviceUser.nom) bits.push(deviceUser.nom);
-  if(deviceUser.tel) bits.push(deviceUser.tel);
+  if(deviceUser.nom) bits.push(formatNom(deviceUser.nom));
+  if(deviceUser.tel) bits.push(formatTel(deviceUser.tel));
   if(deviceUser.courriel) bits.push(deviceUser.courriel);
   return bits.join(' · ');
 }
@@ -1776,6 +1781,74 @@ async function publishMachineCatalog(){
     await window.storage.set('inv:machineCatalog', JSON.stringify({ machines, maj:new Date().toISOString() }), true);
   }catch(e){ console.error('publishMachineCatalog', e); }
 }
+
+// ================== VÉRIF / ENTRETIEN — SOURCE UNIQUE : TUILE MACHINERIE ==================
+// La vérif. annuelle, le changement d'huile et le tune-up des machines ne se saisissent plus
+// dans l'inventaire : ils proviennent de la tuile « Machinerie » (clés inv:machine:<clé>),
+// qui devient la source unique. Ici on les affiche en LECTURE SEULE (comme la localisation).
+let machineRecords = {};   // clé machine -> { verif, huile, tuneup, ... } (venant de la Machinerie)
+async function loadMachineRecords(){
+  machineRecords = {};
+  try{
+    const req = _sb.from('inv_store').select('key,value').like('key','inv:machine:%');
+    const timeout = new Promise((resolve) => setTimeout(() => resolve({ __timeout:true }), 12000));
+    const res = await Promise.race([req, timeout]);
+    if(res && res.__timeout){ console.warn('loadMachineRecords timeout'); return; }
+    if(res && Array.isArray(res.data)){
+      res.data.forEach(r => { try{ const rec = JSON.parse(r.value); if(rec) machineRecords[r.key.replace('inv:machine:','')] = rec; }catch(e){} });
+    }
+  }catch(e){ console.error('loadMachineRecords', e); }
+}
+// Clé d'une machine (même règle que machineKey() de la tuile Machinerie) :
+// identifiant s'il existe, sinon « nom:<nom normalisé> ».
+function machineRecKey(it){
+  const id = (it && it.ident) ? String(it.ident).trim() : '';
+  return id ? id : 'nom:' + normNom(((it && it.name) || '').replace(/\n/g,' '));
+}
+// Une machine « lourde » suivie dans la Machinerie ? (elle porte un type mtype : Lift/Fraco/Mixeur/Scie)
+function isMachineryMachine(it){ return !!(it && it.mtype); }
+function machRecFor(it){ return isMachineryMachine(it) ? (machineRecords[machineRecKey(it)] || null) : null; }
+// Valeurs EFFECTIVES : depuis la Machinerie pour les machines, sinon l'état local
+// (ex. extincteurs, qui n'existent pas dans la Machinerie et restent modifiables ici).
+function effVerif(s, it){ if(isMachineryMachine(it)){ const r = machRecFor(it); return (r && r.verif) || ''; } return (s && s.verif) || ''; }
+function effHuile(s, it){ if(isMachineryMachine(it)){ const r = machRecFor(it); return (r && r.huile) || ''; } return (s && s.huile) || ''; }
+function effTuneup(s, it){ if(isMachineryMachine(it)){ const r = machRecFor(it); return (r && r.tuneup) || ''; } return (s && s.tuneup) || ''; }
+
+// ================== EXTINCTEURS (registre — assignés aux machines depuis la Machinerie) ==================
+// Chaque extincteur numéroté (« Extincteur N ») a une entrée inv:extincteur:<N> qui indique
+// à quelle machine (Lift/Fraco) il est assigné. L'assignation se fait dans la tuile Machinerie ;
+// ici on ne fait que l'AFFICHER (localisation en lecture seule).
+let extincteurs = {};   // num (string) -> { num, machineKey, machineNom, machineIdent, ... }
+async function loadExtincteurs(){
+  extincteurs = {};
+  try{
+    const req = _sb.from('inv_store').select('key,value').like('key','inv:extincteur:%');
+    const timeout = new Promise((resolve) => setTimeout(() => resolve({ __timeout:true }), 12000));
+    const res = await Promise.race([req, timeout]);
+    if(res && res.__timeout){ console.warn('loadExtincteurs timeout'); return; }
+    if(res && Array.isArray(res.data)){
+      res.data.forEach(r => { try{ const e = JSON.parse(r.value); if(e && e.num!=null) extincteurs[String(e.num)] = e; }catch(err){} });
+    }
+  }catch(e){ console.error('loadExtincteurs', e); }
+}
+// Numéro d'un item « Extincteur N » -> "N"
+function extNumFromName(name){ const m = String(name||'').match(/(\d+)/); return m ? m[1].replace(/^0+(?=\d)/,'') : ''; }
+// Étiquette « machine assignée » d'un extincteur (depuis le registre)
+function extAssignLabel(it){
+  const num = extNumFromName(it && it.name);
+  const e = num ? extincteurs[num] : null;
+  if(e && e.machineKey && (e.machineIdent || e.machineNom)){
+    return '🧯 sur ' + (e.machineIdent ? e.machineIdent + ' — ' : '') + (e.machineNom || '');
+  }
+  return '';   // non assigné (en stock)
+}
+// Extincteur assigné à une machine Lift/Fraco (pour l'afficher sur sa fiche)
+function machineExtLabel(it){
+  const k = machineRecKey(it);
+  const e = Object.values(extincteurs).find(x => x && x.machineKey === k);
+  return e ? ('🧯 #' + e.num) : '';
+}
+
 // Un article est-il actif (sur le chantier) pour l'équipe courante dans une select-cat ?
 function isMachineActive(teamId, cat, itemName){
   const v = machineSel[teamId] && machineSel[teamId][cat];
@@ -2084,11 +2157,11 @@ function renderTeamList(){
     const hasData = s.qte !== "" || s.qteReel !== "" || !!est;
     const isExtra = i >= baseLen;
     const hasVerif = !!(it.vf || it.ext);
-    const vst = hasVerif ? verifStatus(s.verif) : null;
-    const hst = it.gas ? entretienStatus(s.huile) : null;   // huile
-    const tst = it.gas ? entretienStatus(s.tuneup) : null;  // tune-up
+    const vst = hasVerif ? verifStatus(effVerif(s, it)) : null;
+    const hst = it.gas ? entretienStatus(effHuile(s, it)) : null;   // huile
+    const tst = it.gas ? entretienStatus(effTuneup(s, it)) : null;  // tune-up
     const qst = qtyStatus(s.qte, s.qteReel);
-    const autoLoc = it.loc ? autoLocLabel(currentTeam) : '';   // localisation automatique (chantier de l'équipe)
+    const autoLoc = it.ext ? extAssignLabel(it) : (it.loc ? autoLocLabel(currentTeam) : '');   // ext = machine assignée ; sinon chantier de l'équipe
     const card = document.createElement('div');
     const etatBorder = edgeClassFor(s, it);
     card.className = 'card' + (openIndex === i ? ' open' : '') + etatBorder;
@@ -2096,7 +2169,10 @@ function renderTeamList(){
     const subParts = [];
     if(s.ident) subParts.push(s.ident);
     if(Array.isArray(s.opts) && s.opts.length) subParts.push('🔩 ' + s.opts.join(' + '));
-    if(it.loc){ if(autoLoc) subParts.push('📍 ' + autoLoc); } else if(s.localisation){ subParts.push('📍 ' + s.localisation); }
+    if(it.ext){ subParts.push(autoLoc ? autoLoc : '🧯 En stock (non assignée)'); }
+    else if(it.loc){ if(autoLoc) subParts.push('📍 ' + autoLoc); }
+    else if(s.localisation){ subParts.push('📍 ' + s.localisation); }
+    if(isMachineryMachine(it) && (it.mtype==='Lift' || it.mtype==='Fraco')){ const el = machineExtLabel(it); if(el) subParts.push(el); }
     if(est) subParts.push('🔧 ' + est.label);
     if(s.comment) subParts.push(s.comment);
 
@@ -2169,22 +2245,36 @@ function renderTeamList(){
           }).join('')}
         </div>
       </div>` : ''}
-      ${it.loc ? `
+      ${it.loc ? (it.ext ? `
+      <div class="field-row">
+        <div class="field">
+          <label>🧯 Machine assignée</label>
+          <div class="loc-auto" style="padding:10px 12px; background:var(--asphalt); border:1px solid var(--line); border-radius:8px; color:var(--paper-dim); font-size:14px;">${autoLoc ? escapeHtml(autoLoc) : "En stock — non assignée à une machine"}</div>
+          <div class="verif-hint">S'assigne dans la tuile Machinerie (sur la fiche du Lift/Fraco). Non modifiable ici.</div>
+        </div>
+      </div>` : `
       <div class="field-row">
         <div class="field">
           <label>📍 Localisation (automatique)</label>
           <div class="loc-auto" style="padding:10px 12px; background:var(--asphalt); border:1px solid var(--line); border-radius:8px; color:var(--paper-dim); font-size:14px;">${autoLoc ? escapeHtml(autoLoc) : "Selon le chantier de l'équipe — mise à jour automatique"}</div>
           <div class="verif-hint">Se met à jour selon l'équipe qui a la machine sur son chantier. Non modifiable ici.</div>
         </div>
-      </div>` : ''}
-      ${it.vf ? `
+      </div>`) : ''}
+      ${it.vf ? (isMachineryMachine(it) ? `
+      <div class="field-row">
+        <div class="field">
+          <label>Vérif. annuelle (AAAA/MM)</label>
+          <div class="loc-auto" style="padding:10px 12px; background:var(--asphalt); border:1px solid var(--line); border-radius:8px; color:var(--paper-dim); font-size:14px;">${effVerif(s, it) ? escapeHtml(effVerif(s, it)) : '—'}</div>
+          <div class="verif-hint ${vst.level}">${escapeHtml(vst.label)} · non modifiable — se met à jour depuis la tuile Machinerie</div>
+        </div>
+      </div>` : `
       <div class="field-row">
         <div class="field">
           <label>Vérif. annuelle (AAAA/MM)</label>
           <input type="text" inputmode="numeric" data-field="verif" class="verif-${vst.level}" value="${escapeAttr(s.verif)}" placeholder="2026/07">
           <div class="verif-hint ${vst.level}">${escapeHtml(vst.label)}</div>
         </div>
-      </div>` : ''}
+      </div>`) : ''}
       ${it.ext ? `
       <div class="field-row">
         <div class="field">
@@ -2197,7 +2287,19 @@ function renderTeamList(){
           <input type="text" data-field="pression" value="${escapeAttr(s.pression)}" placeholder="ex: OK / vert">
         </div>
       </div>` : ''}
-      ${it.gas ? `
+      ${it.gas ? (isMachineryMachine(it) ? `
+      <div class="field-row">
+        <div class="field">
+          <label>🛢️ Changement d'huile (AAAA/MM)</label>
+          <div class="loc-auto" style="padding:10px 12px; background:var(--asphalt); border:1px solid var(--line); border-radius:8px; color:var(--paper-dim); font-size:14px;">${effHuile(s, it) ? escapeHtml(effHuile(s, it)) : '—'}</div>
+          <div class="verif-hint ${hst.level}">${escapeHtml(hst.label)} · non modifiable — tuile Machinerie</div>
+        </div>
+        <div class="field">
+          <label>🔧 Tune up (AAAA/MM)</label>
+          <div class="loc-auto" style="padding:10px 12px; background:var(--asphalt); border:1px solid var(--line); border-radius:8px; color:var(--paper-dim); font-size:14px;">${effTuneup(s, it) ? escapeHtml(effTuneup(s, it)) : '—'}</div>
+          <div class="verif-hint ${tst.level}">${escapeHtml(tst.label)} · non modifiable — tuile Machinerie</div>
+        </div>
+      </div>` : `
       <div class="field-row">
         <div class="field">
           <label>🛢️ Changement d'huile (AAAA/MM)</label>
@@ -2209,7 +2311,7 @@ function renderTeamList(){
           <input type="text" inputmode="numeric" data-field="tuneup" class="verif-${tst.level}" value="${escapeAttr(s.tuneup)}" placeholder="2026/03">
           <div class="verif-hint ${tst.level}">${escapeHtml(tst.label)}</div>
         </div>
-      </div>` : ''}
+      </div>`) : ''}
       ${it.mtype === 'Scie' ? `
       <div class="field-row">
         <div class="field">
@@ -2415,6 +2517,14 @@ function renderTeamList(){
     addBtn.textContent = '+ Ajouter un article';
     addBtn.onclick = openAddItemModal;
     listEl.appendChild(addBtn);
+    // Bouton dédié aux extincteurs, dans l'onglet S.S.T. (là où vit le registre).
+    if(currentCat === 'S.S.T.'){
+      const addExt = document.createElement('button');
+      addExt.className = 'add-item-btn';
+      addExt.textContent = '🧯 Ajouter un extincteur';
+      addExt.onclick = addExtincteur;
+      listEl.appendChild(addExt);
+    }
   }
 }
 
@@ -2545,10 +2655,10 @@ function renderTotalList(){
       if(s.ident) metaBits.push(s.ident);
       if(Array.isArray(s.opts) && s.opts.length) metaBits.push('🔩 ' + s.opts.join(' + '));
       if(s.localisation) metaBits.push('📍 ' + s.localisation);
-      if(s.verif) metaBits.push('Vérif: ' + s.verif);
+      { const _v = effVerif(s, it); if(_v) metaBits.push('Vérif: ' + _v); }
       if(s.pression) metaBits.push('Pression: ' + s.pression);
-      if(s.huile) metaBits.push('🛢️ ' + s.huile);
-      if(s.tuneup) metaBits.push('🔧 ' + s.tuneup);
+      { const _h = effHuile(s, it); if(_h) metaBits.push('🛢️ ' + _h); }
+      { const _t = effTuneup(s, it); if(_t) metaBits.push('🔧 ' + _t); }
       if(s.comment) metaBits.push(s.comment);
       return `
         <div class="team-detail-row">
@@ -2786,7 +2896,7 @@ async function openPeopleDirectory(){
     rows = '<div class="people-list">' + people.map(p => {
       const isMe = (p.id === myId);
       const equipe = p.equipe ? '<span class="people-team">' + escapeHtml(p.equipe) + '</span>' : '';
-      const tel = p.tel ? '<a href="tel:' + escapeAttr(p.tel) + '">' + escapeHtml(p.tel) + '</a>' : '';
+      const tel = p.tel ? '<a href="' + escapeAttr(telHref(p.tel)) + '">' + escapeHtml(formatTel(p.tel)) + '</a>' : '';
       const mail = p.courriel ? '<a href="mailto:' + escapeAttr(p.courriel) + '">' + escapeHtml(p.courriel) + '</a>' : '';
       const contact = [tel, mail].filter(Boolean).join(' · ');
       const carte = (p.extra && p.extra.carteUrl)
@@ -2796,7 +2906,7 @@ async function openPeopleDirectory(){
       const adminDelBtn = isAdmin
         ? '<button type="button" class="people-del-btn" data-del-key="' + escapeAttr(p._key || ('inv:person:'+p.id)) + '" data-del-id="' + escapeAttr(p.id||'') + '" data-del-nom="' + escapeAttr(p.nom||'') + '">🗑️ Supprimer</button>' : '';
       return '<div class="people-item' + (isMe ? ' me' : '') + '">' +
-        '<div class="people-top"><span class="people-name">' + escapeHtml(p.nom || '(sans nom)') +
+        '<div class="people-top"><span class="people-name">' + escapeHtml(formatNom(p.nom) || '(sans nom)') +
           (isMe ? ' <span class="people-you">cet appareil</span>' : '') + '</span>' + equipe + '</div>' +
         (contact ? '<div class="people-contact">' + contact + '</div>' : '') +
         carte +
@@ -3164,8 +3274,8 @@ function openIdentityModal(force, returnToDir){
   document.getElementById('overlay').dataset.locked = force ? '1' : '';
 
   document.getElementById('idSave').onclick = async () => {
-    const nom = document.getElementById('idNom').value.trim();
-    const tel = document.getElementById('idTel').value.trim();
+    const nom = formatNom(document.getElementById('idNom').value);
+    const tel = formatTel(document.getElementById('idTel').value);
     const courriel = document.getElementById('idCourriel').value.trim();
     if(!nom){ document.getElementById('idError').textContent = 'Le nom est requis (ou choisis « tablette de chantier »).'; return; }
     await saveDeviceUser({ nom, tel, courriel });
@@ -3226,6 +3336,34 @@ function openAddCategoryModal(){
     renderList();
   };
   setTimeout(() => document.getElementById('newCatName').focus(), 50);
+}
+
+// Ajoute un nouvel extincteur numéroté au registre (catégorie S.S.T.).
+// Il est créé comme les extincteurs de base (ext:true, loc:true) et s'ajoute à la suite
+// d'« Extincteur 20 ». Partagé avec toutes les équipes ; assignable ensuite dans la Machinerie.
+async function addExtincteur(){
+  const cat = 'S.S.T.';
+  let maxN = 0;
+  itemsFor(cat).forEach(it => { const m = String((it && it.name) || '').match(/^Extincteur\s+(\d+)/i); if(m){ const n = parseInt(m[1], 10); if(n > maxN) maxN = n; } });
+  const saisie = prompt('Numéro du nouvel extincteur :', String(maxN + 1));
+  if(saisie == null) return;
+  const num = String(saisie).replace(/[^\d]/g, '').replace(/^0+(?=\d)/, '');
+  if(!num){ alert('Entre un numéro d\'extincteur (ex. 21).'); return; }
+  const nom = 'Extincteur ' + num;
+  if(itemsFor(cat).some(it => String((it && it.name) || '').trim().toLowerCase() === nom.toLowerCase())){
+    alert('L\'extincteur « ' + nom + ' » existe déjà.'); return;
+  }
+  if(!extraItems[cat]) extraItems[cat] = [];
+  extraItems[cat].push({ name:nom, header:false, ident:'', comment:'', ext:true, loc:true, custom:true });
+  await saveExtraItems(cat);
+  // État pour l'équipe courante ; les autres équipes se complètent au chargement.
+  if(perTeamState[currentTeam] && perTeamState[currentTeam][cat]){
+    perTeamState[currentTeam][cat].push(defaultItemState({ ext:true, loc:true }));
+    try{ await window.storage.set('inv:' + currentTeam + ':' + cat, JSON.stringify(perTeamState[currentTeam][cat]), true); }catch(e){}
+  }
+  if(currentCat !== cat){ currentCat = cat; await ensureTeamCatLoaded(currentTeam, cat); }
+  openIndex = itemsFor(cat).length - 1;   // ouvre le nouvel extincteur
+  renderTabs(); renderList();
 }
 
 function openAddItemModal(){
@@ -3624,23 +3762,26 @@ async function exporterExcel(){
             const article = (it.name||'').replace(/\n/g,' ');
             // Vérif annuelle : seulement pour les équipements qui en ont une (vf ou ext)
             if(it.vf || it.ext){
-              const vs = verifStatus(s.verif);
+              const vVal = effVerif(s, it);
+              const vs = verifStatus(vVal);
               if(vs.level === 'orange' || vs.level === 'red'){
                 lignes.push({ equipe:teamLabel(t.id), cat:catNom, article,
-                  type:'Vérif annuelle', level:vs.level, valeur:(s.verif||'').trim(), detail:vs.label });
+                  type:'Vérif annuelle', level:vs.level, valeur:(vVal||'').trim(), detail:vs.label });
               }
             }
             // Huile & Tune-up : seulement pour les moteurs (gas)
             if(it.gas){
-              const hs = entretienStatus(s.huile);
+              const hVal = effHuile(s, it);
+              const hs = entretienStatus(hVal);
               if(hs.level === 'orange' || hs.level === 'red'){
                 lignes.push({ equipe:teamLabel(t.id), cat:catNom, article,
-                  type:'Huile', level:hs.level, valeur:(s.huile||'').trim(), detail:hs.label });
+                  type:'Huile', level:hs.level, valeur:(hVal||'').trim(), detail:hs.label });
               }
-              const ts = entretienStatus(s.tuneup);
+              const tVal = effTuneup(s, it);
+              const ts = entretienStatus(tVal);
               if(ts.level === 'orange' || ts.level === 'red'){
                 lignes.push({ equipe:teamLabel(t.id), cat:catNom, article,
-                  type:'Tune-up', level:ts.level, valeur:(s.tuneup||'').trim(), detail:ts.label });
+                  type:'Tune-up', level:ts.level, valeur:(tVal||'').trim(), detail:ts.label });
               }
             }
           });
@@ -3789,8 +3930,8 @@ async function exporterExcel(){
               it.noQty ? '' : (s.qte ?? ''), it.noQty ? '' : (s.qteReel ?? ''),
               s.etatBon ?? '', s.etatMoyen ?? '', s.etatMauvais ?? '',
               est ? est.total : '',
-              s.ident || '', (Array.isArray(s.opts) ? s.opts.join(' + ') : ''), s.localisation || '',
-              s.verif || '', s.huile || '', s.tuneup || '', s.lame || '', s.pression || '', s.comment || ''
+              s.ident || '', (Array.isArray(s.opts) ? s.opts.join(' + ') : ''), (it.ext ? (extAssignLabel(it) || 'en stock') : (s.localisation || '')),
+              effVerif(s, it) || '', effHuile(s, it) || '', effTuneup(s, it) || '', s.lame || '', s.pression || '', s.comment || ''
             ], couleur
           });
         });
@@ -3881,7 +4022,9 @@ async function init(){
     loadHiddenItems(),
     loadMyTeam(),
     loadDeviceUser(),
-    loadAdmin()
+    loadAdmin(),
+    loadMachineRecords(),  // vérif/huile/tune-up des machines = source unique tuile Machinerie
+    loadExtincteurs()      // registre des extincteurs (localisation = machine assignée)
   ]);
 
   // Si l'admin a supprimé la fiche de cet appareil, on efface l'identité locale

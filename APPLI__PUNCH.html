@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#232221">
+<title>DMD — Punch</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://toajegeqsqulnhdwkajm.supabase.co" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --asphalt:#232221; --asphalt-2:#2f2d2b; --paper:#f3efe6; --paper-dim:#d9d2c2;
+  --brick:#8a2f31; --brick-line:#5e2022; --logo-grey:#656263;
+  --safety-yellow:#f2b705; --ok-green:#4c7a3f; --danger-red:#c0392b; --line:#46433f;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-family:'Barlow',sans-serif;min-height:100%;}
+#app{min-height:100vh; display:flex; flex-direction:column; max-width:560px; margin:0 auto; background:var(--asphalt);}
+
+.hdr{
+  padding:14px 16px; background-color:#6e2325;
+  background-image:
+    linear-gradient(180deg, rgba(0,0,0,0.10), rgba(0,0,0,0.30)),
+    repeating-linear-gradient(0deg, rgba(48,16,16,0.85) 0px, rgba(48,16,16,0.85) 3px, transparent 3px, transparent 30px),
+    repeating-linear-gradient(90deg, rgba(48,16,16,0.85) 0px, rgba(48,16,16,0.85) 3px, transparent 3px, transparent 62px);
+  border-bottom:3px solid var(--brick-line); display:flex; align-items:center; gap:12px;
+}
+.back{ color:var(--paper); text-decoration:none; font-size:22px; line-height:1; padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.25); border:1px solid rgba(0,0,0,0.3); flex:0 0 auto; }
+.hdr-title{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:21px; letter-spacing:1.5px; text-transform:uppercase; margin:0; }
+.hdr-sub{ font-size:11.5px; letter-spacing:1px; text-transform:uppercase; color:var(--paper-dim); margin-top:1px; }
+.hdr .who{ margin-left:auto; text-align:right; font-size:11.5px; color:var(--paper-dim); line-height:1.3; }
+.hdr .who b{ display:block; color:var(--paper); font-size:13px; }
+
+.wrap{ padding:14px 14px 26px; display:flex; flex-direction:column; gap:14px; }
+
+/* Carte principale d'état */
+.punch-card{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:16px; padding:18px 16px; text-align:center; }
+.punch-card.on{ border-color:var(--ok-green); }
+.pc-state{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:15px; text-transform:uppercase; letter-spacing:1px; color:var(--paper-dim); }
+.pc-state.on{ color:#a9d39a; }
+.pc-assign{ font-size:15px; margin:8px 0 2px; line-height:1.4; }
+.pc-assign b{ color:var(--safety-yellow); }
+.pc-timer{ font-family:'Barlow Condensed',sans-serif; font-size:40px; font-weight:700; letter-spacing:1px; margin:8px 0 4px; }
+.pc-sub{ font-size:12.5px; color:var(--paper-dim); }
+.big-btn{ width:100%; margin-top:14px; padding:18px; font-size:19px; font-weight:700; border:none; border-radius:14px; color:var(--paper); cursor:pointer; text-transform:uppercase; letter-spacing:1px; font-family:'Barlow Condensed',sans-serif; }
+.big-btn.in{ background:var(--ok-green); }
+.big-btn.out{ background:var(--brick); }
+.big-btn:disabled{ opacity:0.6; }
+.hint{ font-size:11.5px; color:var(--logo-grey); margin-top:10px; line-height:1.5; }
+
+/* Résumé heures */
+.tots{ display:flex; gap:8px; }
+.tot-chip{ flex:1; background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:12px; padding:11px; text-align:center; }
+.tot-chip b{ display:block; font-family:'Barlow Condensed',sans-serif; font-size:24px; color:var(--paper); }
+.tot-chip span{ font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--paper-dim); }
+.tot-chip.week{ border-color:var(--safety-yellow); } .tot-chip.week b{ color:var(--safety-yellow); }
+
+/* Section Mes heures */
+.sec-title{ display:flex; align-items:center; gap:10px; margin:2px 2px 0; }
+.sec-title h2{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:18px; letter-spacing:1px; text-transform:uppercase; margin:0; flex:1; }
+.wnav{ display:flex; align-items:center; gap:8px; }
+.wnav button{ width:34px; height:34px; border-radius:9px; border:1.5px solid var(--line); background:var(--asphalt-2); color:var(--paper); font-size:16px; cursor:pointer; }
+.wnav .wlabel{ font-size:12px; color:var(--paper-dim); min-width:120px; text-align:center; }
+
+.day{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:12px; margin-top:9px; overflow:hidden; }
+.day-head{ display:flex; align-items:center; padding:10px 13px; border-bottom:1px solid var(--line); }
+.day-name{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:15px; text-transform:uppercase; letter-spacing:0.5px; flex:1; }
+.day-tot{ font-weight:700; color:var(--safety-yellow); }
+.seg{ display:flex; align-items:center; gap:9px; padding:9px 13px; border-bottom:1px dashed var(--line); cursor:pointer; }
+.seg:last-child{ border-bottom:none; }
+.seg-ic{ font-size:18px; flex:0 0 auto; }
+.seg-mid{ flex:1; min-width:0; }
+.seg-lbl{ font-size:14px; font-weight:600; }
+.seg-time{ font-size:12px; color:var(--paper-dim); }
+.seg-h{ font-weight:700; font-size:14px; }
+.seg.open .seg-h{ color:#a9d39a; }
+.seg .badge-out{ font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; background:#3a2f0a; color:var(--safety-yellow); border-radius:20px; padding:2px 7px; margin-left:5px; }
+.empty{ color:var(--paper-dim); font-size:13px; padding:16px; text-align:center; }
+
+/* Admin */
+.admin-wrap{ margin-top:4px; }
+.admin-toggle{ width:100%; padding:10px; font-size:13px; font-weight:600; cursor:pointer; border:1.5px solid var(--line); border-radius:10px; background:var(--asphalt-2); color:var(--paper-dim); font-family:'Barlow',sans-serif; }
+.admin-zone{ background:rgba(242,183,5,0.08); border:1.5px solid var(--safety-yellow); border-radius:12px; padding:12px; margin-top:8px; }
+.admin-zone h3{ font-family:'Barlow Condensed',sans-serif; font-weight:700; color:var(--safety-yellow); font-size:15px; margin:0 0 8px; text-transform:uppercase; letter-spacing:0.5px; }
+.pers{ display:flex; align-items:center; gap:8px; padding:9px 4px; border-bottom:1px dashed var(--line); font-size:14px; }
+.pers:last-child{ border-bottom:none; }
+.pers .pn{ flex:1; font-weight:600; }
+.pers .ph{ font-weight:700; color:var(--safety-yellow); }
+.admin-btn{ width:100%; padding:11px; font-size:14px; font-weight:700; cursor:pointer; border:1.5px solid var(--line); border-radius:9px; background:var(--asphalt); color:var(--paper); font-family:'Barlow',sans-serif; margin-top:8px; }
+.admin-btn.primary{ background:#4c7a3f; border-color:#345c2a; }
+
+/* Overlay / modale */
+.overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.66); display:none; align-items:flex-start; justify-content:center; z-index:500; padding:16px; overflow:auto; }
+.overlay.show{ display:flex; }
+.modal{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:16px; padding:16px; width:100%; max-width:440px; margin:14px 0 30px; }
+.modal h3{ margin:0 0 12px; font-family:'Barlow Condensed',sans-serif; font-size:21px; letter-spacing:0.5px; text-transform:uppercase; }
+.grp-lbl{ font-size:11.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--paper-dim); font-weight:700; margin:12px 2px 6px; }
+.choice{ width:100%; text-align:left; display:flex; align-items:center; gap:11px; padding:12px 13px; border:1.5px solid var(--line); border-radius:11px; background:var(--asphalt); color:var(--paper); cursor:pointer; margin-bottom:8px; font-family:'Barlow',sans-serif; }
+.choice .ci{ font-size:22px; flex:0 0 auto; }
+.choice .ct{ flex:1; min-width:0; }
+.choice .ct b{ font-size:15px; }
+.choice .ct span{ display:block; font-size:12px; color:var(--paper-dim); margin-top:1px; }
+.choice:active{ border-color:var(--safety-yellow); }
+.field-label{ font-size:12px; text-transform:uppercase; letter-spacing:0.5px; color:var(--paper-dim); font-weight:700; margin:8px 0 4px; }
+.inp{ width:100%; padding:11px 13px; font-size:16px; border-radius:9px; border:1.5px solid var(--line); background:var(--asphalt); color:var(--paper); font-family:'Barlow',sans-serif; }
+.inp:focus{ outline:none; border-color:var(--paper-dim); }
+.btn{ width:100%; padding:12px; font-size:15px; font-weight:700; border:1.5px solid var(--line); border-radius:10px; background:var(--asphalt); color:var(--paper); cursor:pointer; margin-top:10px; font-family:'Barlow',sans-serif; }
+.btn.primary{ background:var(--brick); border-color:var(--brick-line); }
+.btn.danger{ color:#ff9d8f; border-color:#5e2022; }
+
+/* Bannière Santé & Sécurité — repris à l'identique de l'onglet S.S.T. de l'inventaire */
+.sst-stripe{ height:10px; border-radius:4px; margin-bottom:12px; background:repeating-linear-gradient(45deg, var(--danger-red) 0 14px, #1a1918 14px 28px); }
+.sst-banner{ background:linear-gradient(135deg, rgba(192,57,43,0.22), rgba(192,57,43,0.10)); border:1.5px solid var(--danger-red); border-left:6px solid var(--danger-red); border-radius:8px; padding:12px 14px; display:flex; align-items:center; gap:12px; }
+.sst-banner .sst-icon{ font-size:26px; line-height:1; flex:0 0 auto; }
+.sst-banner .sst-title{ font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:1px; font-size:16px; color:#ff9d8c; }
+.sst-banner .sst-sub{ font-size:12.5px; color:var(--paper-dim); margin-top:2px; line-height:1.35; }
+.sst-detail{ margin-top:12px; background:var(--asphalt); border:1px solid var(--line); border-left:4px solid var(--safety-yellow); border-radius:8px; padding:11px 13px; font-size:13.5px; line-height:1.5; color:var(--paper); }
+
+/* Onglets Mes heures + banque de temps */
+.mh-tabs{ display:flex; gap:6px; margin:2px 0 10px; }
+.mh-tab{ flex:1; padding:10px; border-radius:10px 10px 0 0; border:1.5px solid var(--line); border-bottom:none; background:var(--asphalt-2); color:var(--paper-dim); font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13.5px; text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; }
+.mh-tab.active{ background:var(--brick); border-color:var(--brick-line); color:var(--paper); }
+.wnav-wide{ justify-content:space-between; margin-bottom:10px; }
+.bq-statut{ display:flex; align-items:center; gap:10px; background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:12px; padding:10px 13px; font-size:14px; margin-bottom:10px; }
+.bq-statut > span:first-child{ flex:1; }
+.bq-note{ font-size:11.5px; color:var(--logo-grey); flex:0 0 auto; }
+.bq-btn{ background:var(--asphalt); border:1.5px solid var(--line); color:var(--paper); border-radius:8px; padding:7px 11px; font-size:12.5px; font-weight:700; cursor:pointer; font-family:'Barlow',sans-serif; flex:0 0 auto; }
+.bq-block{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:12px; overflow:hidden; }
+.bq-head{ padding:9px 13px; border-bottom:1px solid var(--line); font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--paper-dim); }
+.bq-row{ display:flex; align-items:center; gap:10px; padding:8px 13px; border-bottom:1px dashed var(--line); font-size:14px; }
+.bq-row:last-child{ border-bottom:none; }
+.bq-ic{ width:22px; text-align:center; flex:0 0 auto; }
+.bq-lbl{ flex:1; }
+.bq-h{ font-weight:700; color:var(--safety-yellow); }
+.bq-tot{ background:rgba(242,183,5,0.06); }
+.bq-tot .bq-h{ color:var(--paper); }
+.adm-sub{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:14px; text-transform:uppercase; letter-spacing:0.5px; color:var(--paper); margin-bottom:6px; }
+.adm-line{ display:flex; align-items:center; gap:8px; padding:5px 0; }
+.adm-lbl{ flex:1; font-size:13.5px; }
+.adm-sel{ flex:0 0 auto; max-width:54%; padding:7px 9px; border-radius:8px; border:1.5px solid var(--line); background:var(--asphalt); color:var(--paper); font-family:'Barlow',sans-serif; font-size:13px; }
+
+.foot{ margin-top:auto; padding:14px 18px 20px; color:var(--logo-grey); font-size:11px; text-align:center; border-top:1px solid var(--line); line-height:1.5; }
+.gate{ position:fixed; inset:0; z-index:1000; display:none; align-items:center; justify-content:center; padding:28px; text-align:center; background:var(--asphalt); color:var(--paper-dim); }
+.gate.show{ display:flex; }
+</style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<div id="app">
+  <div class="hdr">
+    <a class="back" href="./index.html" aria-label="Accueil">←</a>
+    <div>
+      <h1 class="hdr-title">Punch</h1>
+      <div class="hdr-sub">Pointage de chantier</div>
+    </div>
+    <div class="who" id="whoBox"></div>
+  </div>
+
+  <div class="wrap">
+    <div class="punch-card" id="punchCard"><div class="pc-state">Chargement…</div></div>
+
+    <div class="tots">
+      <div class="tot-chip"><b id="todayTot">0 h 00</b><span>Aujourd'hui</span></div>
+      <div class="tot-chip week"><b id="weekTot">0 h 00</b><span>Cette semaine</span></div>
+    </div>
+
+    <div class="sec-title"><h2>Mes heures</h2></div>
+    <div class="mh-tabs">
+      <button class="mh-tab active" id="tabBtnBanque">Mes heures en banque</button>
+      <button class="mh-tab" id="tabBtnSemaine">Ma semaine</button>
+    </div>
+    <div id="paneBanque" class="mh-pane"></div>
+    <div id="paneSemaine" class="mh-pane" style="display:none;">
+      <div class="wnav wnav-wide">
+        <button id="wPrev" aria-label="Semaine précédente">‹</button>
+        <div class="wlabel" id="wLabel"></div>
+        <button id="wNext" aria-label="Semaine suivante">›</button>
+      </div>
+      <div id="weekList"></div>
+    </div>
+
+    <div class="admin-wrap" id="adminWrap"></div>
+  </div>
+
+  <div class="foot">
+    Pointage réservé à l'usage interne de Maçonnerie DMD.<br>
+    La position n'est utilisée qu'au moment du punch, pour confirmer la présence au chantier — aucun suivi en continu.
+  </div>
+</div>
+
+<div class="overlay" id="overlay"><div class="modal" id="modalBox"></div></div>
+<div class="gate" id="gate">Connexion requise. Redirection vers l'accueil…</div>
+
+<script>
+// ================== CONFIG ==================
+const SUPABASE_URL = "https://toajegeqsqulnhdwkajm.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvYWplZ2Vxc3F1bG5oZHdrYWptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1OTY1OTQsImV4cCI6MjA5OTE3MjU5NH0.LBLVG--c1d9V_ZRw-h_ATZE2SUX3OAP7lf0SxMqPqNE";
+const RADIUS_M = 250;               // rayon de pointage autour du chantier
+
+let _sb = null;
+try{ if(window.supabase && window.supabase.createClient){ _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } }catch(e){ console.error(e); }
+function withTimeout(p, ms, label){ return Promise.race([Promise.resolve(p), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout:'+(label||''))), ms))]); }
+function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
+function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+function getDeviceId(){ try{ let v=localStorage.getItem('inv:deviceId'); if(!v){ v='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); localStorage.setItem('inv:deviceId',v);} return v; }catch(e){ return 'dev_'+Math.random().toString(36).slice(2,10); } }
+function myName(){ try{ const v=localStorage.getItem('inv:deviceUser'); if(v){ const u=JSON.parse(v); if(u){ if(u.chantier) return 'Tablette de chantier'; if(u.nom) return u.nom; } } }catch(e){} return 'Appareil '+getDeviceId().slice(-4); }
+function isDeviceAdmin(){ try{ return localStorage.getItem('inv:isAdmin') === '1'; }catch(e){ return false; } }
+
+const storage = {
+  async get(k){ try{ const r=await withTimeout(_sb.from('inv_store').select('value').eq('key',k).maybeSingle(),8000,'get'); const {data,error}=r||{}; if(error){console.error(error);return null;} return data?{key:k,value:data.value}:null; }catch(e){ return null; } },
+  async set(k, value){ const {error}=await _sb.from('inv_store').upsert({key:k,value,updated_at:new Date().toISOString()}); if(error){console.error(error);return null;} return {key:k,value}; },
+  async del(k){ const {error}=await _sb.from('inv_store').delete().eq('key',k); return !error; },
+  async like(prefix){ try{ const r=await withTimeout(_sb.from('inv_store').select('key,value').like('key',prefix+'%'),12000,'like'); return (r&&Array.isArray(r.data))?r.data:[]; }catch(e){ return []; } }
+};
+
+// ================== GÉOLOCALISATION ==================
+function geolocConsent(){ try{ return localStorage.getItem('punch:geolocConsent')==='1'; }catch(e){ return false; } }
+function setGeolocConsent(on){ try{ localStorage.setItem('punch:geolocConsent', on?'1':'0'); }catch(e){} }
+function getPosition(timeoutMs){
+  return new Promise(res => {
+    if(!navigator.geolocation) return res(null);
+    navigator.geolocation.getCurrentPosition(
+      p => res({ lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy }),
+      () => res(null),
+      { enableHighAccuracy:true, timeout:timeoutMs||12000, maximumAge:0 }
+    );
+  });
+}
+function haversine(lat1, lng1, lat2, lng2){
+  const R=6371000, toR=x=>x*Math.PI/180;
+  const dLat=toR(lat2-lat1), dLng=toR(lng2-lng1);
+  const a=Math.sin(dLat/2)**2 + Math.cos(toR(lat1))*Math.cos(toR(lat2))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+
+// ================== DONNÉES ==================
+const PUNCH_TYPES = {
+  chantier:{ label:'Chantier', icon:'🏗' },
+  formation:{ label:'Formation', icon:'🎓' },
+  entrepot:{ label:'Entrepôt', icon:'🏬' },
+  transport:{ label:'Transport', icon:'🚚' },
+  gestion:{ label:'Gestion', icon:'🗂️' },
+  transport_equipe:{ label:'Transport équipe', icon:'🚐' }
+};
+// Secteurs CCQ — attribués PAR ÉQUIPE/CHANTIER (réglés par l'admin)
+const SECTEURS = [
+  { id:'residentiel',       label:'Résidentiel',       icon:'🏠' },
+  { id:'residentiel_lourd', label:'Résidentiel lourd', icon:'🏘️' },
+  { id:'commercial',        label:'Commercial',        icon:'🏬' },
+  { id:'genie_civil',       label:'Génie civil',       icon:'🛣️' },
+  { id:'hors_ccq',          label:'Hors CCQ',          icon:'⛏️' }
+];
+function secteurById(id){ return SECTEURS.find(x => x.id === id) || null; }
+// Statuts / qualifications — réglés par l'ADMIN uniquement
+const STATUTS = ['Apprenti 1','Apprenti 2','Apprenti 3','Compagnon','Manœuvre','Manœuvre 1'];
+let teams = [];
+let teamInfo = {};      // teamId -> { projet, adresse }
+let sites = {};         // teamId -> { lat, lng, acc, by, at }
+let mySegments = [];    // segments de CET appareil
+let weekOffset = 0;     // 0 = semaine courante (dimanche→samedi)
+let tickTimer = null;
+let teamSecteur = {};   // teamId -> secteurId (réglé par l'admin, par équipe/chantier)
+let myStatut = '';      // statut CCQ de CET appareil (réglé par l'admin)
+let _statutsAll = {};   // deviceId -> statut (vue admin)
+
+async function loadTeamSecteurs(){
+  teamSecteur = {};
+  const rows = await storage.like('punch_secteur:');
+  rows.forEach(r => { const v = String(r.value||'').replace(/^"|"$/g,''); if(v) teamSecteur[r.key.slice('punch_secteur:'.length)] = v; });
+}
+async function saveTeamSecteur(teamId, secId){ teamSecteur[teamId] = secId||''; try{ await storage.set('punch_secteur:'+teamId, secId||''); }catch(e){} }
+async function loadMyStatut(){
+  try{ const r=await storage.get('punch_statut:'+getDeviceId()); myStatut = (r&&r.value) ? (JSON.parse(r.value).statut||'') : ''; }catch(e){ myStatut=''; }
+}
+async function setStatutFor(deviceId, nom, statut){
+  try{ await storage.set('punch_statut:'+deviceId, JSON.stringify({ statut:statut||'', nom:nom||'', at:new Date().toISOString() })); }catch(e){}
+  _statutsAll[deviceId] = statut||'';
+  if(deviceId===getDeviceId()) myStatut = statut||'';
+}
+
+async function loadTeams(){
+  try{ const r=await storage.get('inv:teams'); if(r&&r.value){ const p=JSON.parse(r.value); if(Array.isArray(p)&&p.length) teams=p; } }catch(e){}
+  if(!teams.length) teams = [1,2,3,4,5,6].map(n=>({id:'team_'+n,label:'Équipe '+n}));
+  // On garde uniquement les vraies équipes de chantier ; « Entrepôt » est un type de punch dédié.
+  teams = teams.filter(t => t && t.id !== 'entrepot');
+}
+async function loadTeamInfos(){
+  teamInfo = {};
+  await Promise.all(teams.map(async t => {
+    try{ const r=await storage.get('inv:info:'+t.id); if(r&&r.value){ const info=JSON.parse(r.value); if(info&&typeof info==='object') teamInfo[t.id]=info; } }catch(e){}
+  }));
+}
+async function loadSites(){
+  sites = {};
+  const rows = await storage.like('punch_site:');
+  rows.forEach(row => { try{ const s=JSON.parse(row.value); if(s) sites[row.key.slice('punch_site:'.length)] = s; }catch(e){} });
+}
+async function saveSite(teamId, pos){
+  const rec = { lat:pos.lat, lng:pos.lng, acc:pos.acc, by:myName(), at:new Date().toISOString() };
+  sites[teamId] = rec;
+  try{ await storage.set('punch_site:'+teamId, JSON.stringify(rec)); }catch(e){}
+}
+async function loadMySegments(){
+  mySegments = [];
+  const rows = await storage.like('punch:'+getDeviceId()+':');
+  rows.forEach(row => { try{ const s=JSON.parse(row.value); if(s){ s._key=row.key; mySegments.push(s); } }catch(e){} });
+  mySegments.sort((a,b)=> String(a.start||'').localeCompare(String(b.start||'')));
+}
+function openSegment(){ return mySegments.find(s => !s.end) || null; }
+function lastAssignment(){
+  for(let i=mySegments.length-1; i>=0; i--){ const s=mySegments[i]; if(s.type) return { type:s.type, teamId:s.teamId||'', teamLabel:s.teamLabel||'', projet:s.projet||'', adresse:s.adresse||'' }; }
+  return null;
+}
+
+// ================== FORMATIONS (synchro avec la tuile Formations) ==================
+// La tuile Formations écrit le plan dans inv:formationsPlan ; on le LIT ici -> synchro
+// automatique dès qu'un admin ajoute/modifie une formation. Aucune écriture croisée.
+let formationsPlan = [];   // [{id,type,lieu,debut,fin,notes,employes:[]}]
+async function loadFormationsPlan(){
+  try{ const r=await storage.get('inv:formationsPlan'); if(r&&r.value){ const p=JSON.parse(r.value); formationsPlan=(p&&Array.isArray(p.items))?p.items:[]; } else formationsPlan=[]; }catch(e){ formationsPlan=[]; }
+}
+function normNom(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim(); }
+function nomsProches(n1,n2){ const w1=normNom(n1).split(' ').filter(Boolean), w2=normNom(n2).split(' ').filter(Boolean); if(!w1.length||!w2.length) return false; const common=w1.filter(w=>w2.includes(w)); return common.length>=Math.min(2,Math.min(w1.length,w2.length)); }
+function userInFormation(it){ const me=myName(); return (it.employes||[]).some(n => normNom(n)===normNom(me) || nomsProches(n,me)); }
+function dateStr(d){ const z=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()); }
+function frDate(ds){ if(!ds) return '—'; const p=String(ds).split('-'); if(p.length<3) return ds; return parseInt(p[2],10)+' '+(MOIS[parseInt(p[1],10)-1]||'')+' '+p[0]; }
+// Formations de CET utilisateur actives à la date ds (AAAA-MM-JJ)
+function myFormationsOn(ds){ return formationsPlan.filter(it => userInFormation(it) && (it.debut||'') <= ds && ds <= (it.fin || it.debut || '')); }
+function formationDetail(it){ const bits=[]; bits.push('🎓 '+(it.type||'Formation')); if(it.lieu) bits.push('📍 '+it.lieu); bits.push('🗓️ '+frDate(it.debut)+((it.fin&&it.fin!==it.debut)?(' → '+frDate(it.fin)):'')); if(it.notes) bits.push('📝 '+it.notes); return bits.join('\n'); }
+function formationLine(s){ const bits=[]; if(s.formationLieu) bits.push('📍 '+s.formationLieu); if(s.formationDebut) bits.push('🗓️ '+frDate(s.formationDebut)+((s.formationFin&&s.formationFin!==s.formationDebut)?(' → '+frDate(s.formationFin)):'')); if(s.formationNotes) bits.push('📝 '+s.formationNotes); return bits.join(' · '); }
+
+// ================== SEMAINE (dimanche → samedi) ==================
+function startOfWeek(d, offset){
+  const x = new Date(d); x.setHours(0,0,0,0);
+  x.setDate(x.getDate() - x.getDay() + (offset||0)*7);   // getDay(): 0 = dimanche
+  return x;
+}
+function fmtH(h){ if(!h || h<0) h=0; const m=Math.round(h*60); return Math.floor(m/60)+' h '+String(m%60).padStart(2,'0'); }
+function segHours(s, nowMs){
+  const st=new Date(s.start).getTime(); if(isNaN(st)) return 0;
+  const en = s.end ? new Date(s.end).getTime() : (nowMs||Date.now());
+  return Math.max(0, (en-st)/3600000);
+}
+function timeHM(iso){ const d=new Date(iso); if(isNaN(d)) return '—'; return String(d.getHours()).padStart(2,'0')+'h'+String(d.getMinutes()).padStart(2,'0'); }
+const JOURS = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+const MOIS = ['janv.','févr.','mars','avr.','mai','juin','juill.','août','sept.','oct.','nov.','déc.'];
+function dLabel(d){ return JOURS[d.getDay()]+' '+d.getDate()+' '+MOIS[d.getMonth()]; }
+
+// ================== AFFICHAGE ==================
+function assignText(s){
+  const t = PUNCH_TYPES[s.type] || { label:s.type||'—', icon:'⏱' };
+  if(s.type==='chantier'){
+    let txt = (s.teamLabel||'Chantier');
+    const bits=[]; if(s.projet) bits.push('Projet '+s.projet); if(s.adresse) bits.push(s.adresse);
+    if(bits.length) txt += ' — '+bits.join(' — ');
+    const sec = secteurById(s.secteur); if(sec) txt += ' · '+sec.label;
+    return txt;
+  }
+  if(s.type==='formation'){ let x='Formation'; if(s.formationType) x+=' — '+s.formationType; if(s.formationLieu) x+=' ('+s.formationLieu+')'; return x; }
+  return t.label;
+}
+function renderStatus(){
+  const card = document.getElementById('punchCard');
+  const open = openSegment();
+  document.getElementById('whoBox').innerHTML = '<b>'+escapeHtml(formatNom(myName()))+'</b>'+(isDeviceAdmin()?'Mode admin 🔑':'');
+  if(open){
+    const ic = (PUNCH_TYPES[open.type]||{}).icon || '⏱';
+    card.className = 'punch-card on';
+    card.innerHTML =
+      '<div class="pc-state on">● Punché</div>' +
+      '<div class="pc-assign">'+ic+' <b>'+escapeHtml(assignText(open))+'</b></div>' +
+      ((open.type==='formation' && formationLine(open)) ? '<div class="pc-sub" style="margin:0 0 2px;">'+escapeHtml(formationLine(open))+'</div>' : '') +
+      '<div class="pc-timer" id="pcTimer">0 h 00</div>' +
+      '<div class="pc-sub">Depuis '+timeHM(open.start)+(open.outsideConfirmed?' · <span style="color:var(--safety-yellow);">hors rayon</span>':'')+'</div>' +
+      '<button class="big-btn out" id="btnPunch">■ Dépuncher ma journée</button>' +
+      '<div class="hint">Touche « Dépuncher » à la fin de ta journée. Tu peux repuncher ensuite (plusieurs segments par jour).</div>';
+  } else {
+    card.className = 'punch-card';
+    card.innerHTML =
+      '<div class="pc-state">Pas punché</div>' +
+      '<div class="pc-sub" style="margin-top:6px;">Touche « Puncher » en arrivant.</div>' +
+      '<button class="big-btn in" id="btnPunch">▶ Puncher</button>' +
+      '<div class="hint">Sur un chantier, ta position est vérifiée (rayon de '+RADIUS_M+' m). Autres choix : formation, entrepôt, transport.</div>';
+  }
+  const b=document.getElementById('btnPunch');
+  if(b) b.onclick = open ? doPunchOut : startPunch;
+  updateTimers();
+}
+function updateTimers(){
+  const now = Date.now();
+  const open = openSegment();
+  const tEl = document.getElementById('pcTimer');
+  if(open && tEl) tEl.textContent = fmtH(segHours(open, now));
+  // totaux jour + semaine courante réelle (offset 0), en incluant le segment ouvert
+  const wkStart = startOfWeek(new Date(), 0).getTime();
+  const wkEnd = wkStart + 7*86400000;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayMs = today.getTime(), tomMs = todayMs + 86400000;
+  let dayT=0, weekT=0;
+  mySegments.forEach(s => {
+    const st = new Date(s.start).getTime(); if(isNaN(st)) return;
+    const h = segHours(s, now);
+    if(st>=wkStart && st<wkEnd) weekT += h;
+    if(st>=todayMs && st<tomMs) dayT += h;
+  });
+  const dEl=document.getElementById('todayTot'), wEl=document.getElementById('weekTot');
+  if(dEl) dEl.textContent = fmtH(dayT);
+  if(wEl) wEl.textContent = fmtH(weekT);
+}
+function renderWeek(){
+  const wkStart = startOfWeek(new Date(), weekOffset);
+  const wkStartMs = wkStart.getTime(), wkEndMs = wkStartMs + 7*86400000;
+  const end = new Date(wkStartMs + 6*86400000);
+  document.getElementById('wLabel').textContent = wkStart.getDate()+' '+MOIS[wkStart.getMonth()]+' – '+end.getDate()+' '+MOIS[end.getMonth()];
+  const list = document.getElementById('weekList');
+  const now = Date.now();
+  // regroupe par jour
+  const byDay = {};
+  mySegments.forEach(s => {
+    const st = new Date(s.start).getTime(); if(isNaN(st) || st<wkStartMs || st>=wkEndMs) return;
+    const dk = new Date(st); dk.setHours(0,0,0,0);
+    (byDay[dk.getTime()] = byDay[dk.getTime()] || []).push(s);
+  });
+  let html='', weekT=0;
+  for(let i=0;i<7;i++){
+    const dayMs = wkStartMs + i*86400000;
+    const segs = (byDay[dayMs]||[]).sort((a,b)=>String(a.start).localeCompare(String(b.start)));
+    if(!segs.length) continue;
+    let dayT=0;
+    const rows = segs.map(s => {
+      const h = segHours(s, now); dayT+=h; weekT+=h;
+      const ic = (PUNCH_TYPES[s.type]||{}).icon || '⏱';
+      const openCls = s.end ? '' : ' open';
+      const timeTxt = timeHM(s.start)+' → '+(s.end?timeHM(s.end):'<span style="color:#a9d39a;">en cours</span>');
+      return '<div class="seg'+openCls+'" data-seg="'+escapeAttr(s._key)+'">' +
+        '<span class="seg-ic">'+ic+'</span>' +
+        '<div class="seg-mid"><div class="seg-lbl">'+escapeHtml(assignText(s))+(s.outsideConfirmed?'<span class="badge-out">hors rayon</span>':'')+'</div>' +
+        '<div class="seg-time">'+timeTxt+'</div></div>' +
+        '<div class="seg-h">'+(s.end?fmtH(h):'…')+'</div>' +
+      '</div>';
+    }).join('');
+    html += '<div class="day"><div class="day-head"><div class="day-name">'+dLabel(new Date(dayMs))+'</div><div class="day-tot">'+fmtH(dayT)+'</div></div>'+rows+'</div>';
+  }
+  list.innerHTML = html || '<div class="empty">Aucune heure cette semaine.</div>';
+  list.querySelectorAll('[data-seg]').forEach(r => r.onclick = () => openSegEditor(r.getAttribute('data-seg')));
+}
+function renderAll(){ renderStatus(); renderBanque(); renderWeek(); renderAdminBar(); }
+
+// ================== BANQUE DE TEMPS (onglet « Mes heures en banque ») ==================
+// Chantier -> secteur de son équipe (résidentiel, rés. lourd, commercial, génie civil).
+// Tout le reste (hors CCQ, formation, entrepôt, transport, gestion, transport équipe) -> Hors CCQ.
+function bucketOf(s){
+  if(s.type==='chantier'){ const sec=secteurById(s.secteur); if(sec && sec.id!=='hors_ccq') return { id:sec.id, label:sec.label, icon:sec.icon }; }
+  const h=secteurById('hors_ccq'); return { id:'hors_ccq', label:h.label, icon:h.icon };
+}
+function sumBank(){
+  const now=Date.now(); const map={}; let total=0;
+  mySegments.forEach(s => { if(!s.end) return; const b=bucketOf(s); const hh=segHours(s,now); if(!map[b.id]) map[b.id]={label:b.label,icon:b.icon,h:0}; map[b.id].h+=hh; total+=hh; });
+  return { map, total };
+}
+function renderBanque(){
+  const el = document.getElementById('paneBanque'); if(!el) return;
+  const res = sumBank();
+  const order = SECTEURS.map(s=>s.id);
+  const keys = Object.keys(res.map).sort((a,b)=> order.indexOf(a)-order.indexOf(b));
+  const statLine =
+    '<div class="bq-statut"><span>👷 Statut : <b>'+(myStatut?escapeHtml(myStatut):'<span style="color:var(--safety-yellow);">non défini</span>')+'</b></span>' +
+    (isDeviceAdmin() ? '<button class="bq-btn" id="bqGerer">Gérer (admin)</button>' : '<span class="bq-note">réglé par l\'admin</span>') + '</div>';
+  let rows = keys.length
+    ? keys.map(k=>{ const r=res.map[k]; return '<div class="bq-row"><span class="bq-ic">'+r.icon+'</span><span class="bq-lbl">'+escapeHtml(r.label)+'</span><span class="bq-h">'+fmtH(r.h)+'</span></div>'; }).join('')
+    : '<div class="empty" style="padding:14px;">Aucune heure en banque.</div>';
+  if(keys.length) rows += '<div class="bq-row bq-tot"><span class="bq-ic"></span><span class="bq-lbl"><b>Total</b></span><span class="bq-h">'+fmtH(res.total)+'</span></div>';
+  el.innerHTML = statLine + '<div class="bq-block"><div class="bq-head">Heures accumulées par secteur</div>'+rows+'</div>';
+  const g=document.getElementById('bqGerer'); if(g) g.onclick=openAdminManagers;
+}
+function switchTab(which){
+  const b=document.getElementById('paneBanque'), s=document.getElementById('paneSemaine');
+  const bb=document.getElementById('tabBtnBanque'), sb=document.getElementById('tabBtnSemaine');
+  if(which==='semaine'){ b.style.display='none'; s.style.display=''; sb.classList.add('active'); bb.classList.remove('active'); }
+  else { s.style.display='none'; b.style.display=''; bb.classList.add('active'); sb.classList.remove('active'); }
+}
+function openAdminManagers(){ if(!_adminOpen){ _adminOpen=true; renderAdminBar(); } const el=document.getElementById('adminWrap'); if(el) el.scrollIntoView({behavior:'smooth'}); }
+
+// ================== PUNCH ==================
+let _pendingLoc=null, _pendingInRadius=null, _pendingOutside=false;
+
+async function startPunch(){
+  if(openSegment()){ alert('Tu es déjà punché. Dépunche d\'abord.'); return; }
+  const btn=document.getElementById('btnPunch'); if(btn) btn.disabled=true;
+  try{
+    let choice = null;
+    const last = lastAssignment();
+    if(last){
+      const lbl = (PUNCH_TYPES[last.type]||{}).icon+' '+assignText({type:last.type, teamLabel:last.teamLabel, projet:last.projet, adresse:last.adresse});
+      if(confirm('Es-tu sur la même affectation qu\'à ton dernier punch ?\n\n'+lbl+'\n\nOK = garder  ·  Annuler = changer')){
+        choice = { type:last.type, teamId:last.teamId };
+      }
+    }
+    if(!choice){ choice = await chooseAssignment(); }
+    if(!choice){ return; }
+    _pendingLoc=null; _pendingInRadius=null; _pendingOutside=false;
+    if(choice.type==='chantier'){
+      // Avertissement stylisé (look S.S.T.) : une formation est prévue aujourd'hui.
+      // L'employé peut tout de même puncher sur le chantier.
+      const ft = myFormationsOn(dateStr(new Date()));
+      if(ft.length){
+        const proceed = await sstConfirm({
+          icon:'📚',
+          title:'Formation prévue aujourd\'hui',
+          sub:'D\'après le plan, tu devrais être en formation. Tu peux tout de même puncher sur le chantier.',
+          detail:formationDetail(ft[0]),
+          okLabel:'🏗 Puncher quand même sur le chantier',
+          cancelLabel:'Annuler'
+        });
+        if(!proceed) return;
+      }
+      const g = await checkChantierGeo(choice.teamId, 'in');
+      if(!g) return;
+      _pendingLoc=g.loc; _pendingInRadius=g.inRadius; _pendingOutside=g.outside;
+    }
+    let formInfo = null;
+    if(choice.type==='formation'){ const fs = myFormationsOn(dateStr(new Date())); if(fs.length) formInfo = fs[0]; }
+    await createSegment(choice.type, choice.type==='chantier'?choice.teamId:'', formInfo);
+  } finally { const b=document.getElementById('btnPunch'); if(b) b.disabled=false; }
+}
+
+// Vérifie la présence au chantier (rayon 250 m), au PUNCH ('in') comme au DÉPUNCH ('out').
+// Retourne { loc, inRadius, outside } si on peut continuer, ou null si annulé.
+async function checkChantierGeo(teamId, mode){
+  const verbe = (mode==='out') ? 'Dépuncher' : 'Puncher';
+  if(!geolocConsent()){
+    const okC = confirm('📍 Pointage de chantier\n\nTa position est utilisée UNIQUEMENT à ce moment, pour confirmer ta présence au chantier (aucun suivi en continu). Activer la localisation ?');
+    if(!okC){
+      if(!confirm('Sans localisation, la présence ne peut pas être vérifiée.\n'+verbe+' quand même ?')) return null;
+      return { loc:null, inRadius:null, outside:true };
+    }
+    setGeolocConsent(true);
+  }
+  const pos = await getPosition();
+  const site = sites[teamId];
+  if(!pos){
+    if(!confirm('Position indisponible (GPS refusé ou hors service).\n'+verbe+' quand même sans vérification ?')) return null;
+    return { loc:null, inRadius:null, outside:true };
+  }
+  if(!site || site.lat==null){
+    if(mode==='in'){
+      await saveSite(teamId, pos);
+      alert('📍 Position du chantier enregistrée (premier punch). Les prochains punchs seront comparés à ce point.');
+      return { loc:pos, inRadius:true, outside:false };
+    }
+    // Dépunch sans position de référence connue : on ne peut pas vérifier.
+    return { loc:pos, inRadius:null, outside:true };
+  }
+  const d = haversine(pos.lat, pos.lng, site.lat, site.lng);
+  if(mode==='in' && isDeviceAdmin()){
+    if(confirm('Mode admin — tu es à ~'+Math.round(d)+' m du point actuel du chantier.\n\nRelocaliser le point du chantier à ta position actuelle ?')){
+      await saveSite(teamId, pos); return { loc:pos, inRadius:true, outside:false };
+    }
+  }
+  if(d <= RADIUS_M){ return { loc:pos, inRadius:true, outside:false }; }
+  if(confirm('Tu es à ~'+Math.round(d)+' m du chantier (hors du rayon de '+RADIUS_M+' m).\n\n'+verbe+' quand même ?')){ return { loc:pos, inRadius:false, outside:true }; }
+  return null;
+}
+
+async function createSegment(type, teamId, formInfo){
+  const now = new Date().toISOString();
+  const t = teamId ? teams.find(x=>x.id===teamId) : null;
+  const info = teamId ? (teamInfo[teamId]||{}) : {};
+  const seg = {
+    id:uid(), deviceId:getDeviceId(), nom:myName(), type,
+    teamId:teamId||'', teamLabel:t?t.label:'', projet:info.projet||'', adresse:info.adresse||'',
+    start:now, end:null,
+    startLoc:_pendingLoc||null, startInRadius:_pendingInRadius, outsideConfirmed:!!_pendingOutside, hours:0
+  };
+  if(type==='formation' && formInfo){
+    seg.formationId=formInfo.id||''; seg.formationType=formInfo.type||''; seg.formationLieu=formInfo.lieu||'';
+    seg.formationNotes=formInfo.notes||''; seg.formationDebut=formInfo.debut||''; seg.formationFin=formInfo.fin||'';
+  }
+  if(type==='chantier'){ seg.secteur = teamSecteur[teamId]||''; }   // secteur hérité de l'équipe/chantier
+  seg.statut = myStatut||'';                                          // statut réglé par l'admin
+  const key = 'punch:'+getDeviceId()+':'+now+'_'+seg.id;
+  const rec = Object.assign({}, seg);
+  const res = await storage.set(key, JSON.stringify(rec));
+  if(!res){ alert('Enregistrement impossible. Vérifie ta connexion et réessaie.'); return; }
+  seg._key = key; mySegments.push(seg);
+  renderAll();
+}
+
+async function doPunchOut(){
+  const open = openSegment(); if(!open) return;
+  const btn=document.getElementById('btnPunch'); if(btn) btn.disabled=true;
+  try{
+    let endLoc=null, endInRadius=null, endOutside=false;
+    if(open.type==='chantier'){
+      // Le dépunch d'un chantier exige aussi d'être dans le rayon de 250 m.
+      const g = await checkChantierGeo(open.teamId, 'out');
+      if(!g) return;   // annulé (hors rayon non confirmé, GPS refusé, etc.)
+      endLoc=g.loc; endInRadius=g.inRadius; endOutside=g.outside;
+    } else {
+      if(!confirm('Dépuncher ta journée maintenant ?')) return;
+    }
+    open.end = new Date().toISOString();
+    open.hours = segHours(open, Date.now());
+    open.endLoc=endLoc; open.endInRadius=endInRadius; open.endOutsideConfirmed=endOutside;
+    const rec = Object.assign({}, open); delete rec._key;
+    const res = await storage.set(open._key, JSON.stringify(rec));
+    if(!res){ open.end=null; open.hours=0; open.endLoc=null; alert('Enregistrement impossible. Réessaie.'); return; }
+    renderAll();
+    // Rappel : une formation est prévue demain pour cet utilisateur ?
+    const tom = new Date(); tom.setDate(tom.getDate()+1);
+    const fs = myFormationsOn(dateStr(tom));
+    if(fs.length){ await sstConfirm({ icon:'📅', title:'Formation demain', sub:'Rappel — demain ('+frDate(dateStr(tom))+'), tu as une formation.', detail:formationDetail(fs[0]), okLabel:'Compris', infoOnly:true }); }
+  } finally { const b=document.getElementById('btnPunch'); if(b) b.disabled=false; }
+}
+
+// ================== CHOIX D'AFFECTATION (modale) ==================
+function chooseAssignment(){
+  return new Promise(resolve => {
+    const box = document.getElementById('modalBox');
+    let html = '<h3>⏱ Ton affectation</h3>';
+    html += '<div class="grp-lbl">Chantier — choisis ton équipe</div>';
+    if(teams.length){
+      teams.forEach(t => {
+        const info = teamInfo[t.id]||{};
+        const bits=[]; if(info.projet) bits.push('Projet '+info.projet); if(info.adresse) bits.push(info.adresse);
+        html += '<button class="choice" data-team="'+escapeAttr(t.id)+'"><span class="ci">🏗</span><span class="ct"><b>'+escapeHtml(t.label)+'</b><span>'+(bits.length?escapeHtml(bits.join(' — ')):'Chantier non renseigné (inventaire)')+'</span></span></button>';
+      });
+    } else { html += '<div class="empty">Aucune équipe configurée.</div>'; }
+    html += '<div class="grp-lbl">Autre</div>';
+    const fToday = myFormationsOn(dateStr(new Date()));
+    ['formation','entrepot','transport','gestion','transport_equipe'].forEach(k => {
+      const ty=PUNCH_TYPES[k];
+      let subt='';
+      if(k==='formation' && fToday.length){ subt='<span>'+escapeHtml((fToday[0].type||'Formation')+(fToday[0].lieu?(' · '+fToday[0].lieu):''))+'</span>'; }
+      html += '<button class="choice" data-type="'+k+'"><span class="ci">'+ty.icon+'</span><span class="ct"><b>'+ty.label+'</b>'+subt+'</span></button>';
+    });
+    html += '<button class="btn" id="chCancel">Annuler</button>';
+    box.innerHTML = html;
+    document.getElementById('overlay').classList.add('show');
+    let done=false;
+    const finish = (val)=>{ if(done) return; done=true; closeModal(); resolve(val); };
+    box.querySelectorAll('[data-team]').forEach(b => b.onclick = ()=> finish({ type:'chantier', teamId:b.getAttribute('data-team') }));
+    box.querySelectorAll('[data-type]').forEach(b => b.onclick = ()=> finish({ type:b.getAttribute('data-type') }));
+    document.getElementById('chCancel').onclick = ()=> finish(null);
+    document.getElementById('overlay').onclick = (e)=>{ if(e.target.id==='overlay') finish(null); };
+  });
+}
+function closeModal(){ document.getElementById('overlay').classList.remove('show'); document.getElementById('overlay').onclick=null; }
+
+// Pop-up stylisé « Santé & Sécurité » (même look que l'onglet S.S.T. de l'inventaire).
+// Retourne true si l'utilisateur continue, false s'il annule. infoOnly = un seul bouton.
+function sstConfirm(opts){
+  opts = opts || {};
+  return new Promise(resolve => {
+    const box = document.getElementById('modalBox');
+    box.innerHTML =
+      '<div class="sst-stripe"></div>' +
+      '<div class="sst-banner"><div class="sst-icon">'+(opts.icon||'📚')+'</div><div class="sst-text">' +
+        '<div class="sst-title">'+escapeHtml(opts.title||'')+'</div>' +
+        (opts.sub ? '<div class="sst-sub">'+escapeHtml(opts.sub)+'</div>' : '') +
+      '</div></div>' +
+      (opts.detail ? '<div class="sst-detail">'+escapeHtml(opts.detail).replace(/\n/g,'<br>')+'</div>' : '') +
+      '<button class="btn primary" id="sstOk">'+escapeHtml(opts.okLabel||'Continuer')+'</button>' +
+      (opts.infoOnly ? '' : '<button class="btn" id="sstCancel">'+escapeHtml(opts.cancelLabel||'Annuler')+'</button>');
+    document.getElementById('overlay').classList.add('show');
+    let done=false; const fin=v=>{ if(done) return; done=true; closeModal(); resolve(v); };
+    document.getElementById('sstOk').onclick = ()=> fin(true);
+    const c=document.getElementById('sstCancel'); if(c) c.onclick = ()=> fin(false);
+    document.getElementById('overlay').onclick = e=>{ if(e.target.id==='overlay') fin(false); };
+  });
+}
+
+// ================== CORRECTION / SUPPRESSION D'UN SEGMENT ==================
+function toLocalInput(iso){ if(!iso) return ''; const d=new Date(iso); if(isNaN(d)) return ''; const z=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+'T'+z(d.getHours())+':'+z(d.getMinutes()); }
+function fromLocalInput(v){ if(!v) return null; const d=new Date(v); return isNaN(d)?null:d.toISOString(); }
+function openSegEditor(key){
+  const s = mySegments.find(x=>x._key===key); if(!s) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML =
+    '<h3>Corriger le punch</h3>' +
+    '<div class="pc-assign" style="text-align:left;margin:0 0 6px;">'+((PUNCH_TYPES[s.type]||{}).icon||'⏱')+' '+escapeHtml(assignText(s))+'</div>' +
+    '<div class="field-label">Début</div><input class="inp" type="datetime-local" id="edStart" value="'+escapeAttr(toLocalInput(s.start))+'">' +
+    '<div class="field-label">Fin</div><input class="inp" type="datetime-local" id="edEnd" value="'+escapeAttr(toLocalInput(s.end))+'">' +
+    '<div class="hint" style="margin-top:6px;">Laisse la fin vide pour un punch encore en cours.</div>' +
+    '<button class="btn primary" id="edSave">Enregistrer</button>' +
+    '<button class="btn danger" id="edDel">Supprimer ce punch</button>' +
+    '<button class="btn" id="edCancel">Annuler</button>';
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('overlay').onclick = (e)=>{ if(e.target.id==='overlay') closeModal(); };
+  document.getElementById('edCancel').onclick = closeModal;
+  document.getElementById('edSave').onclick = async () => {
+    const st = fromLocalInput(document.getElementById('edStart').value);
+    const en = fromLocalInput(document.getElementById('edEnd').value);
+    if(!st){ alert('Le début est requis.'); return; }
+    if(en && new Date(en) < new Date(st)){ alert('La fin doit être après le début.'); return; }
+    s.start = st; s.end = en; s.hours = en ? segHours(s, Date.now()) : 0;
+    const rec = Object.assign({}, s); delete rec._key;
+    const res = await storage.set(s._key, JSON.stringify(rec));
+    if(!res){ alert('Enregistrement impossible.'); return; }
+    closeModal(); renderAll();
+  };
+  document.getElementById('edDel').onclick = async () => {
+    if(!confirm('Supprimer définitivement ce punch ?')) return;
+    await storage.del(s._key);
+    mySegments = mySegments.filter(x=>x._key!==s._key);
+    closeModal(); renderAll();
+  };
+}
+
+// ================== ADMIN : toutes les heures ==================
+let _adminOpen = false;
+function renderAdminBar(){
+  const el = document.getElementById('adminWrap');
+  if(!isDeviceAdmin()){ el.innerHTML=''; _adminOpen=false; return; }
+  el.innerHTML = '<button class="admin-toggle" id="admToggle">'+(_adminOpen?'▲ Masquer les heures de tous':'🔑 Voir les heures de tous (admin)')+'</button><div id="admZone"></div>';
+  document.getElementById('admToggle').onclick = async () => { _adminOpen = !_adminOpen; renderAdminBar(); if(_adminOpen) await renderAdminZone(); };
+  if(_adminOpen) renderAdminZone();   // recharge la zone si elle est ouverte
+}
+async function renderAdminZone(){
+  const z = document.getElementById('admZone'); if(!z) return;
+  z.innerHTML = '<div class="admin-zone"><h3>🔑 Heures — semaine affichée</h3><div class="empty">Chargement…</div></div>';
+  const rows = await storage.like('punch:');
+  const all = [];
+  rows.forEach(r => { try{ const s=JSON.parse(r.value); if(s&&s.start){ s._key=r.key; all.push(s); } }catch(e){} });
+  // Statuts déjà enregistrés (par appareil) pour les sélecteurs admin
+  _statutsAll = {};
+  const srows = await storage.like('punch_statut:');
+  srows.forEach(r => { try{ _statutsAll[r.key.slice('punch_statut:'.length)] = (JSON.parse(r.value).statut||''); }catch(e){} });
+  const wkStart = startOfWeek(new Date(), weekOffset).getTime(), wkEnd = wkStart + 7*86400000;
+  const now = Date.now();
+  const byPers = {};
+  all.forEach(s => {
+    const st=new Date(s.start).getTime(); if(isNaN(st)||st<wkStart||st>=wkEnd) return;
+    const pid = s.deviceId||'?';
+    if(!byPers[pid]) byPers[pid] = { nom:s.nom||('Appareil '+String(pid).slice(-4)), h:0, n:0 };
+    byPers[pid].h += segHours(s, now); byPers[pid].n++;
+    if(s.nom) byPers[pid].nom = s.nom;
+  });
+  window._adminWeekSegs = all.filter(s => { const st=new Date(s.start).getTime(); return !isNaN(st)&&st>=wkStart&&st<wkEnd; });
+  const pers = Object.values(byPers).sort((a,b)=> a.nom.localeCompare(b.nom,'fr'));
+  const wkS = startOfWeek(new Date(), weekOffset); const wkE=new Date(wkStart+6*86400000);
+  let html = '<div class="admin-zone"><h3>🔑 Heures — '+wkS.getDate()+' '+MOIS[wkS.getMonth()]+' – '+wkE.getDate()+' '+MOIS[wkE.getMonth()]+'</h3>';
+  if(!pers.length){ html += '<div class="empty">Aucune heure pour cette semaine.</div>'; }
+  else {
+    let grand=0;
+    pers.forEach(p => { grand+=p.h; html += '<div class="pers"><span class="pn">'+escapeHtml(formatNom(p.nom))+'</span><span class="ph">'+fmtH(p.h)+'</span></div>'; });
+    html += '<div class="pers" style="border-top:1px solid var(--line);margin-top:4px;"><span class="pn"><b>TOTAL</b></span><span class="ph">'+fmtH(grand)+'</span></div>';
+    html += '<button class="admin-btn primary" id="admExport">⬇ Exporter en Excel</button>';
+  }
+  // --- Secteur CCQ par équipe/chantier ---
+  html += '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:11px;"><div class="adm-sub">🧱 Secteur par équipe / chantier</div>';
+  if(teams.length){
+    teams.forEach(t => {
+      html += '<div class="adm-line"><span class="adm-lbl">'+escapeHtml(t.label)+'</span><select class="adm-sel" data-secteam="'+escapeAttr(t.id)+'">' +
+        '<option value="">— non défini —</option>' +
+        SECTEURS.map(s=>'<option value="'+s.id+'"'+(teamSecteur[t.id]===s.id?' selected':'')+'>'+escapeHtml(s.label)+'</option>').join('') +
+      '</select></div>';
+    });
+  } else { html += '<div class="empty">Aucune équipe.</div>'; }
+  html += '</div>';
+  // --- Statut CCQ par employé ---
+  html += '<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:11px;"><div class="adm-sub">🪪 Statut par employé</div>';
+  const persAll={}; all.forEach(s=>{ const pid=s.deviceId||'?'; if(!persAll[pid]) persAll[pid]={nom:s.nom||('Appareil '+String(pid).slice(-4))}; if(s.nom) persAll[pid].nom=s.nom; });
+  const pids=Object.keys(persAll).sort((a,b)=>persAll[a].nom.localeCompare(persAll[b].nom,'fr'));
+  if(!pids.length){ html += '<div class="empty">Personne n\'a encore punché.</div>'; }
+  pids.forEach(pid=>{ const cur=_statutsAll[pid]||''; html += '<div class="adm-line"><span class="adm-lbl">'+escapeHtml(formatNom(persAll[pid].nom))+'</span><select class="adm-sel" data-statdev="'+escapeAttr(pid)+'" data-statnom="'+escapeAttr(persAll[pid].nom)+'">' +
+    '<option value="">— non défini —</option>' +
+    STATUTS.map(st=>'<option value="'+escapeAttr(st)+'"'+(cur===st?' selected':'')+'>'+escapeHtml(st)+'</option>').join('') +
+  '</select></div>'; });
+  html += '</div>';
+  html += '<div class="hint">Les heures affichées suivent la semaine sélectionnée ci-dessus (‹ ›). Le secteur et le statut s\'appliquent aux prochains punchs.</div></div>';
+  z.innerHTML = html;
+  const ex=document.getElementById('admExport'); if(ex) ex.onclick = exportAdminExcel;
+  z.querySelectorAll('[data-secteam]').forEach(sel => sel.onchange = async ()=>{ await saveTeamSecteur(sel.getAttribute('data-secteam'), sel.value); });
+  z.querySelectorAll('[data-statdev]').forEach(sel => sel.onchange = async ()=>{ await setStatutFor(sel.getAttribute('data-statdev'), sel.getAttribute('data-statnom'), sel.value); if(sel.getAttribute('data-statdev')===getDeviceId()) renderBanque(); });
+}
+
+// ---- Export Excel (admin) ----
+let _xlsxLoading=null;
+function ensureXLSX(){
+  if(window.XLSX) return Promise.resolve();
+  if(_xlsxLoading) return _xlsxLoading;
+  _xlsxLoading = new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js'; s.onload=()=>res(); s.onerror=()=>{ _xlsxLoading=null; rej(new Error('xlsx')); }; document.head.appendChild(s); });
+  return _xlsxLoading;
+}
+async function exportAdminExcel(){
+  try{ await ensureXLSX(); }catch(e){ alert('Impossible de charger le module Excel.'); return; }
+  const segs = (window._adminWeekSegs||[]).slice();
+  if(!segs.length){ alert('Aucune heure à exporter.'); return; }
+  const now = Date.now();
+  const wkS = startOfWeek(new Date(), weekOffset), wkE=new Date(wkS.getTime()+6*86400000);
+  const wb = XLSX.utils.book_new();
+  // Feuille détails
+  segs.sort((a,b)=> (a.nom||'').localeCompare(b.nom||'','fr') || String(a.start).localeCompare(String(b.start)));
+  const aoa=[['Employé','Statut','Date','Type','Chantier / équipe','Secteur (banque)','Début','Fin','Heures','Hors rayon']];
+  const perTot={}; const bank={};
+  segs.forEach(s => {
+    const h = s.end ? segHours(s, now) : 0;
+    perTot[s.nom||'—'] = (perTot[s.nom||'—']||0)+h;
+    const bk = bucketOf(s).label;
+    if(s.end){ const key=(formatNom(s.nom)||'—')+'||'+bk; bank[key]=(bank[key]||0)+h; }
+    const d=new Date(s.start);
+    aoa.push([ formatNom(s.nom)||'—', s.statut||'', isNaN(d)?'':d.toLocaleDateString('fr-CA'), (PUNCH_TYPES[s.type]||{}).label||s.type,
+      s.type==='chantier'?[s.teamLabel, s.projet?('Projet '+s.projet):'', s.adresse].filter(Boolean).join(' — '):(s.type==='formation'?[s.formationType, s.formationLieu].filter(Boolean).join(' — '):''),
+      bk, timeHM(s.start), s.end?timeHM(s.end):'en cours', h?Number(h.toFixed(2)):'', s.outsideConfirmed?'Oui':'' ]);
+  });
+  const ws1 = XLSX.utils.aoa_to_sheet(aoa); ws1['!cols']=[{wch:24},{wch:12},{wch:12},{wch:14},{wch:30},{wch:16},{wch:8},{wch:8},{wch:8},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Détails');
+  // Feuille résumé (par employé)
+  const aoa2=[['Employé','Heures (semaine)']];
+  Object.keys(perTot).sort((a,b)=>a.localeCompare(b,'fr')).forEach(n => aoa2.push([formatNom(n), Number(perTot[n].toFixed(2))]));
+  const ws2 = XLSX.utils.aoa_to_sheet(aoa2); ws2['!cols']=[{wch:26},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Résumé');
+  // Feuille banque par secteur (employé × secteur)
+  const aoa3=[['Employé','Secteur','Heures']];
+  Object.keys(bank).sort((a,b)=>a.localeCompare(b,'fr')).forEach(k => { const p=k.split('||'); aoa3.push([p[0], p[1], Number(bank[k].toFixed(2))]); });
+  const ws3 = XLSX.utils.aoa_to_sheet(aoa3); ws3['!cols']=[{wch:24},{wch:20},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, ws3, 'Banque par secteur');
+  XLSX.writeFile(wb, 'Heures_DMD_'+wkS.getFullYear()+'-'+String(wkS.getMonth()+1).padStart(2,'0')+'-'+String(wkS.getDate()).padStart(2,'0')+'.xlsx');
+}
+
+// ================== ÉVÉNEMENTS ==================
+document.getElementById('wPrev').onclick = () => { weekOffset--; renderWeek(); if(_adminOpen) renderAdminZone(); };
+document.getElementById('wNext').onclick = () => { weekOffset++; renderWeek(); if(_adminOpen) renderAdminZone(); };
+document.getElementById('tabBtnBanque').onclick = () => switchTab('banque');
+document.getElementById('tabBtnSemaine').onclick = () => switchTab('semaine');
+
+// ================== DÉMARRAGE ==================
+(async function(){
+  if(!_sb){ document.getElementById('punchCard').innerHTML='<div class="pc-state">Serveur injoignable</div>'; return; }
+  try{
+    const { data } = await withTimeout(_sb.auth.getSession(), 8000, 'getSession');
+    if(!data || !data.session){ document.getElementById('gate').classList.add('show'); location.replace('./index.html'); return; }
+  }catch(e){ document.getElementById('punchCard').innerHTML='<div class="pc-state">Serveur injoignable</div>'; return; }
+  try{
+    await loadTeams();
+    await Promise.all([ loadTeamInfos(), loadSites(), loadMySegments(), loadFormationsPlan(), loadTeamSecteurs(), loadMyStatut() ]);
+    renderAll();
+    tickTimer = setInterval(updateTimers, 1000);
+    document.addEventListener('visibilitychange', async () => {
+      if(!document.hidden){ await Promise.all([ loadMySegments(), loadSites(), loadFormationsPlan(), loadTeamSecteurs(), loadMyStatut() ]); renderAll(); }
+    });
+  }catch(e){ console.error(e); document.getElementById('punchCard').innerHTML='<div class="pc-state">Impossible de démarrer le pointage.</div>'; }
+})();
+</script>
+</body>
+</html>

@@ -229,6 +229,7 @@ const storage = {
 // ================== HELPERS ==================
 function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
+function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
 function normNom(s){ return (s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[.,\-]/g,' ').replace(/\s+/g,' ').trim(); }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function todayInput(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -345,6 +346,54 @@ async function loadRecords(){
     }
   }catch(e){ console.error(e); }
 }
+// ================== EXTINCTEURS (registre partagé — assignés aux machines) ==================
+// Une ligne par extincteur : inv:extincteur:<num> = { num, machineKey, machineNom,
+// machineIdent, since, par, statut, history:[] }. Un extincteur = une seule machine.
+let extincteurs = {};   // num (string) -> entrée
+async function loadExtincteurs(){
+  extincteurs = {};
+  try{
+    const res = await withTimeout(_sb.from('inv_store').select('key,value').like('key','inv:extincteur:%'), 12000, 'ext');
+    if(res && Array.isArray(res.data)){
+      res.data.forEach(r => { try{ const e = JSON.parse(r.value); if(e && e.num!=null) extincteurs[String(e.num)] = e; }catch(err){} });
+    }
+  }catch(e){ console.error('loadExtincteurs', e); }
+}
+function extForMachine(m){
+  const k = machineKey(m);
+  return Object.values(extincteurs).find(e => e && e.machineKey === k) || null;
+}
+async function saveExtincteur(e){
+  extincteurs[String(e.num)] = e;
+  return await storage.set('inv:extincteur:'+e.num, JSON.stringify(e), true);
+}
+function extHistoPush(e, action){ e.history = e.history || []; e.history.unshift({ date:new Date().toISOString(), action, par:parLabel() }); }
+// Assigne l'extincteur `num` à la machine m ; le retire de son ancienne machine (déplacement)
+// et retire l'extincteur déjà présent sur m (remplacement).
+async function assignExtincteur(m, num){
+  num = String(num).replace(/[^\d]/g,'').replace(/^0+(?=\d)/,'');
+  if(!num) return false;
+  const k = machineKey(m);
+  const actuel = extForMachine(m);
+  if(actuel && String(actuel.num) !== num){
+    actuel.machineKey = null; actuel.machineNom=''; actuel.machineIdent=''; actuel.statut='stock';
+    extHistoPush(actuel, 'Retiré de '+(m.ident||m.nom)+' (remplacé par #'+num+')');
+    await saveExtincteur(actuel);
+  }
+  let e = extincteurs[num] || { num:num, machineKey:null, history:[] };
+  const provenance = (e.machineKey && e.machineKey !== k) ? (' — déplacé de '+(e.machineIdent||e.machineNom||'?')) : '';
+  e.machineKey = k; e.machineNom = m.nom; e.machineIdent = m.ident||''; e.since = new Date().toISOString(); e.par = parLabel(); e.statut = 'assigne';
+  extHistoPush(e, 'Assigné à '+(m.ident?m.ident+' — ':'')+m.nom+provenance);
+  const res = await saveExtincteur(e);
+  return !!res;
+}
+async function removeExtincteur(m){
+  const e = extForMachine(m); if(!e) return;
+  e.machineKey=null; e.machineNom=''; e.machineIdent=''; e.statut='stock';
+  extHistoPush(e, 'Retiré de '+(m.ident||m.nom)+' — remis en stock');
+  await saveExtincteur(e);
+}
+
 // Sélection des machines par équipe (faite dans l'inventaire) + chantier de chaque équipe.
 // C'est la source de la localisation/équipe AUTOMATIQUE de chaque machine.
 async function loadTeamAssignments(){
@@ -493,6 +542,7 @@ function renderList(){
     if(st.openRepar>0) pills.push(pill('orange', '🛠 '+st.openRepar+' répar.'));
     pills.push(pill(st.lastInsp?'green':'grey', 'Insp : ' + (st.lastInsp ? fmtDateFR(st.lastInsp.date) : 'aucune')));
     if(st.maint) pills.push(pill(st.maint.level, '🛢 '+st.maint.label));
+    if(m.cat==='Lift' || m.cat==='Fraco'){ const e = extForMachine(m); pills.push(pill(e?'green':'red', e ? ('🧯 #'+e.num) : '🧯 aucun')); }
     return '<div class="card'+st.edge+'" data-key="'+escapeAttr(machineKey(m))+'">' +
       '<div class="c-top"><span class="c-ident">'+escapeHtml(m.ident||'—')+'</span>' +
         '<span class="c-nom">'+escapeHtml(m.nom)+'</span>' + (q?'<span class="c-cat">'+escapeHtml(m.cat)+'</span>':'') + '</div>' +
@@ -541,7 +591,7 @@ function openDetail(key){
     const resolu = b.statut==='resolu';
     return '<div class="entry"><div class="e-top"><span class="e-date">'+fmtDateFR(b.date)+'</span>' +
       '<span class="tag '+(resolu?'green':'red')+'">'+(resolu?'Résolu':'Ouvert')+'</span>' +
-      '<span class="e-by">'+escapeHtml(b.par||'')+'</span></div>' +
+      '<span class="e-by">'+escapeHtml(formatNom(b.par))+'</span></div>' +
       '<div class="e-desc">'+escapeHtml(b.desc||'')+'</div>' +
       '<div class="e-actions">' + (resolu?'':'<span class="mini-link" data-bris-res="'+b.id+'">✔ Marquer résolu</span>') +
       '<span class="mini-link danger" data-bris-del="'+b.id+'">Supprimer</span></div></div>';
@@ -561,7 +611,7 @@ function openDetail(key){
   const repsHtml = reps.length ? reps.map(r =>
     '<div class="entry"><div class="e-top"><span class="e-date">'+fmtDateFR(r.date)+'</span>' +
     '<span class="tag '+repStatutTag(r.statut)+'">'+repStatutLbl(r.statut)+'</span>' +
-    '<span class="e-by">'+escapeHtml(r.par||'')+'</span></div>' +
+    '<span class="e-by">'+escapeHtml(formatNom(r.par))+'</span></div>' +
     '<div class="e-desc">'+escapeHtml(r.desc||'')+ (r.cout?(' <span class="muted">· '+escapeHtml(r.cout)+' $</span>'):'') +'</div>' +
     '<div class="e-actions"><span class="mini-link" data-rep-cyc="'+r.id+'">↻ Changer statut</span><span class="mini-link danger" data-rep-del="'+r.id+'">Supprimer</span></div></div>'
   ).join('') : '<div class="empty-sec">Aucune réparation enregistrée.</div>';
@@ -578,7 +628,7 @@ function openDetail(key){
   const inspHtml = insps.length ? insps.map(i =>
     '<div class="entry"><div class="e-top"><span class="e-date">'+fmtDateFR(i.date)+'</span>' +
     '<span class="tag '+(i.conforme==='non'?'red':(i.conforme==='oui'?'green':'grey'))+'">'+(i.conforme==='non'?'Non conforme':(i.conforme==='oui'?'Conforme':'N/A'))+'</span>' +
-    '<span class="e-by">'+escapeHtml(i.par||'')+'</span></div>' +
+    '<span class="e-by">'+escapeHtml(formatNom(i.par))+'</span></div>' +
     (i.note?'<div class="e-desc">'+escapeHtml(i.note)+'</div>':'') +
     '<div class="e-actions"><span class="mini-link danger" data-insp-del="'+i.id+'">Supprimer</span></div></div>'
   ).join('') : '<div class="empty-sec">Aucune inspection enregistrée.</div>';
@@ -606,10 +656,30 @@ function openDetail(key){
       '</div></details>';
   }
 
+  // --- Extincteur assigné (Lift / Fraco) ---
+  let extincteurSection = '';
+  if(m.cat === 'Lift' || m.cat === 'Fraco'){
+    const e = extForMachine(m);
+    const cur = e
+      ? ('🧯 <b>Extincteur #'+escapeHtml(String(e.num))+'</b>' + (e.since ? ' <span style="color:var(--logo-grey);">(depuis '+fmtDateFR(e.since)+')</span>' : ''))
+      : '<span style="color:var(--logo-grey);">Aucun extincteur assigné</span>';
+    const histo = (e && e.history && e.history.length)
+      ? e.history.slice(0,6).map(h => '<div class="entry"><div class="e-top"><span class="e-date">'+fmtDateFR(h.date)+'</span><span class="e-by">'+escapeHtml(h.par||'')+'</span></div><div class="e-desc">'+escapeHtml(h.action||'')+'</div></div>').join('')
+      : '<div class="empty-sec">Aucun changement enregistré.</div>';
+    extincteurSection =
+      '<details class="sec" open><summary>🧯 Extincteur assigné' + (e?'':' <span class="tag red" style="margin-left:6px;">Aucun</span>') + '<span class="chev">▶</span></summary><div class="sec-body">' +
+        '<div class="statusline">'+cur+'</div>' +
+        '<div class="btn-row"><button type="button" class="btn primary" id="extAssign">'+(e?'Changer l\'extincteur':'Assigner un extincteur')+'</button>' +
+        (e?'<button type="button" class="btn" id="extRemove">Retirer</button>':'') + '</div>' +
+        '<div class="note">Chaque Lift et Fraco doit avoir un extincteur numéroté (registre = onglet Extincteurs de l\'inventaire). Déplacer un extincteur ici le retire automatiquement de son ancienne machine.</div>' +
+        '<div class="field-label" style="margin-top:12px;">Historique</div>' + histo +
+      '</div></details>';
+  }
+
   box.innerHTML =
     '<div class="m-head"><span class="c-ident">'+escapeHtml(m.ident||'—')+'</span><span class="m-title">'+escapeHtml(m.nom)+'</span><button type="button" class="m-close" id="mClose">✕</button></div>' +
     '<div class="m-catline">'+escapeHtml(m.cat)+(m.gas?' · moteur':'')+'</div>' +
-    locSection + verifSection + inspSection + brisSection + repSection + entretienSection;
+    locSection + extincteurSection + verifSection + inspSection + brisSection + repSection + entretienSection;
 
   document.getElementById('overlay').classList.add('show');
   document.getElementById('mClose').onclick = closeModal;
@@ -619,6 +689,25 @@ function openDetail(key){
 function wireDetail(m, key){
   const rec = records[key];
   const reopen = () => { renderSummary(); renderTabs(); renderList(); openDetail(key); };
+
+  // Extincteur assigné (Lift/Fraco) — assignation / remplacement / retrait
+  const extAssign = document.getElementById('extAssign');
+  if(extAssign) extAssign.onclick = async () => {
+    const cur = extForMachine(m);
+    const saisie = prompt('Numéro de l\'extincteur à assigner à '+(m.ident||m.nom)+' :', cur ? String(cur.num) : '');
+    if(saisie == null) return;
+    const num = String(saisie).replace(/[^\d]/g,'');
+    if(!num){ alert('Entre un numéro d\'extincteur (ex. 12).'); return; }
+    const other = Object.values(extincteurs).find(x => x && String(x.num) === num && x.machineKey && x.machineKey !== machineKey(m));
+    if(other && !confirm('L\'extincteur #'+num+' est présentement sur '+(other.machineIdent||other.machineNom||'une autre machine')+'.\nLe déplacer sur '+(m.ident||m.nom)+' ?')) return;
+    const ok = await assignExtincteur(m, num);
+    if(ok) reopen(); else alert('Enregistrement impossible. Vérifie la connexion et réessaie.');
+  };
+  const extRemove = document.getElementById('extRemove');
+  if(extRemove) extRemove.onclick = async () => {
+    if(!confirm('Retirer l\'extincteur de '+(m.ident||m.nom)+' ? Il sera remis en stock.')) return;
+    await removeExtincteur(m); reopen();
+  };
 
   // (La localisation & l'équipe sont automatiques — plus de déplacement manuel ici.)
   // Vérif annuelle
@@ -769,8 +858,8 @@ async function exporterExcel(){
       XLSX.utils.book_append_sheet(wb, xlsSheet(aoa, meta, [10,28,22,26,26], [1,3,4]), 'Résumé modifs');
     }
     // --- Une feuille par type de machine ---
-    const H = ['Ident','Machine','Chantier','Équipe','Depuis','Vérif annuelle','Statut vérif','Bris ouverts','Répar. en cours','Dern. inspection','Huile','Tune-up'];
-    const W = [8,30,26,13,12,14,24,12,15,15,15,15];
+    const H = ['Ident','Machine','Chantier','Équipe','Depuis','Vérif annuelle','Statut vérif','Bris ouverts','Répar. en cours','Dern. inspection','Huile','Tune-up','Extincteur'];
+    const W = [8,30,26,13,12,14,24,12,15,15,15,15,12];
     CATS.forEach(cat => {
       const machines = catalog.filter(m => m.cat===cat);
       if(!machines.length) return;
@@ -784,7 +873,8 @@ async function exporterExcel(){
           rec.verif||'', st.verifActive ? st.verif.label : 'n/a',
           st.openBris||0, st.openRepar||0,
           st.lastInsp ? String(st.lastInsp.date).slice(0,10) : '',
-          m.gas ? (rec.huile||'') : 'n/a', m.gas ? (rec.tuneup||'') : 'n/a'
+          m.gas ? (rec.huile||'') : 'n/a', m.gas ? (rec.tuneup||'') : 'n/a',
+          (m.cat==='Lift'||m.cat==='Fraco') ? (extForMachine(m) ? ('#'+extForMachine(m).num) : '—') : 'n/a'
         ]);
         meta.push({couleur:edgeToCouleur(st.edge)});
       });
@@ -796,10 +886,10 @@ async function exporterExcel(){
     const events = [];
     catalog.forEach(m => {
       const rec = recFor(m); if(!rec) return;
-      (rec.histoLoc||[]).forEach(h => events.push({ d:h.date||'', row:[m.ident||'—', m.nom, 'Déplacement', String(h.date||'').slice(0,10), [h.chantier, h.equipe, h.note].filter(Boolean).join(' · '), '', h.par||''], couleur:null }));
-      (rec.bris||[]).forEach(b => events.push({ d:b.date||'', row:[m.ident||'—', m.nom, 'Bris', String(b.date||'').slice(0,10), b.desc||'', b.statut==='resolu'?'Résolu':'Ouvert', b.par||''], couleur:b.statut==='resolu'?'green':'red' }));
-      (rec.reparations||[]).forEach(x => events.push({ d:x.date||'', row:[m.ident||'—', m.nom, 'Réparation', String(x.date||'').slice(0,10), (x.desc||'')+(x.cout?(' ('+x.cout+' $)'):''), x.statut==='fait'?'Fait':(x.statut==='en_cours'?'En cours':'À faire'), x.par||''], couleur:x.statut==='fait'?'green':'yellow' }));
-      (rec.inspections||[]).forEach(i => events.push({ d:i.date||'', row:[m.ident||'—', m.nom, 'Inspection', String(i.date||'').slice(0,10), i.note||'', i.conforme==='non'?'Non conforme':(i.conforme==='oui'?'Conforme':'N/A'), i.par||''], couleur:i.conforme==='non'?'red':(i.conforme==='oui'?'green':null) }));
+      (rec.histoLoc||[]).forEach(h => events.push({ d:h.date||'', row:[m.ident||'—', m.nom, 'Déplacement', String(h.date||'').slice(0,10), [h.chantier, h.equipe, h.note].filter(Boolean).join(' · '), '', formatNom(h.par)], couleur:null }));
+      (rec.bris||[]).forEach(b => events.push({ d:b.date||'', row:[m.ident||'—', m.nom, 'Bris', String(b.date||'').slice(0,10), b.desc||'', b.statut==='resolu'?'Résolu':'Ouvert', formatNom(b.par)], couleur:b.statut==='resolu'?'green':'red' }));
+      (rec.reparations||[]).forEach(x => events.push({ d:x.date||'', row:[m.ident||'—', m.nom, 'Réparation', String(x.date||'').slice(0,10), (x.desc||'')+(x.cout?(' ('+x.cout+' $)'):''), x.statut==='fait'?'Fait':(x.statut==='en_cours'?'En cours':'À faire'), formatNom(x.par)], couleur:x.statut==='fait'?'green':'yellow' }));
+      (rec.inspections||[]).forEach(i => events.push({ d:i.date||'', row:[m.ident||'—', m.nom, 'Inspection', String(i.date||'').slice(0,10), i.note||'', i.conforme==='non'?'Non conforme':(i.conforme==='oui'?'Conforme':'N/A'), formatNom(i.par)], couleur:i.conforme==='non'?'red':(i.conforme==='oui'?'green':null) }));
     });
     if(events.length){
       events.sort((a,b) => String(b.d).localeCompare(String(a.d)));
@@ -839,7 +929,7 @@ document.addEventListener('keydown', function(e){
   }
   try{
     await loadTeams();
-    await Promise.all([ loadCatalog(), loadRecords(), loadTeamAssignments() ]);
+    await Promise.all([ loadCatalog(), loadRecords(), loadTeamAssignments(), loadExtincteurs() ]);
     renderSummary(); renderTabs(); renderList();
   }catch(e){
     console.error(e);

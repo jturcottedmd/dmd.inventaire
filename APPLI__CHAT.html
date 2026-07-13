@@ -129,6 +129,7 @@ try{ if(window.supabase && window.supabase.createClient){ _sb = window.supabase.
 function withTimeout(p, ms, label){ return Promise.race([Promise.resolve(p), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout:'+(label||''))), ms))]); }
 function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
+function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
 function getDeviceId(){ try{ let v=localStorage.getItem('inv:deviceId'); if(!v){ v='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); localStorage.setItem('inv:deviceId',v);} return v; }catch(e){ return 'dev_'+Math.random().toString(36).slice(2,10); } }
@@ -331,9 +332,9 @@ function renderFeed(scrollBottom){
     const sc = seenCount(m);
     const mark = sc > 0 ? '<span class="seen">✓ '+sc+'</span>' : '<span class="unseen">⊗</span>';
     html += '<div class="msg'+(me?' me':'')+'">' +
-      (me?'':'<div class="who">'+escapeHtml(m.author||'—')+'</div>') +
+      (me?'':'<div class="who">'+escapeHtml(formatNom(m.author)||'—')+'</div>') +
       '<div class="bubble">'+escapeHtml(txt)+'</div>' +
-      '<div class="meta">'+timeLabel(m.ts)+(me?' · '+escapeHtml(m.author||''):'')+' · '+mark+'</div>' +
+      '<div class="meta">'+timeLabel(m.ts)+(me?' · '+escapeHtml(formatNom(m.author)):'')+' · '+mark+'</div>' +
     '</div>';
   });
   feed.innerHTML = html;
@@ -508,7 +509,7 @@ async function exporterExcel(){
         const d = new Date(m.ts);
         const txt = (m.photo && m.photo.url) ? ('[Photo]' + (m.text ? ' ' + m.text : '')) : (m.text||'');
         aoa.push([ isNaN(d)?'':d.toLocaleDateString('fr-CA'), isNaN(d)?'':(String(d.getHours()).padStart(2,'0')+'h'+String(d.getMinutes()).padStart(2,'0')),
-                   m.author||'—', txt ]);
+                   formatNom(m.author)||'—', txt ]);
         meta.push({});
       });
       const c = channelById(ch);

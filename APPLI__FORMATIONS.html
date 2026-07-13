@@ -196,6 +196,7 @@ function withTimeout(promise, ms, label){
   ]);
 }
 function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
 
 // ================== STOCKAGE (clé partagée Supabase inv_store) ==================
 const FORM_KEY = 'inv:formationsPlan'; // { items:[...] }
@@ -307,7 +308,7 @@ function render(){
 function cardHtml(it){
   const st = statutOf(it);
   const admin = isDeviceAdmin();
-  const emps = (it.employes||[]).map(n => '<span class="emp-chip">'+escapeHtml(n)+'</span>').join('');
+  const emps = (it.employes||[]).map(n => '<span class="emp-chip">'+escapeHtml(formatNom(n))+'</span>').join('');
   return '<div class="card">' +
     '<div><span class="type">'+escapeHtml(it.type||'Formation')+'</span>' +
       '<span class="badge '+st+'">'+(st==='encours'?'En cours':'En attente')+'</span></div>' +
@@ -342,7 +343,7 @@ function openModal(id){
 function closeModal(){ document.getElementById('overlay').style.display = 'none'; }
 function renderSelEmps(){
   document.getElementById('fEmpSelected').innerHTML = _selEmps.map((n,i) =>
-    '<span class="chip">'+escapeHtml(n)+' <span class="x" data-rm="'+i+'">✕</span></span>').join('');
+    '<span class="chip">'+escapeHtml(formatNom(n))+' <span class="x" data-rm="'+i+'">✕</span></span>').join('');
   document.querySelectorAll('#fEmpSelected .x').forEach(x => x.onclick = () => {
     _selEmps.splice(parseInt(x.getAttribute('data-rm'),10),1); renderSelEmps();
   });
@@ -361,7 +362,7 @@ function showSuggest(q){
   if(!t){ box.style.display='none'; return; }
   const matches = _repNames.filter(n => normNom(n).includes(t) && !_selEmps.some(s => normNom(s)===normNom(n))).slice(0,8);
   if(!matches.length){ box.style.display='none'; return; }
-  box.innerHTML = matches.map(n => '<div data-n="'+escapeHtml(n)+'">'+escapeHtml(n)+'</div>').join('');
+  box.innerHTML = matches.map(n => '<div data-n="'+escapeHtml(n)+'">'+escapeHtml(formatNom(n))+'</div>').join('');
   box.style.display='';
   box.querySelectorAll('div').forEach(d => d.onclick = () => addEmp(d.getAttribute('data-n')));
 }

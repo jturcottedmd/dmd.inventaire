@@ -238,6 +238,12 @@ function withTimeout(promise, ms, label){
 function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
 
+// ---- Affichage uniforme des noms et téléphones (partagé dans toute l'app) ----
+function onlyDigits(s){ return String(s==null?'':s).replace(/\D/g,''); }
+function formatTel(s){ const d=onlyDigits(s); let n=d; if(n.length===11 && n[0]==='1') n=n.slice(1); if(n.length===10) return '('+n.slice(0,3)+')'+n.slice(3,6)+'-'+n.slice(6); return String(s==null?'':s).trim(); }
+function telHref(s){ const d=onlyDigits(s); return 'tel:'+(d||String(s==null?'':s).trim()); }
+function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
+
 // ================== STOCKAGE PARTAGÉ (même logique que l'inventaire) ==================
 // shared=true -> Supabase (partagé entre tous) ; shared=false -> localStorage (cet appareil)
 window.storage = {
@@ -580,7 +586,7 @@ function render(){
   }
   list.innerHTML = shown.map(p => {
     const isMe = (p.id === myId);
-    const tel = p.tel ? '<a href="tel:' + escapeAttr(p.tel) + '"><b>📞</b> ' + escapeHtml(p.tel) + '</a>' : '';
+    const tel = p.tel ? '<a href="' + escapeAttr(telHref(p.tel)) + '"><b>📞</b> ' + escapeHtml(formatTel(p.tel)) + '</a>' : '';
     const mail = p.courriel ? '<a href="mailto:' + escapeAttr(p.courriel) + '"><b>✉️</b> ' + escapeHtml(p.courriel) + '</a>' : '';
     const contact = [tel, mail].filter(Boolean).join('');
     const equipe = p.equipe ? '<span class="p-team">' + escapeHtml(p.equipe) + '</span>' : '';
@@ -595,9 +601,9 @@ function render(){
       ? '<div class="p-urgence">' +
           '<button type="button" class="urg-btn" data-urg-toggle="' + uid + '">🆘 En cas d\'urgence</button>' +
           '<div class="urg-box" id="urg-' + uid + '">' +
-            '<div class="urg-name">' + escapeHtml(urg.nom || '—') +
+            '<div class="urg-name">' + escapeHtml(formatNom(urg.nom) || '—') +
               (urg.lien ? ' <span class="urg-lien">(' + escapeHtml(urg.lien) + ')</span>' : '') + '</div>' +
-            (urg.tel ? '<a class="urg-call" href="tel:' + escapeAttr(urg.tel) + '">📞 ' + escapeHtml(urg.tel) + '</a>' : '') +
+            (urg.tel ? '<a class="urg-call" href="' + escapeAttr(telHref(urg.tel)) + '">📞 ' + escapeHtml(formatTel(urg.tel)) + '</a>' : '') +
             '<div class="urg-hint">Réservé aux situations d\'urgence sur un chantier.</div>' +
           '</div>' +
         '</div>'
@@ -610,7 +616,7 @@ function render(){
       : '';
     // Formations : chacun voit les siennes, l'admin voit toutes (lignes colorées selon l'échéance)
     return '<div class="card' + (isMe ? ' me' : '') + '">' +
-      '<div class="p-top"><span class="p-name">' + escapeHtml(p.nom || '(sans nom)') +
+      '<div class="p-top"><span class="p-name">' + escapeHtml(formatNom(p.nom) || '(sans nom)') +
         (isMe ? ' <span class="p-you">Toi</span>' : '') + '</span>' + equipe + '</div>' +
       (contact ? '<div class="p-contact">' + contact + '</div>' : '') +
       carte +
@@ -695,11 +701,11 @@ function openEdit(){
 document.getElementById('idCancel').onclick = () => document.getElementById('overlay').classList.remove('show');
 document.getElementById('overlay').addEventListener('click', e => { if(e.target.id === 'overlay') document.getElementById('overlay').classList.remove('show'); });
 document.getElementById('idSave').onclick = async () => {
-  const nom = document.getElementById('idNom').value.trim();
-  const tel = document.getElementById('idTel').value.trim();
+  const nom = formatNom(document.getElementById('idNom').value);
+  const tel = formatTel(document.getElementById('idTel').value);
   const courriel = document.getElementById('idCourriel').value.trim();
-  const urgNom = document.getElementById('idUrgNom').value.trim();
-  const urgTel = document.getElementById('idUrgTel').value.trim();
+  const urgNom = formatNom(document.getElementById('idUrgNom').value);
+  const urgTel = formatTel(document.getElementById('idUrgTel').value);
   const urgLien = document.getElementById('idUrgLien').value.trim();
   if(!nom){ document.getElementById('idError').textContent = 'Le nom est requis.'; return; }
   if(!tel){ document.getElementById('idError').textContent = 'Le numéro de téléphone est obligatoire.'; return; }
@@ -783,7 +789,7 @@ async function exporterExcel(){
     // --- Répertoire ---
     if(people.length){
       const aoa=[['Nom','Téléphone','Courriel','Équipe']], meta=[{header:true}];
-      people.forEach(p => { aoa.push([p.nom||'—', p.tel||'', p.courriel||'', p.equipe||'']); meta.push({}); });
+      people.forEach(p => { aoa.push([formatNom(p.nom)||'—', formatTel(p.tel), p.courriel||'', p.equipe||'']); meta.push({}); });
       XLSX.utils.book_append_sheet(wb, xlsSheet(aoa, meta, [30,16,32,14], [0,2]), 'Répertoire');
     }
     // --- Formations (admins seulement, avec échéances colorées comme à l'écran) ---
@@ -792,7 +798,7 @@ async function exporterExcel(){
       formationsData.people.forEach(pers => {
         (pers.forms||[]).forEach(f => {
           const st = echeanceStatus(f.echeance);
-          aoa.push([pers.nom, f.formation||'', f.date||'', f.attestation||'', f.echeance||'', st?st.label:'']);
+          aoa.push([formatNom(pers.nom), f.formation||'', f.date||'', f.attestation||'', f.echeance||'', st?st.label:'']);
           meta.push({couleur: st ? (st.level==='orange'?'yellow':st.level) : null});
         });
       });

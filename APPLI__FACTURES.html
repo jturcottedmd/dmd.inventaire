@@ -189,6 +189,7 @@ try{ if(window.supabase && window.supabase.createClient){ _sb = window.supabase.
 function withTimeout(p, ms, label){ return Promise.race([Promise.resolve(p), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout:'+(label||''))), ms))]); }
 function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
+function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function getDeviceId(){ try{ let v=localStorage.getItem('inv:deviceId'); if(!v){ v='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); localStorage.setItem('inv:deviceId',v);} return v; }catch(e){ return 'dev_'+Math.random().toString(36).slice(2,10); } }
 function myName(){ try{ const v=localStorage.getItem('inv:deviceUser'); if(v){ const u=JSON.parse(v); if(u){ if(u.chantier) return 'Tablette de chantier'; if(u.nom) return u.nom; } } }catch(e){} return 'Appareil '+getDeviceId().slice(-4); }
@@ -284,7 +285,7 @@ function renderList(){
       : (me && h.items.length ? '<div class="month-done">✔ Ton mois est confirmé — '+h.items.length+' facture'+(h.items.length>1?'s':'')+'</div>' : '');
     return '<div class="holder'+(me?' me':'')+(open?' open':'')+(allConf?' edge-green':' edge-yellow')+'" data-holder="'+escapeAttr(h.id)+'">' +
       '<div class="h-head">' +
-        '<span class="h-name">💳 '+escapeHtml(h.nom)+(me?' <span class="h-you">Toi</span>':'')+'</span>' +
+        '<span class="h-name">💳 '+escapeHtml(formatNom(h.nom))+(me?' <span class="h-you">Toi</span>':'')+'</span>' +
         '<span class="h-total">'+fmtMoney(h.total)+'</span>' +
       '</div>' +
       '<div class="h-sub">'+h.items.length+' facture'+(h.items.length>1?'s':'')+
@@ -419,7 +420,7 @@ function applyV(){ document.getElementById('vImg').style.transform='translate('+
 function fitViewer(){ const vw=window.innerWidth,vh=window.innerHeight; const s=Math.min(vw/vState.natW,vh/vState.natH); vState.scale=s; vState.x=(vw-vState.natW*s)/2; vState.y=(vh-vState.natH*s)/2; applyV(); }
 function openViewer(url,by,ts){
   const img=document.getElementById('vImg');
-  document.getElementById('vMeta').textContent=(by||'')+(ts?' · '+new Date(ts).toLocaleString('fr-CA'):'');
+  document.getElementById('vMeta').textContent=(formatNom(by)||'')+(ts?' · '+new Date(ts).toLocaleString('fr-CA'):'');
   document.getElementById('vOpen').href=url;
   img.onload=()=>{ vState.natW=img.naturalWidth||1; vState.natH=img.naturalHeight||1; fitViewer(); };
   img.src=url; document.getElementById('viewer').classList.add('show');
@@ -540,7 +541,7 @@ async function exporterExcel(){
     let grandTotal=0;
     holders.forEach(h => {
       grandTotal += h.total;
-      aoa1.push([h.nom, h.items.length, h.total.toFixed(2), h.items.length-h.nonConf, h.nonConf]);
+      aoa1.push([formatNom(h.nom), h.items.length, h.total.toFixed(2), h.items.length-h.nonConf, h.nonConf]);
       meta1.push({couleur: h.nonConf===0 ? 'green' : 'yellow'});
     });
     aoa1.push(['TOTAL '+ymLabel(curYM), factures.length, grandTotal.toFixed(2), '', '']);
@@ -549,7 +550,7 @@ async function exporterExcel(){
     // --- Détail des factures ---
     const aoa2=[['Détenteur','Date','Montant ($)','Fournisseur','Note','Statut']], meta2=[{header:true}];
     factures.slice().sort((a,b)=>(a.author||'').localeCompare(b.author||'','fr') || (a.ts||'').localeCompare(b.ts||'')).forEach(f => {
-      aoa2.push([ f.author||'—', String(f.ts||'').slice(0,10), f.montant||'', f.fournisseur||'', f.note||'',
+      aoa2.push([ formatNom(f.author)||'—', String(f.ts||'').slice(0,10), f.montant||'', f.fournisseur||'', f.note||'',
                   f.statut==='confirmee'?'Confirmée':'Publiée' ]);
       meta2.push({couleur: f.statut==='confirmee' ? 'green' : 'yellow'});
     });
