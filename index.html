@@ -324,6 +324,14 @@ const APPS = [
     soon:false
   },
   {
+    id:'equipes',
+    nom:'Infos équipe',
+    desc:'Chantiers & composition',
+    icon:'equipes',
+    href:'./APPLI__EQUIPES.html',   // <-- infos chantier + membres par rôle
+    soon:false
+  },
+  {
     id:'materiel',
     nom:'Commandes & matériel',
     desc:'Suivi projets & réappro',
@@ -346,6 +354,13 @@ const Y = '#f2b705';   // jaune sécurité
 const P = '#f3efe6';   // papier
 const G = '#d9d2c2';   // papier atténué
 const ICONS = {
+  // Groupe de personnes (infos équipe)
+  equipes: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="24" cy="22" r="7" stroke="${P}" stroke-width="3"/>
+    <circle cx="44" cy="24" r="6" stroke="${Y}" stroke-width="3"/>
+    <path d="M12 48c0-7 5.4-12 12-12s12 5 12 12" stroke="${P}" stroke-width="3" stroke-linecap="round"/>
+    <path d="M38 46c.6-5.5 4.6-9 9.5-9 5 0 8.9 3.6 9.5 9" stroke="${Y}" stroke-width="3" stroke-linecap="round"/>
+  </svg>`,
   // Chariot/palette d'équipements
   inventaire: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
     <rect x="10" y="26" width="20" height="16" rx="2" stroke="${Y}" stroke-width="3"/>

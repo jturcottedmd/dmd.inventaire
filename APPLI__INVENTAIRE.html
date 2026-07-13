@@ -216,6 +216,8 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
   font-family:'Barlow',sans-serif;
 }
 .ti-field input:focus{outline:none; border-color:var(--safety-orange);}
+.ti-ro{ width:100%; background:var(--asphalt-2); border:1px solid var(--line); color:var(--paper); padding:9px 10px; border-radius:6px; font-size:15px; min-height:38px; }
+.ti-note{ margin-top:8px; font-size:11.5px; color:var(--logo-grey); }
 .team-info-readonly{
   background:var(--asphalt-2);
   border:1px solid var(--line);
@@ -1294,6 +1296,8 @@ function renderTeamInfo(){
   if(!box) return;
   if(currentTeam === 'TOTAL'){ box.classList.remove('show'); box.innerHTML=''; return; }
   const info = teamInfo[currentTeam] || { projet:"", adresse:"", contremaitre:"" };
+  // Lecture seule : l'édition se fait maintenant dans la tuile « Infos équipe ».
+  const ro = v => (v && String(v).trim()) ? escapeHtml(String(v).trim()) : '<span style="color:var(--logo-grey);">—</span>';
   box.innerHTML = `
     <div class="team-band" style="background:${teamColor(currentTeam)}">
       <span class="tb-dot"></span> ${escapeHtml(teamLabel(currentTeam))}
@@ -1302,30 +1306,22 @@ function renderTeamInfo(){
     <div class="ti-row">
       <div class="ti-field">
         <label>N° de projet</label>
-        <input type="text" data-ti="projet" value="${escapeAttr(info.projet)}" placeholder="ex: 2026-142">
+        <div class="ti-ro">${ro(info.projet)}</div>
       </div>
       <div class="ti-field">
         <label>Contremaître</label>
-        <input type="text" data-ti="contremaitre" value="${escapeAttr(info.contremaitre)}" placeholder="Nom">
+        <div class="ti-ro">${ro(info.contremaitre)}</div>
       </div>
     </div>
     <div class="ti-row">
       <div class="ti-field full">
         <label>Adresse</label>
-        <input type="text" data-ti="adresse" value="${escapeAttr(info.adresse)}" placeholder="Adresse du chantier">
+        <div class="ti-ro">${ro(info.adresse)}</div>
       </div>
     </div>
+    <div class="ti-note">🔒 Ces infos se modifient dans la tuile <b>Infos équipe</b>.</div>
   `;
   box.classList.add('show');
-  box.querySelectorAll('input[data-ti]').forEach(inp => {
-    const prev = inp.value;
-    inp.addEventListener('input', () => {
-      if(!confirmForeignEdit(0)){ inp.value = (teamInfo[currentTeam] && teamInfo[currentTeam][inp.dataset.ti]) || ''; inp.blur(); return; }
-      if(!teamInfo[currentTeam]) teamInfo[currentTeam] = { projet:"", adresse:"", contremaitre:"" };
-      teamInfo[currentTeam][inp.dataset.ti] = inp.value;
-      scheduleSaveTeamInfo(currentTeam);
-    });
-  });
 }
 
 async function loadCustomCats(){
@@ -4118,6 +4114,7 @@ document.addEventListener('keydown', function(e){
     const el = document.activeElement;
     const enEdition = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
     if(enEdition) return; // on ne bloque pas le vrai "couper"
+    try{ if(localStorage.getItem('inv:isAdmin')!=='1') return; }catch(err){ return; }   // export réservé au mode admin
     e.preventDefault();
     const btn = document.getElementById('exportBtn');
     if(btn){ btn.style.display = ''; btn.focus(); }

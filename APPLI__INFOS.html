@@ -815,6 +815,7 @@ document.addEventListener('keydown', function(e){
   if((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key==='x' || e.key==='X')){
     const el = document.activeElement;
     if(el && (el.tagName==='INPUT' || el.tagName==='TEXTAREA' || el.isContentEditable)) return;
+    try{ if(localStorage.getItem('inv:isAdmin')!=='1') return; }catch(err){ return; }   // export réservé au mode admin
     e.preventDefault();
     const btn = document.getElementById('exportBtn');
     if(btn){ btn.style.display=''; btn.focus(); }

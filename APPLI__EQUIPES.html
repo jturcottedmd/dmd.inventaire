@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#232221">
+<title>DMD — Infos équipe</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://toajegeqsqulnhdwkajm.supabase.co" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --asphalt:#232221; --asphalt-2:#2f2d2b; --paper:#f3efe6; --paper-dim:#d9d2c2;
+  --brick:#8a2f31; --brick-line:#5e2022; --logo-grey:#656263;
+  --safety-yellow:#f2b705; --ok-green:#4c7a3f; --danger-red:#c0392b; --line:#46433f;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-family:'Barlow',sans-serif;min-height:100%;}
+#app{min-height:100vh; display:flex; flex-direction:column; max-width:600px; margin:0 auto; background:var(--asphalt);}
+
+.hdr{
+  padding:14px 16px; background-color:#6e2325;
+  background-image:
+    linear-gradient(180deg, rgba(0,0,0,0.10), rgba(0,0,0,0.30)),
+    repeating-linear-gradient(0deg, rgba(48,16,16,0.85) 0px, rgba(48,16,16,0.85) 3px, transparent 3px, transparent 30px),
+    repeating-linear-gradient(90deg, rgba(48,16,16,0.85) 0px, rgba(48,16,16,0.85) 3px, transparent 3px, transparent 62px);
+  border-bottom:3px solid var(--brick-line); display:flex; align-items:center; gap:12px;
+}
+.back{ color:var(--paper); text-decoration:none; font-size:22px; line-height:1; padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.25); border:1px solid rgba(0,0,0,0.3); flex:0 0 auto; }
+.hdr-title{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:21px; letter-spacing:1.5px; text-transform:uppercase; margin:0; }
+.hdr-sub{ font-size:11.5px; letter-spacing:1px; text-transform:uppercase; color:var(--paper-dim); margin-top:1px; }
+.exportBtn{ margin-left:auto; background:#4c7a3f; color:#f3efe6; border:none; border-radius:6px; padding:7px 12px; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:14px; text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; white-space:nowrap; display:none; }
+
+/* Onglets d'équipe */
+.tabs{ display:flex; gap:6px; padding:10px 14px 2px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.tab{ flex:0 0 auto; padding:9px 14px; border-radius:20px; border:1.5px solid var(--line); background:var(--asphalt-2); color:var(--paper-dim); font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:14.5px; letter-spacing:0.5px; text-transform:uppercase; cursor:pointer; }
+.tab.active{ background:var(--brick); border-color:var(--brick-line); color:var(--paper); }
+.tab .tc{ margin-left:6px; font-family:'Barlow',sans-serif; font-size:11.5px; font-weight:700; background:var(--asphalt); color:var(--paper-dim); border-radius:10px; padding:1px 7px; }
+.tab.active .tc{ background:rgba(0,0,0,0.3); color:var(--paper); }
+
+.save-status{ padding:2px 16px 0; font-size:11.5px; color:var(--paper-dim); min-height:16px; }
+.save-status.ok{ color:#a9d39a; } .save-status.err{ color:#ff9d8f; font-weight:700; }
+
+.wrap{ padding:10px 14px 26px; display:flex; flex-direction:column; gap:12px; }
+
+/* Carte infos chantier */
+.card{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:14px; padding:14px; }
+.card h3{ margin:0 0 10px; font-family:'Barlow Condensed',sans-serif; font-size:18px; letter-spacing:0.5px; text-transform:uppercase; }
+.field-label{ font-size:12px; text-transform:uppercase; letter-spacing:0.5px; color:var(--paper-dim); font-weight:700; margin:8px 0 4px; }
+.inp{ width:100%; padding:11px 13px; font-size:16px; border-radius:9px; border:1.5px solid var(--line); background:var(--asphalt); color:var(--paper); font-family:'Barlow',sans-serif; }
+.inp:focus{ outline:none; border-color:var(--paper-dim); }
+.inp:disabled{ opacity:0.85; }
+.ro-val{ padding:10px 12px; background:var(--asphalt); border:1px solid var(--line); border-radius:8px; color:var(--paper); font-size:15px; min-height:40px; }
+.ro-val .muted{ color:var(--logo-grey); }
+
+/* Rôles / membres */
+.role-group{ margin-top:4px; }
+.role-head{ display:flex; align-items:center; gap:8px; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:14px; text-transform:uppercase; letter-spacing:0.5px; color:var(--safety-yellow); margin:12px 2px 6px; }
+.role-head .rc{ font-family:'Barlow',sans-serif; font-size:11.5px; font-weight:700; color:var(--paper-dim); background:var(--asphalt); border:1px solid var(--line); border-radius:10px; padding:1px 7px; }
+.mbr{ display:flex; align-items:center; gap:9px; padding:9px 11px; background:var(--asphalt); border:1px solid var(--line); border-radius:10px; margin-bottom:6px; }
+.mbr .mn{ flex:1; font-size:14.5px; font-weight:600; }
+.mbr .mtag{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; border-radius:20px; padding:2px 8px; background:#1f3018; color:#a9d39a; }
+.mbr .mtag.punch{ background:#3a2f0a; color:var(--safety-yellow); }
+.mbr .mbtn{ background:var(--asphalt-2); border:1.5px solid var(--line); color:var(--paper-dim); border-radius:8px; padding:6px 9px; font-size:12px; cursor:pointer; font-family:'Barlow',sans-serif; }
+.mbr .mbtn.danger{ color:#ff9d8f; border-color:#5e2022; }
+.empty-role{ color:var(--logo-grey); font-size:12.5px; padding:2px 4px 6px; font-style:italic; }
+.add-btn{ width:100%; padding:12px; font-size:15px; font-weight:700; border:1.5px dashed var(--safety-yellow); border-radius:11px; background:transparent; color:var(--safety-yellow); cursor:pointer; font-family:'Barlow',sans-serif; margin-top:6px; }
+
+.count-note{ font-size:12px; color:var(--paper-dim); padding:2px 2px 0; }
+.empty{ padding:30px 20px; text-align:center; color:var(--paper-dim); font-size:14px; line-height:1.5; }
+
+/* Zone admin */
+.admin-wrap{ padding:8px 14px 0; }
+.admin-toggle{ width:100%; padding:9px; font-size:13px; font-weight:600; cursor:pointer; border:1.5px solid var(--line); border-radius:10px; background:var(--asphalt-2); color:var(--paper-dim); font-family:'Barlow',sans-serif; }
+.admin-zone{ background:rgba(242,183,5,0.08); border:1.5px solid var(--safety-yellow); border-radius:12px; padding:12px; }
+.admin-zone .az-t{ font-family:'Barlow Condensed',sans-serif; font-weight:700; color:var(--safety-yellow); font-size:15px; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px; }
+
+/* Modale */
+.overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.66); display:none; align-items:flex-start; justify-content:center; z-index:500; padding:16px; overflow:auto; }
+.overlay.show{ display:flex; }
+.modal{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:16px; padding:16px; width:100%; max-width:440px; margin:14px 0 30px; }
+.modal h3{ margin:0 0 12px; font-family:'Barlow Condensed',sans-serif; font-size:21px; letter-spacing:0.5px; text-transform:uppercase; }
+.sel{ width:100%; padding:11px 13px; font-size:16px; border-radius:9px; border:1.5px solid var(--line); background:var(--asphalt); color:var(--paper); font-family:'Barlow',sans-serif; }
+.btn{ width:100%; padding:12px; font-size:15px; font-weight:700; border:1.5px solid var(--line); border-radius:10px; background:var(--asphalt); color:var(--paper); cursor:pointer; margin-top:10px; font-family:'Barlow',sans-serif; }
+.btn.primary{ background:var(--brick); border-color:var(--brick-line); }
+.sugg{ background:var(--asphalt); border:1px solid var(--line); border-radius:9px; margin-top:6px; max-height:160px; overflow:auto; }
+.sugg div{ padding:9px 11px; cursor:pointer; font-size:14px; border-bottom:1px solid var(--line); }
+.sugg div:last-child{ border-bottom:none; }
+.m-err{ color:#ff9d8f; font-size:13px; min-height:16px; margin-top:6px; font-weight:600; }
+
+.foot{ margin-top:auto; padding:14px 18px 20px; color:var(--logo-grey); font-size:11px; text-align:center; border-top:1px solid var(--line); line-height:1.5; }
+.gate{ position:fixed; inset:0; z-index:1000; display:none; align-items:center; justify-content:center; padding:28px; text-align:center; background:var(--asphalt); color:var(--paper-dim); }
+.gate.show{ display:flex; }
+</style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<div id="app">
+  <div class="hdr">
+    <a class="back" href="./index.html" aria-label="Accueil">←</a>
+    <div>
+      <h1 class="hdr-title">Infos équipe</h1>
+      <div class="hdr-sub">Chantiers & composition des équipes</div>
+    </div>
+    <button id="exportBtn" class="exportBtn">⬇ Excel</button>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+  <div class="save-status" id="saveStatus">&nbsp;</div>
+  <div class="admin-wrap" id="adminBar"></div>
+  <div class="wrap" id="wrap"><div class="empty">Chargement…</div></div>
+
+  <div class="foot">
+    Composition des équipes · usage interne Maçonnerie DMD.<br>
+    Le rôle assigné ici met à jour le statut CCQ de l'employé dans la tuile Punch.
+  </div>
+</div>
+
+<div class="overlay" id="overlay"><div class="modal" id="modalBox"></div></div>
+<div class="gate" id="gate">Connexion requise. Redirection vers l'accueil…</div>
+
+<script>
+// ================== CONFIG ==================
+const SUPABASE_URL = "https://toajegeqsqulnhdwkajm.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvYWplZ2Vxc3F1bG5oZHdrYWptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1OTY1OTQsImV4cCI6MjA5OTE3MjU5NH0.LBLVG--c1d9V_ZRw-h_ATZE2SUX3OAP7lf0SxMqPqNE";
+const ADMIN_CODE = "DMD-ADMIN";
+
+let _sb = null;
+try{ if(window.supabase && window.supabase.createClient){ _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } }catch(e){ console.error(e); }
+function withTimeout(p, ms, label){ return Promise.race([Promise.resolve(p), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout:'+(label||''))), ms))]); }
+function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function getDeviceId(){ try{ return localStorage.getItem('inv:deviceId') || ''; }catch(e){ return ''; } }
+function isDeviceAdmin(){ try{ return localStorage.getItem('inv:isAdmin') === '1'; }catch(e){ return false; } }
+async function setAdmin(on){ try{ localStorage.setItem('inv:isAdmin', on?'1':'0'); }catch(e){} }
+function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
+function normNom(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim(); }
+function nomsProches(n1,n2){ const w1=normNom(n1).split(' ').filter(Boolean), w2=normNom(n2).split(' ').filter(Boolean); if(!w1.length||!w2.length) return false; const common=w1.filter(w=>w2.includes(w)); return common.length>=Math.min(2,Math.min(w1.length,w2.length)); }
+
+const storage = {
+  async get(k){ try{ const r=await withTimeout(_sb.from('inv_store').select('value').eq('key',k).maybeSingle(),8000,'get'); const {data,error}=r||{}; if(error){console.error(error);return null;} return data?{key:k,value:data.value}:null; }catch(e){ return null; } },
+  async set(k, value){ const {error}=await _sb.from('inv_store').upsert({key:k,value,updated_at:new Date().toISOString()}); if(error){console.error(error);return null;} return {key:k,value}; },
+  async del(k){ const {error}=await _sb.from('inv_store').delete().eq('key',k); return !error; },
+  async like(prefix){ try{ const r=await withTimeout(_sb.from('inv_store').select('key,value').like('key',prefix+'%'),12000,'like'); return (r&&Array.isArray(r.data))?r.data:[]; }catch(e){ return []; } }
+};
+
+// ================== ÉQUIPES / RÔLES ==================
+const STD_TEAMS = [
+  {id:'team_1',label:'Équipe 1'},{id:'team_2',label:'Équipe 2'},{id:'team_3',label:'Équipe 3'},
+  {id:'team_4',label:'Équipe 4'},{id:'team_5',label:'Équipe 5'},{id:'team_6',label:'Équipe 6'},
+  {id:'reno_1',label:'Réno 1'},{id:'reno_2',label:'Réno 2'},
+  {id:'entrepot',label:'Entrepôt'},{id:'administration',label:'Administration'}
+];
+const ROLES = [
+  'Briqueteur/maçon apprenti 1',
+  'Briqueteur/maçon apprenti 2',
+  'Briqueteur/maçon apprenti 3',
+  'Briqueteur/maçon compagnon',
+  "Chef d'équipe",
+  'Contremaître',
+  'Manœuvre',
+  'Manœuvre 1'
+];
+// Le rôle d'équipe alimente le statut CCQ du Punch (punch_statut:<appareil>).
+function roleToStatut(role){
+  const m={
+    'Briqueteur/maçon apprenti 1':'Apprenti 1','Briqueteur/maçon apprenti 2':'Apprenti 2','Briqueteur/maçon apprenti 3':'Apprenti 3',
+    'Briqueteur/maçon compagnon':'Compagnon',"Chef d'équipe":'Compagnon','Contremaître':'Compagnon',
+    'Manœuvre':'Manœuvre','Manœuvre 1':'Manœuvre 1'
+  };
+  return m[role]||'';
+}
+
+let teams = STD_TEAMS.slice();
+let currentTeam = 'team_1';
+let teamInfo = {};       // teamId -> { projet, contremaitre, adresse }
+let members = [];        // { _key, id, nom, teamId, role }
+let people = [];         // pool : répertoire + formations (noms uniques)
+let personDevice = {};   // normNom -> deviceId (pour synchro statut)
+let punchTeamOf = {};     // normNom -> teamId (dernière équipe punchée)
+let infoSaveTimer = null;
+
+// ================== CHARGEMENT ==================
+async function loadTeams(){
+  try{ const r=await storage.get('inv:teams'); if(r&&r.value){ const p=JSON.parse(r.value); if(Array.isArray(p)&&p.length) teams=p; } }catch(e){}
+  // Fusionne les équipes standard manquantes (réno 1-2, administration…)
+  const byId={}; teams.forEach(t=>{ if(t&&t.id) byId[t.id]=t; });
+  let changed=false;
+  STD_TEAMS.forEach(st=>{ if(!byId[st.id]){ byId[st.id]=st; changed=true; } });
+  // Ordre : standard d'abord, puis éventuels customs
+  const ordered = STD_TEAMS.map(st=>byId[st.id]).concat(teams.filter(t=>t&&t.id&&!STD_TEAMS.some(s=>s.id===t.id)));
+  teams = ordered.filter(Boolean);
+  if(changed && isDeviceAdmin()){ try{ await storage.set('inv:teams', JSON.stringify(teams)); }catch(e){} }
+}
+async function loadTeamInfos(){
+  teamInfo = {};
+  await Promise.all(teams.map(async t => {
+    try{ const r=await storage.get('inv:info:'+t.id); if(r&&r.value){ const info=JSON.parse(r.value); if(info&&typeof info==='object') teamInfo[t.id]=info; } }catch(e){}
+    if(!teamInfo[t.id]) teamInfo[t.id]={ projet:'', contremaitre:'', adresse:'' };
+  }));
+}
+async function loadMembers(){
+  members = [];
+  const rows = await storage.like('inv:teammember:');
+  rows.forEach(r => { try{ const m=JSON.parse(r.value); if(m&&m.nom){ m._key=r.key; members.push(m); } }catch(e){} });
+}
+async function loadPool(){
+  people = []; personDevice = {};
+  const seen = new Set();
+  const add = (nom, deviceId) => {
+    const n = formatNom(nom); if(!n) return;
+    const key = normNom(n);
+    if(deviceId) personDevice[key] = deviceId;
+    if(seen.has(key)) return; seen.add(key); people.push(n);
+  };
+  // Répertoire (gens identifiés)
+  const pr = await storage.like('inv:person:');
+  pr.forEach(r => { try{ const p=JSON.parse(r.value); if(p&&p.nom) add(p.nom, p.id||r.key.replace('inv:person:','')); }catch(e){} });
+  // Liste des formations (Excel)
+  try{ const f=await storage.get('inv:formations'); if(f&&f.value){ const d=JSON.parse(f.value); if(d&&Array.isArray(d.people)) d.people.forEach(p=>{ if(p&&p.nom) add(p.nom, null); }); } }catch(e){}
+  people.sort((a,b)=>a.localeCompare(b,'fr'));
+}
+async function loadPunchTeams(){
+  punchTeamOf = {};
+  const rows = await storage.like('punch:');
+  const latest = {};   // normNom -> {ts, teamId}
+  rows.forEach(r => { try{ const s=JSON.parse(r.value); if(s&&s.nom&&s.type==='chantier'&&s.teamId){ const k=normNom(s.nom); if(!latest[k] || String(s.start)>latest[k].ts){ latest[k]={ts:String(s.start||''), teamId:s.teamId}; } } }catch(e){} });
+  Object.keys(latest).forEach(k => punchTeamOf[k]=latest[k].teamId);
+}
+
+// ================== SYNCHRO STATUT PUNCH ==================
+async function syncStatutForMember(m){
+  const st = roleToStatut(m.role); if(!st) return;
+  // Trouver l'appareil de cette personne (répertoire)
+  let dev = personDevice[normNom(m.nom)];
+  if(!dev){ const hit = Object.keys(personDevice).find(k => nomsProches(k, m.nom)); if(hit) dev = personDevice[hit]; }
+  if(!dev) return;   // personne pas encore identifiée -> rien à synchroniser
+  try{ await storage.set('punch_statut:'+dev, JSON.stringify({ statut:st, nom:m.nom, at:new Date().toISOString(), source:'equipe' })); }catch(e){}
+}
+
+// ================== STATUT D'ENREGISTREMENT ==================
+function setSave(state){
+  const el=document.getElementById('saveStatus'); if(!el) return;
+  if(state==='saving'){ el.className='save-status'; el.textContent='💾 Enregistrement…'; }
+  else if(state==='ok'){ const d=new Date(); el.className='save-status ok'; el.textContent='✔ Enregistré à '+String(d.getHours()).padStart(2,'0')+'h'+String(d.getMinutes()).padStart(2,'0'); }
+  else if(state==='err'){ el.className='save-status err'; el.textContent='⚠ Non enregistré — vérifie la connexion'; }
+  else { el.className='save-status'; el.innerHTML='&nbsp;'; }
+}
+
+// ================== AFFICHAGE ==================
+function teamLabel(id){ const t=teams.find(x=>x.id===id); return t?t.label:id; }
+function membersOfTeam(id){
+  const map = {};
+  members.forEach(m => { if(m.teamId===id){ (map[m.role]=map[m.role]||[]).push(m); } });
+  return map;
+}
+function countTeam(id){ return members.filter(m=>m.teamId===id).length; }
+
+function renderTabs(){
+  document.getElementById('tabs').innerHTML = teams.map(t =>
+    '<button class="tab'+(t.id===currentTeam?' active':'')+'" data-team="'+escapeAttr(t.id)+'">'+escapeHtml(t.label)+'<span class="tc">'+countTeam(t.id)+'</span></button>'
+  ).join('');
+  document.querySelectorAll('#tabs .tab').forEach(b => b.onclick = ()=>{ currentTeam=b.getAttribute('data-team'); renderTabs(); renderTeam(); });
+}
+
+function renderAdminBar(){
+  const el=document.getElementById('adminBar');
+  if(isDeviceAdmin()){
+    el.innerHTML = '<button class="admin-toggle" id="admLock">🔑 Mode admin activé — toucher pour quitter</button>';
+    document.getElementById('admLock').onclick = async ()=>{ await setAdmin(false); renderAdminBar(); renderTeam(); };
+  } else {
+    el.innerHTML = '<button class="admin-toggle" id="admUnlock">🔒 Lecture seule — activer le mode admin</button>';
+    document.getElementById('admUnlock').onclick = async ()=>{ const c=prompt('Code admin :'); if(c==null) return; if(c.trim()===ADMIN_CODE){ await setAdmin(true); renderAdminBar(); renderTeam(); } else alert('Code incorrect.'); };
+  }
+}
+
+function renderTeam(){
+  const wrap=document.getElementById('wrap');
+  const admin=isDeviceAdmin();
+  const info=teamInfo[currentTeam]||{ projet:'', contremaitre:'', adresse:'' };
+  // --- Infos chantier ---
+  let html='<div class="card"><h3>🏗 Infos du chantier — '+escapeHtml(teamLabel(currentTeam))+'</h3>';
+  if(admin){
+    html += '<div class="field-label">N° de projet</div><input class="inp" data-ti="projet" value="'+escapeAttr(info.projet||'')+'" placeholder="ex : 2026-142">';
+    html += '<div class="field-label">Contremaître</div><input class="inp" data-ti="contremaitre" value="'+escapeAttr(info.contremaitre||'')+'" placeholder="Nom du contremaître">';
+    html += '<div class="field-label">Adresse du chantier</div><input class="inp" data-ti="adresse" value="'+escapeAttr(info.adresse||'')+'" placeholder="Adresse">';
+  } else {
+    html += '<div class="field-label">N° de projet</div><div class="ro-val">'+(info.projet?escapeHtml(info.projet):'<span class="muted">—</span>')+'</div>';
+    html += '<div class="field-label">Contremaître</div><div class="ro-val">'+(info.contremaitre?escapeHtml(formatNom(info.contremaitre)):'<span class="muted">—</span>')+'</div>';
+    html += '<div class="field-label">Adresse du chantier</div><div class="ro-val">'+(info.adresse?escapeHtml(info.adresse):'<span class="muted">—</span>')+'</div>';
+  }
+  html += '</div>';
+
+  // --- Membres par rôle ---
+  const map=membersOfTeam(currentTeam);
+  html += '<div class="card"><h3>👷 Membres — '+escapeHtml(teamLabel(currentTeam))+' <span class="tc" style="font-size:13px;color:var(--paper-dim);">('+countTeam(currentTeam)+')</span></h3>';
+  ROLES.forEach(role => {
+    const list=(map[role]||[]).slice().sort((a,b)=>formatNom(a.nom).localeCompare(formatNom(b.nom),'fr'));
+    html += '<div class="role-group"><div class="role-head">'+escapeHtml(role)+'<span class="rc">'+list.length+'</span></div>';
+    if(list.length){
+      list.forEach(m => {
+        html += '<div class="mbr"><span class="mn">'+escapeHtml(formatNom(m.nom))+'</span>' +
+          (roleToStatut(m.role)?'<span class="mtag">CCQ : '+escapeHtml(roleToStatut(m.role))+'</span>':'') +
+          (admin?'<button class="mbtn" data-move="'+escapeAttr(m._key)+'">Déplacer</button><button class="mbtn" data-edit="'+escapeAttr(m._key)+'">Rôle</button><button class="mbtn danger" data-del="'+escapeAttr(m._key)+'">✕</button>':'') +
+        '</div>';
+      });
+    } else { html += '<div class="empty-role">Aucun</div>'; }
+    html += '</div>';
+  });
+  if(admin){ html += '<button class="add-btn" id="addMbr">➕ Ajouter un membre</button>'; }
+  html += '</div>';
+
+  // --- Suggestions (répertoire / punch non assignés) ---
+  if(admin){
+    const assigned = new Set(members.map(m=>normNom(m.nom)));
+    const sugg = people.filter(n => !assigned.has(normNom(n)));
+    if(sugg.length){
+      html += '<div class="card"><h3>💡 À classer ('+sugg.length+')</h3><div class="count-note">Employés du répertoire / des formations pas encore assignés à une équipe.</div>';
+      sugg.slice(0,40).forEach(n => {
+        const pt = punchTeamOf[normNom(n)];
+        html += '<div class="mbr"><span class="mn">'+escapeHtml(n)+'</span>' +
+          (pt?'<span class="mtag punch">punch : '+escapeHtml(teamLabel(pt))+'</span>':'') +
+          '<button class="mbtn" data-quick="'+escapeAttr(n)+'">Ajouter ici</button></div>';
+      });
+      if(sugg.length>40) html += '<div class="count-note">… et '+(sugg.length-40)+' autres (utilise « Ajouter un membre »).</div>';
+      html += '</div>';
+    }
+  }
+
+  wrap.innerHTML = html;
+  wireTeam();
+}
+
+function wireTeam(){
+  // Infos chantier (édition admin, sauvegarde différée)
+  document.querySelectorAll('[data-ti]').forEach(inp => inp.addEventListener('input', () => {
+    if(!teamInfo[currentTeam]) teamInfo[currentTeam]={ projet:'', contremaitre:'', adresse:'' };
+    teamInfo[currentTeam][inp.dataset.ti]=inp.value;
+    setSave('saving');
+    clearTimeout(infoSaveTimer);
+    infoSaveTimer=setTimeout(async ()=>{ const r=await storage.set('inv:info:'+currentTeam, JSON.stringify(teamInfo[currentTeam])); setSave(r?'ok':'err'); }, 600);
+  }));
+  const add=document.getElementById('addMbr'); if(add) add.onclick=()=>openAddMember(currentTeam);
+  document.querySelectorAll('[data-quick]').forEach(b => b.onclick=()=>openAddMember(currentTeam, b.getAttribute('data-quick')));
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick=async ()=>{ const m=members.find(x=>x._key===b.getAttribute('data-del')); if(!m) return; if(!confirm('Retirer '+formatNom(m.nom)+' de '+teamLabel(m.teamId)+' ?')) return; setSave('saving'); await storage.del(m._key); members=members.filter(x=>x._key!==m._key); setSave('ok'); renderTabs(); renderTeam(); });
+  document.querySelectorAll('[data-edit]').forEach(b => b.onclick=()=>{ const m=members.find(x=>x._key===b.getAttribute('data-edit')); if(m) openRole(m); });
+  document.querySelectorAll('[data-move]').forEach(b => b.onclick=()=>{ const m=members.find(x=>x._key===b.getAttribute('data-move')); if(m) openMove(m); });
+}
+
+// ================== MODALES ==================
+function closeModal(){ document.getElementById('overlay').classList.remove('show'); document.getElementById('overlay').onclick=null; }
+function openAddMember(teamId, presetNom){
+  const box=document.getElementById('modalBox');
+  box.innerHTML =
+    '<h3>➕ Ajouter à '+escapeHtml(teamLabel(teamId))+'</h3>' +
+    '<div class="field-label">Nom de l\'employé</div>' +
+    '<input class="inp" id="amNom" placeholder="Chercher ou saisir un nom…" value="'+escapeAttr(presetNom||'')+'" autocomplete="off">' +
+    '<div class="sugg" id="amSugg" style="display:none;"></div>' +
+    '<div class="field-label">Rôle</div>' +
+    '<select class="sel" id="amRole">'+ROLES.map(r=>'<option value="'+escapeAttr(r)+'">'+escapeHtml(r)+'</option>').join('')+'</select>' +
+    '<div class="m-err" id="amErr">&nbsp;</div>' +
+    '<button class="btn primary" id="amSave">Ajouter</button>' +
+    '<button class="btn" id="amCancel">Annuler</button>';
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('overlay').onclick=e=>{ if(e.target.id==='overlay') closeModal(); };
+  document.getElementById('amCancel').onclick=closeModal;
+  const nomInp=document.getElementById('amNom'), sBox=document.getElementById('amSugg');
+  nomInp.addEventListener('input', ()=>{
+    const q=normNom(nomInp.value); if(!q){ sBox.style.display='none'; return; }
+    const assigned=new Set(members.map(m=>normNom(m.nom)));
+    const matches=people.filter(n=>normNom(n).includes(q) && !assigned.has(normNom(n))).slice(0,8);
+    if(!matches.length){ sBox.style.display='none'; return; }
+    sBox.innerHTML=matches.map(n=>'<div data-n="'+escapeAttr(n)+'">'+escapeHtml(n)+'</div>').join('');
+    sBox.style.display='';
+    sBox.querySelectorAll('div').forEach(d=>d.onclick=()=>{ nomInp.value=d.getAttribute('data-n'); sBox.style.display='none'; });
+  });
+  document.getElementById('amSave').onclick=async ()=>{
+    const nom=formatNom(nomInp.value); const role=document.getElementById('amRole').value;
+    if(!nom){ document.getElementById('amErr').textContent='Indique un nom.'; return; }
+    if(members.some(m=>normNom(m.nom)===normNom(nom))){ if(!confirm(nom+' est déjà dans une équipe. L\'ajouter/déplacer ici quand même ?')) return; }
+    setSave('saving');
+    // s'il existe déjà, on le déplace ; sinon on crée
+    let m=members.find(x=>normNom(x.nom)===normNom(nom));
+    if(m){ m.teamId=teamId; m.role=role; }
+    else { m={ id:uid(), nom, teamId, role }; m._key='inv:teammember:'+m.id; members.push(m); }
+    const rec={ id:m.id, nom:m.nom, teamId:m.teamId, role:m.role };
+    const r=await storage.set(m._key, JSON.stringify(rec));
+    await syncStatutForMember(m);
+    setSave(r?'ok':'err'); closeModal(); renderTabs(); renderTeam();
+  };
+  setTimeout(()=>{ try{ nomInp.focus(); }catch(e){} }, 60);
+}
+function openRole(m){
+  const box=document.getElementById('modalBox');
+  box.innerHTML =
+    '<h3>Rôle de '+escapeHtml(formatNom(m.nom))+'</h3>' +
+    '<select class="sel" id="rRole">'+ROLES.map(r=>'<option value="'+escapeAttr(r)+'"'+(r===m.role?' selected':'')+'>'+escapeHtml(r)+'</option>').join('')+'</select>' +
+    '<div class="count-note" style="margin-top:8px;">Le statut CCQ du Punch sera mis à jour en conséquence.</div>' +
+    '<button class="btn primary" id="rSave">Enregistrer</button><button class="btn" id="rCancel">Annuler</button>';
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('overlay').onclick=e=>{ if(e.target.id==='overlay') closeModal(); };
+  document.getElementById('rCancel').onclick=closeModal;
+  document.getElementById('rSave').onclick=async ()=>{
+    m.role=document.getElementById('rRole').value;
+    setSave('saving');
+    const r=await storage.set(m._key, JSON.stringify({ id:m.id, nom:m.nom, teamId:m.teamId, role:m.role }));
+    await syncStatutForMember(m);
+    setSave(r?'ok':'err'); closeModal(); renderTeam();
+  };
+}
+function openMove(m){
+  const box=document.getElementById('modalBox');
+  box.innerHTML =
+    '<h3>Déplacer '+escapeHtml(formatNom(m.nom))+'</h3>' +
+    '<div class="field-label">Vers l\'équipe</div>' +
+    '<select class="sel" id="mTeam">'+teams.map(t=>'<option value="'+escapeAttr(t.id)+'"'+(t.id===m.teamId?' selected':'')+'>'+escapeHtml(t.label)+'</option>').join('')+'</select>' +
+    '<button class="btn primary" id="mSave">Déplacer</button><button class="btn" id="mCancel">Annuler</button>';
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('overlay').onclick=e=>{ if(e.target.id==='overlay') closeModal(); };
+  document.getElementById('mCancel').onclick=closeModal;
+  document.getElementById('mSave').onclick=async ()=>{
+    m.teamId=document.getElementById('mTeam').value;
+    setSave('saving');
+    const r=await storage.set(m._key, JSON.stringify({ id:m.id, nom:m.nom, teamId:m.teamId, role:m.role }));
+    setSave(r?'ok':'err'); closeModal(); renderTabs(); renderTeam();
+  };
+}
+
+// ================== EXPORT EXCEL ==================
+let _xlsxLoading=null;
+function ensureXLSX(){ if(window.XLSX) return Promise.resolve(); if(_xlsxLoading) return _xlsxLoading; _xlsxLoading=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js'; s.onload=()=>res(); s.onerror=()=>{_xlsxLoading=null;rej(new Error('xlsx'));}; document.head.appendChild(s); }); return _xlsxLoading; }
+async function exporterExcel(){
+  try{ await ensureXLSX(); }catch(e){ alert('Impossible de charger le module Excel.'); return; }
+  const wb=XLSX.utils.book_new();
+  const aoa=[['Équipe','N° projet','Contremaître','Adresse','Rôle','Employé']];
+  teams.forEach(t=>{
+    const info=teamInfo[t.id]||{};
+    const mem=members.filter(m=>m.teamId===t.id).sort((a,b)=>ROLES.indexOf(a.role)-ROLES.indexOf(b.role) || formatNom(a.nom).localeCompare(formatNom(b.nom),'fr'));
+    if(!mem.length){ aoa.push([t.label, info.projet||'', formatNom(info.contremaitre)||'', info.adresse||'', '', '']); }
+    mem.forEach(m=> aoa.push([t.label, info.projet||'', formatNom(info.contremaitre)||'', info.adresse||'', m.role, formatNom(m.nom)]));
+  });
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:16},{wch:12},{wch:22},{wch:30},{wch:26},{wch:24}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Équipes');
+  const d=new Date();
+  XLSX.writeFile(wb, 'Equipes_DMD_'+d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'.xlsx');
+}
+document.getElementById('exportBtn').addEventListener('click', exporterExcel);
+document.addEventListener('keydown', function(e){
+  if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&!e.altKey&&(e.key==='x'||e.key==='X')){
+    const el=document.activeElement; if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.isContentEditable)) return;
+    if(!isDeviceAdmin()) return;   // export réservé au mode admin
+    e.preventDefault(); const b=document.getElementById('exportBtn'); if(b){ b.style.display=''; b.focus(); }
+  }
+});
+
+// ================== DÉMARRAGE ==================
+(async function(){
+  if(!_sb){ document.getElementById('wrap').innerHTML='<div class="empty">Connexion au serveur impossible.</div>'; return; }
+  try{
+    const { data } = await withTimeout(_sb.auth.getSession(), 8000, 'getSession');
+    if(!data || !data.session){ document.getElementById('gate').classList.add('show'); location.replace('./index.html'); return; }
+  }catch(e){ document.getElementById('wrap').innerHTML='<div class="empty">Serveur injoignable.</div>'; return; }
+  try{
+    await loadTeams();
+    await Promise.all([ loadTeamInfos(), loadMembers(), loadPool(), loadPunchTeams() ]);
+    renderAdminBar(); renderTabs(); renderTeam();
+    document.addEventListener('visibilitychange', async ()=>{ if(!document.hidden){ await Promise.all([ loadTeamInfos(), loadMembers(), loadPool(), loadPunchTeams() ]); renderTabs(); renderTeam(); } });
+  }catch(e){ console.error(e); document.getElementById('wrap').innerHTML='<div class="empty">Impossible de charger les équipes.</div>'; }
+})();
+</script>
+</body>
+</html>
