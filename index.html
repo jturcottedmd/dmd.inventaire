@@ -109,6 +109,12 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
   width:9px; height:9px; border-radius:50%;
   background:var(--ok-green); box-shadow:0 0 0 3px rgba(76,122,63,0.25);
 }
+/* Mode réorganisation des tuiles (par appareil) */
+.tile.reordering{ cursor:default; border-style:dashed; }
+.tile.reordering:active{ transform:none; }
+.reorder-ctrl{ position:absolute; top:8px; left:8px; display:flex; gap:6px; }
+.reorder-ctrl .ro-move{ width:32px; height:32px; border-radius:8px; border:1.5px solid var(--safety-yellow); background:rgba(0,0,0,0.55); color:var(--safety-yellow); font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; }
+.reorder-ctrl .ro-move:disabled{ opacity:0.3; border-color:var(--line); color:var(--logo-grey); cursor:default; }
 
 .foot{
   margin-top:auto; padding:16px 18px 22px;
@@ -236,13 +242,16 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
     <div class="hdr-sub">Plateforme de chantier</div>
   </div>
 
-  <div class="intro">Choisis une application&nbsp;:</div>
+  <div class="intro" style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+    <span id="introText">Choisis une application&nbsp;:</span>
+    <span><a class="lnk" id="reorderReset" style="display:none; margin-right:12px;">↺ Défaut</a><a class="lnk" id="reorderToggle">✥ Réorganiser</a></span>
+  </div>
 
   <div class="grid" id="grid"></div>
 
   <div class="foot">
     <span class="me" id="meLine"></span>
-    Maçonnerie DMD · Plateforme interne · <span class="v" id="ver"></span><span id="logoutWrap"> · <a class="lnk" id="logoutBtn">Déconnexion</a></span>
+    Maçonnerie DMD · Plateforme interne · <span class="v" id="ver"></span> · <a class="lnk" id="adminToggle">🔑 Mode admin</a><span id="logoutWrap"> · <a class="lnk" id="logoutBtn">Déconnexion</a></span>
   </div>
 </div>
 
@@ -439,21 +448,57 @@ const ICONS = {
   </svg>`
 };
 
+// ================== ORDRE DES TUILES (par appareil) ==================
+// L'ordre est stocké comme une LISTE D'IDENTIFIANTS dans localStorage. À l'affichage,
+// on le réconcilie avec les tuiles réelles (APPS) : les ids disparus sont ignorés et
+// les NOUVELLES tuiles (ajoutées via GitHub) apparaissent automatiquement à la fin.
+// -> aucun plantage même si l'app change (tuiles ajoutées/retirées/renommées).
+let _reorder = false;
+function getTileOrder(){ try{ const v=localStorage.getItem('inv:tileOrder'); const a=v?JSON.parse(v):null; return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+function setTileOrder(ids){ try{ localStorage.setItem('inv:tileOrder', JSON.stringify(ids)); }catch(e){} }
+function orderedApps(){
+  const order=getTileOrder(); const byId={}; APPS.forEach(a=>{ byId[a.id]=a; });
+  const seen=new Set(); const out=[];
+  order.forEach(id=>{ if(byId[id] && !seen.has(id)){ out.push(byId[id]); seen.add(id); } });   // ordre sauvegardé (ids encore valides)
+  APPS.forEach(a=>{ if(!seen.has(a.id)){ out.push(a); seen.add(a.id); } });                       // nouvelles tuiles -> à la fin
+  return out;
+}
+function moveTile(id, dir){
+  const ids=orderedApps().map(a=>a.id); const i=ids.indexOf(id); if(i<0) return;
+  const j=i+dir; if(j<0 || j>=ids.length) return;
+  const t=ids[i]; ids[i]=ids[j]; ids[j]=t; setTileOrder(ids); render();
+}
+
 // ================== RENDU ==================
 function render(){
   const grid = document.getElementById('grid');
   grid.innerHTML = '';
-  APPS.forEach(app => {
-    const tile = document.createElement(app.soon ? 'div' : 'a');
-    tile.className = 'tile ' + (app.soon ? 'soon' : 'active');
-    if(!app.soon){ tile.href = app.href; }
-    tile.innerHTML =
-      (app.soon ? '<span class="badge-soon">Bientôt</span>' : '<span class="badge-ok" title="Disponible"></span>') +
+  const list = orderedApps();
+  list.forEach((app, idx) => {
+    const tag = (app.soon || _reorder) ? 'div' : 'a';
+    const tile = document.createElement(tag);
+    tile.className = 'tile ' + (app.soon ? 'soon' : 'active') + (_reorder ? ' reordering' : '');
+    if(!app.soon && !_reorder){ tile.href = app.href; }
+    let inner =
+      (app.soon ? '<span class="badge-soon">Bientôt</span>' : (_reorder ? '' : '<span class="badge-ok" title="Disponible"></span>')) +
       '<div class="tile-ico">' + (ICONS[app.icon] || '') + '</div>' +
       '<div class="tile-name">' + app.nom + '</div>' +
       '<div class="tile-desc">' + app.desc + '</div>';
+    if(_reorder){
+      inner += '<div class="reorder-ctrl">' +
+        '<button class="ro-move" data-id="' + app.id + '" data-dir="-1"' + (idx===0?' disabled':'') + ' aria-label="Avancer">◀</button>' +
+        '<button class="ro-move" data-id="' + app.id + '" data-dir="1"' + (idx===list.length-1?' disabled':'') + ' aria-label="Reculer">▶</button>' +
+      '</div>';
+    }
+    tile.innerHTML = inner;
     grid.appendChild(tile);
   });
+  if(_reorder){
+    grid.querySelectorAll('.ro-move').forEach(b => b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); moveTile(b.getAttribute('data-id'), parseInt(b.getAttribute('data-dir'),10)); });
+  }
+  const rt=document.getElementById('reorderToggle'); if(rt) rt.textContent = _reorder ? '✓ Terminé' : '✥ Réorganiser';
+  const rr=document.getElementById('reorderReset'); if(rr) rr.style.display = _reorder ? '' : 'none';
+  const it=document.getElementById('introText'); if(it) it.textContent = _reorder ? 'Réorganise avec ◀ ▶ :' : 'Choisis une application :';
   // Numéro de version = date du jour, pratique pour vérifier la mise en cache
   const d = new Date();
   document.getElementById('ver').textContent =
@@ -567,6 +612,10 @@ function isOnRoster(nom){
   return false;
 }
 function isDeviceAdmin(){ try{ return localStorage.getItem('inv:isAdmin') === '1'; }catch(e){ return false; } }
+// Mode admin activé depuis l'accueil ; le drapeau inv:isAdmin est partagé (même domaine) avec TOUTES les tuiles.
+const ADMIN_CODE = 'DMD-ADMIN';
+function setAdmin(on){ try{ localStorage.setItem('inv:isAdmin', on?'1':'0'); }catch(e){} }
+function updateAdminLabel(){ const a=document.getElementById('adminToggle'); if(!a) return; const on=isDeviceAdmin(); a.textContent = on ? '🔑 Admin activé' : '🔑 Mode admin'; a.style.color = on ? '#a9d39a' : ''; }
 // Enregistre l'identité — MÊME format que l'app d'inventaire (localStorage partagé + fiche Supabase)
 // Écrit l'identité LOCALEMENT (instantané) puis synchronise la fiche partagée.
 // Retourne la promesse de synchro : à l'identification on l'attend (brièvement)
@@ -816,6 +865,25 @@ document.getElementById('idChantier').addEventListener('click', () => saveIdenti
 document.getElementById('idCourriel').addEventListener('keydown', e => { if(e.key === 'Enter') document.getElementById('idSave').click(); });
 const _logout = document.getElementById('logoutBtn');
 if(_logout) _logout.addEventListener('click', async () => { try{ await _sb.auth.signOut(); }catch(e){} location.reload(); });
+
+// Mode admin — activable depuis l'accueil, actif ensuite dans toutes les tuiles (localStorage partagé)
+const _adminToggle = document.getElementById('adminToggle');
+if(_adminToggle) _adminToggle.addEventListener('click', () => {
+  if(isDeviceAdmin()){
+    if(confirm('Quitter le mode admin ?')){ setAdmin(false); updateAdminLabel(); }
+  } else {
+    const c = prompt('Code admin :'); if(c==null) return;
+    if(c.trim()===ADMIN_CODE){ setAdmin(true); updateAdminLabel(); alert('✅ Mode admin activé — il est maintenant actif dans toutes les tuiles.'); }
+    else alert('Code incorrect.');
+  }
+});
+updateAdminLabel();
+
+// Réorganisation des tuiles (par appareil)
+const _reorderToggle = document.getElementById('reorderToggle');
+if(_reorderToggle) _reorderToggle.addEventListener('click', (e) => { e.preventDefault(); _reorder = !_reorder; render(); });
+const _reorderReset = document.getElementById('reorderReset');
+if(_reorderReset) _reorderReset.addEventListener('click', (e) => { e.preventDefault(); if(confirm('Remettre l\'ordre par défaut des tuiles ?')){ setTileOrder([]); render(); } });
 
 // Reprend le logo du header (évite de dupliquer l'image encodée)
 (function(){ const l = document.getElementById('dmdLogo'), g = document.getElementById('gateLogo'); if(l && g) g.src = l.src; })();

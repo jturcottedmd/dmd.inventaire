@@ -41,6 +41,8 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 .hdr-title{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:23px; letter-spacing:0.5px; margin:0; color:var(--paper); line-height:1.05; }
 .hdr-sub{ font-size:11.5px; letter-spacing:1px; text-transform:uppercase; color:var(--paper-dim); margin-top:1px; }
 
+.adm-toggle{ margin-left:auto; flex:0 0 auto; background:rgba(0,0,0,0.25); border:1px solid rgba(0,0,0,0.3); color:var(--paper); border-radius:8px; padding:8px 11px; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; white-space:nowrap; }
+.adm-toggle.on{ background:var(--safety-yellow); color:#232221; border-color:var(--safety-yellow); }
 .section-title{
   font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:15px;
   text-transform:uppercase; letter-spacing:1px; color:var(--paper-dim);
@@ -126,6 +128,7 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
       <h1 class="hdr-title">Formations</h1>
       <div class="hdr-sub">En cours &amp; en attente</div>
     </div>
+    <button class="adm-toggle" id="admToggle">🔒 Admin</button>
   </div>
 
   <div id="notice" class="notice" style="display:none;"></div>
@@ -217,6 +220,8 @@ async function savePlan(items){
 // ================== IDENTITÉ / ADMIN (même logique que le reste de l'app) ==================
 function getDeviceUser(){ try{ const v = localStorage.getItem('inv:deviceUser'); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
 function isDeviceAdmin(){ try{ return localStorage.getItem('inv:isAdmin') === '1'; }catch(e){ return false; } }
+const ADMIN_CODE = 'DMD-ADMIN';
+function setAdmin(on){ try{ localStorage.setItem('inv:isAdmin', on?'1':'0'); }catch(e){} }
 
 // ================== CORRESPONDANCE DES NOMS (identique à l'inventaire/infos) ==================
 function normNom(s){
@@ -275,7 +280,8 @@ async function loadRepNames(){
 let _items = [];
 function render(){
   const admin = isDeviceAdmin();
-  document.getElementById('addBtn').style.display = admin ? '' : 'none';
+  document.getElementById('addBtn').style.display = admin ? 'block' : 'none';
+  const at=document.getElementById('admToggle'); if(at){ at.textContent = admin ? '🔑 Admin activé' : '🔒 Admin'; at.classList.toggle('on', admin); }
 
   const notice = document.getElementById('notice');
   if(admin){ notice.style.display=''; notice.innerHTML = '🔑 <b>Mode admin</b> — tu peux ajouter, modifier ou retirer des formations. Chaque employé inscrit verra un rappel à l\'ouverture de l\'application jusqu\'à la fin de sa formation.'; }
@@ -401,6 +407,14 @@ async function removeItem(id){
 
 // ================== INIT ==================
 document.getElementById('addBtn').onclick = () => openModal(null);
+document.getElementById('admToggle').onclick = async () => {
+  if(isDeviceAdmin()){ setAdmin(false); render(); }
+  else {
+    const c = prompt('Code admin :'); if(c==null) return;
+    if(c.trim()===ADMIN_CODE){ setAdmin(true); try{ if(!_repNames.length) await loadRepNames(); }catch(e){} render(); }
+    else alert('Code incorrect.');
+  }
+};
 document.getElementById('fCancel').onclick = closeModal;
 document.getElementById('fSave').onclick = saveItem;
 document.getElementById('fEmpAdd').onclick = () => addEmp(document.getElementById('fEmpInput').value);
