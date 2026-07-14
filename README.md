@@ -24,6 +24,8 @@ Application web interne (pages HTML statiques) hébergée sur **GitHub → Verce
 
 Notes communes :
 - Les **noms** s'affichent en casse propre (ex. « Maxime Blouin-Hébert ») et les **téléphones** au format `(450)502-7273` (appel automatique conservé).
+- Les **adresses** suivent un format uniforme (ex. « 1100 av. André-Champagne, St-Bruno, Qc ») : exemple affiché dans les champs et reformatage automatique à l'affichage (partout sauf saisie brute conservée). Les codes postaux et n° d'appartement sont préservés.
+- Dans les formulaires (toutes les tuiles **sauf Inventaire et Machinerie**), le clavier affiche une flèche **« suivant »** : **Entrée** passe au champ suivant et **corrige le champ au passage** — majuscules des noms, **nom synchronisé avec la liste** quand la correspondance est unique, adresse et téléphone. Les zones de notes, la messagerie et les barres de recherche gardent leur comportement.
 - L'**export Excel** de chaque tuile se révèle par **Ctrl+X** et est **réservé au mode admin**.
 
 ## Documentation (dossier `docs/`)

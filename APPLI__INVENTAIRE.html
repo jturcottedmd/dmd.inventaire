@@ -1316,7 +1316,7 @@ function renderTeamInfo(){
     <div class="ti-row">
       <div class="ti-field full">
         <label>Adresse</label>
-        <div class="ti-ro">${ro(info.adresse)}</div>
+        <div class="ti-ro">${ro(formatAdresse(info.adresse))}</div>
       </div>
     </div>
     <div class="ti-note">🔒 Ces infos se modifient dans la tuile <b>Infos équipe</b>.</div>
@@ -1600,6 +1600,32 @@ function onlyDigits(s){ return String(s==null?'':s).replace(/\D/g,''); }
 function formatTel(s){ const d=onlyDigits(s); let n=d; if(n.length===11 && n[0]==='1') n=n.slice(1); if(n.length===10) return '('+n.slice(0,3)+')'+n.slice(3,6)+'-'+n.slice(6); return String(s==null?'':s).trim(); }
 function telHref(s){ const d=onlyDigits(s); return 'tel:'+(d||String(s==null?'':s).trim()); }
 function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
+// Notation d'adresse standard (ex. : 1100 av. André-Champagne, St-Bruno, Qc)
+function formatAdresse(s){
+  s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s;
+  s=s.replace(/\s*,\s*/g,', ');
+  var ST={avenue:'av.',ave:'av.',av:'av.',boulevard:'boul.',boul:'boul.',bd:'boul.',rue:'rue',chemin:'ch.',ch:'ch.',route:'rte',rte:'rte',rang:'rang',montee:'mtée',place:'pl.',impasse:'imp.'};
+  var PART={de:1,du:1,des:1,la:1,le:1,les:1,l:1,d:1,a:1,au:1,aux:1,et:1,sur:1,sous:1};
+  function deacc(w){ return w.toLocaleLowerCase('fr').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\./g,''); }
+  function cap(w){ return w?w.charAt(0).toLocaleUpperCase('fr')+w.slice(1):w; }
+  var segs=s.split(', ');
+  return segs.map(function(seg,si){
+    var last=si===segs.length-1;
+    return seg.split(' ').filter(Boolean).map(function(w,wi){
+      var d=deacc(w);
+      if(ST[d]!==undefined) return ST[d];
+      if(last && (d==='qc'||d==='quebec')) return 'Qc';
+      return w.split('-').map(function(pp,pi){
+        if(/\d/.test(pp)) return pp.toLocaleUpperCase('fr');
+        var dp=deacc(pp);
+        if(dp==='st'||dp==='saint') return 'St';
+        if(dp==='ste'||dp==='sainte') return 'Ste';
+        if(PART[dp] && !(wi===0 && pi===0)) return dp;
+        return cap(pp.toLocaleLowerCase('fr'));
+      }).join('-');
+    }).join(' ');
+  }).join(', ');
+}
 // Distance d'édition (Levenshtein) entre deux mots
 function levenshtein(a, b){
   if(a === b) return 0;
@@ -1859,7 +1885,7 @@ function autoLocLabel(teamId){
   if(!ti) return '';
   const bits = [];
   if(ti.projet && String(ti.projet).trim()) bits.push('Projet ' + String(ti.projet).trim());
-  if(ti.adresse && String(ti.adresse).trim()) bits.push(String(ti.adresse).trim());
+  if(ti.adresse && String(ti.adresse).trim()) bits.push(formatAdresse(ti.adresse));
   return bits.join(' — ');
 }
 // Passe à l'équipe teamId, avec confirmation si ce n'est pas "mon équipe".

@@ -230,6 +230,31 @@ const storage = {
 function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
 function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
+function formatAdresse(s){
+  s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s;
+  s=s.replace(/\s*,\s*/g,', ');
+  var ST={avenue:'av.',ave:'av.',av:'av.',boulevard:'boul.',boul:'boul.',bd:'boul.',rue:'rue',chemin:'ch.',ch:'ch.',route:'rte',rte:'rte',rang:'rang',montee:'mtée',place:'pl.',impasse:'imp.'};
+  var PART={de:1,du:1,des:1,la:1,le:1,les:1,l:1,d:1,a:1,au:1,aux:1,et:1,sur:1,sous:1};
+  function deacc(w){ return w.toLocaleLowerCase('fr').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\./g,''); }
+  function cap(w){ return w?w.charAt(0).toLocaleUpperCase('fr')+w.slice(1):w; }
+  var segs=s.split(', ');
+  return segs.map(function(seg,si){
+    var last=si===segs.length-1;
+    return seg.split(' ').filter(Boolean).map(function(w,wi){
+      var d=deacc(w);
+      if(ST[d]!==undefined) return ST[d];
+      if(last && (d==='qc'||d==='quebec')) return 'Qc';
+      return w.split('-').map(function(pp,pi){
+        if(/\d/.test(pp)) return pp.toLocaleUpperCase('fr');
+        var dp=deacc(pp);
+        if(dp==='st'||dp==='saint') return 'St';
+        if(dp==='ste'||dp==='sainte') return 'Ste';
+        if(PART[dp] && !(wi===0 && pi===0)) return dp;
+        return cap(pp.toLocaleLowerCase('fr'));
+      }).join('-');
+    }).join(' ');
+  }).join(', ');
+}
 function normNom(s){ return (s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[.,\-]/g,' ').replace(/\s+/g,' ').trim(); }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function todayInput(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -417,7 +442,7 @@ function autoLocForMachine(m){
   const info = teamChantier[found[0].id] || {};
   const cbits = [];
   if(info.projet && String(info.projet).trim()) cbits.push('Projet '+String(info.projet).trim());
-  if(info.adresse && String(info.adresse).trim()) cbits.push(String(info.adresse).trim());
+  if(info.adresse && String(info.adresse).trim()) cbits.push(formatAdresse(info.adresse));
   return { equipe: found.map(x=>x.label).join(', '), chantier: cbits.join(' — '), multi: found.length>1 };
 }
 function locTextAuto(m){

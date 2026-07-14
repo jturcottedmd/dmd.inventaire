@@ -210,6 +210,32 @@ function withTimeout(p, ms, label){ return Promise.race([Promise.resolve(p), new
 function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
 function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
+// Notation d'adresse standard (ex. : 1100 av. André-Champagne, St-Bruno, Qc)
+function formatAdresse(s){
+  s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s;
+  s=s.replace(/\s*,\s*/g,', ');
+  var ST={avenue:'av.',ave:'av.',av:'av.',boulevard:'boul.',boul:'boul.',bd:'boul.',rue:'rue',chemin:'ch.',ch:'ch.',route:'rte',rte:'rte',rang:'rang',montee:'mtée',place:'pl.',impasse:'imp.'};
+  var PART={de:1,du:1,des:1,la:1,le:1,les:1,l:1,d:1,a:1,au:1,aux:1,et:1,sur:1,sous:1};
+  function deacc(w){ return w.toLocaleLowerCase('fr').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\./g,''); }
+  function cap(w){ return w?w.charAt(0).toLocaleUpperCase('fr')+w.slice(1):w; }
+  var segs=s.split(', ');
+  return segs.map(function(seg,si){
+    var last=si===segs.length-1;
+    return seg.split(' ').filter(Boolean).map(function(w,wi){
+      var d=deacc(w);
+      if(ST[d]!==undefined) return ST[d];
+      if(last && (d==='qc'||d==='quebec')) return 'Qc';
+      return w.split('-').map(function(pp,pi){
+        if(/\d/.test(pp)) return pp.toLocaleUpperCase('fr');
+        var dp=deacc(pp);
+        if(dp==='st'||dp==='saint') return 'St';
+        if(dp==='ste'||dp==='sainte') return 'Ste';
+        if(PART[dp] && !(wi===0 && pi===0)) return dp;
+        return cap(pp.toLocaleLowerCase('fr'));
+      }).join('-');
+    }).join(' ');
+  }).join(', ');
+}
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
 function getDeviceId(){ try{ let v=localStorage.getItem('inv:deviceId'); if(!v){ v='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); localStorage.setItem('inv:deviceId',v);} return v; }catch(e){ return 'dev_'+Math.random().toString(36).slice(2,10); } }
@@ -361,7 +387,7 @@ function assignText(s){
   const t = PUNCH_TYPES[s.type] || { label:s.type||'—', icon:'⏱' };
   if(s.type==='chantier'){
     let txt = (s.teamLabel||'Chantier');
-    const bits=[]; if(s.projet) bits.push('Projet '+s.projet); if(s.adresse) bits.push(s.adresse);
+    const bits=[]; if(s.projet) bits.push('Projet '+s.projet); if(s.adresse) bits.push(formatAdresse(s.adresse));
     if(bits.length) txt += ' — '+bits.join(' — ');
     const sec = secteurById(s.secteur); if(sec) txt += ' · '+sec.label;
     return txt;
@@ -632,7 +658,7 @@ function chooseAssignment(){
     if(teams.length){
       teams.forEach(t => {
         const info = teamInfo[t.id]||{};
-        const bits=[]; if(info.projet) bits.push('Projet '+info.projet); if(info.adresse) bits.push(info.adresse);
+        const bits=[]; if(info.projet) bits.push('Projet '+info.projet); if(info.adresse) bits.push(formatAdresse(info.adresse));
         html += '<button class="choice" data-team="'+escapeAttr(t.id)+'"><span class="ci">🏗</span><span class="ct"><b>'+escapeHtml(t.label)+'</b><span>'+(bits.length?escapeHtml(bits.join(' — ')):'Chantier non renseigné (inventaire)')+'</span></span></button>';
       });
     } else { html += '<div class="empty">Aucune équipe configurée.</div>'; }
@@ -811,7 +837,7 @@ async function exportAdminExcel(){
     if(s.end){ const key=(formatNom(s.nom)||'—')+'||'+bk; bank[key]=(bank[key]||0)+h; }
     const d=new Date(s.start);
     aoa.push([ formatNom(s.nom)||'—', s.statut||'', isNaN(d)?'':d.toLocaleDateString('fr-CA'), (PUNCH_TYPES[s.type]||{}).label||s.type,
-      s.type==='chantier'?[s.teamLabel, s.projet?('Projet '+s.projet):'', s.adresse].filter(Boolean).join(' — '):(s.type==='formation'?[s.formationType, s.formationLieu].filter(Boolean).join(' — '):''),
+      s.type==='chantier'?[s.teamLabel, s.projet?('Projet '+s.projet):'', formatAdresse(s.adresse)].filter(Boolean).join(' — '):(s.type==='formation'?[s.formationType, s.formationLieu].filter(Boolean).join(' — '):''),
       bk, timeHM(s.start), s.end?timeHM(s.end):'en cours', h?Number(h.toFixed(2)):'', s.outsideConfirmed?'Oui':'' ]);
   });
   const ws1 = XLSX.utils.aoa_to_sheet(aoa); ws1['!cols']=[{wch:24},{wch:12},{wch:12},{wch:14},{wch:30},{wch:16},{wch:8},{wch:8},{wch:8},{wch:10}];
@@ -852,6 +878,79 @@ document.getElementById('tabBtnSemaine').onclick = () => switchTab('semaine');
     });
   }catch(e){ console.error(e); document.getElementById('punchCard').innerHTML='<div class="pc-state">Impossible de démarrer le pointage.</div>'; }
 })();
+
+/* ==== DMD : Entree = champ suivant + correction auto du champ ==== */
+(function(){
+  if (window.__dmdEnterNext) return; window.__dmdEnterNext = true;
+  var NAV_SCOPE = '.modal, #modalBox, .card, form, .panel, .sheet, .edit-form';
+  var SKIP = {button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,range:1,color:1,hidden:1,image:1};
+  function navigable(el){
+    if(!el || el.tagName !== 'INPUT') return false;
+    var ty = (el.getAttribute('type') || 'text').toLowerCase();
+    return !SKIP[ty];
+  }
+  function visibleField(el){
+    if(el.disabled || el.readOnly) return false;
+    var ty = (el.getAttribute('type') || 'text').toLowerCase();
+    if(ty === 'hidden' || ty === 'file') return false;
+    return el.offsetParent !== null;
+  }
+  // Applique la correction d'ecriture au champ : majuscules, nom synchronise de la liste, adresse, telephone
+  function fmtField(el){
+    if(!el || el.tagName !== 'INPUT') return;
+    var kind = el.getAttribute('data-fmt');
+    if(!kind && (el.getAttribute('type') || '').toLowerCase() === 'tel') kind = 'tel';
+    if(!kind) return;
+    var v = el.value; if(v == null) return;
+    var out = v;
+    try{
+      if(kind === 'nom'){
+        if(typeof window.__dmdCanonNom === 'function') out = window.__dmdCanonNom(v);
+        else if(typeof window.formatNom === 'function') out = window.formatNom(v);
+      } else if(kind === 'adresse'){
+        if(typeof window.formatAdresse === 'function') out = window.formatAdresse(v);
+      } else if(kind === 'tel'){
+        if(typeof window.formatTel === 'function') out = window.formatTel(v);
+      }
+    }catch(_){ out = v; }
+    if(out != null && out !== v){
+      el.value = out;
+      try{ el.dispatchEvent(new Event('input', {bubbles:true})); }catch(_){}
+    }
+  }
+  window.__dmdFmtField = fmtField;
+  // Fleche "suivant" sur le clavier mobile, uniquement dans un formulaire
+  document.addEventListener('focusin', function(e){
+    var t = e.target;
+    if(navigable(t) && t.closest(NAV_SCOPE) && !t.hasAttribute('enterkeyhint')){
+      t.setAttribute('enterkeyhint', 'next');
+    }
+  });
+  // Corrige aussi quand on quitte le champ autrement (toucher ailleurs, bouton Enregistrer)
+  document.addEventListener('focusout', function(e){ fmtField(e.target); });
+  // Entree : corrige le champ puis passe au champ suivant du meme formulaire
+  document.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter' || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey) return;
+    if(e.defaultPrevented) return;            // respecte les gestionnaires existants (chat, ajout employe...)
+    var t = e.target;
+    if(!navigable(t)) return;                  // laisse tranquilles les textarea et les champs de recherche
+    var scope = t.closest(NAV_SCOPE);
+    if(!scope) return;
+    fmtField(t);                               // correction immediate du champ courant
+    var fields = [].slice.call(scope.querySelectorAll('input, select, textarea')).filter(visibleField);
+    var i = fields.indexOf(t);
+    if(i < 0) return;
+    e.preventDefault();
+    if(i < fields.length - 1){
+      var nx = fields[i + 1];
+      nx.focus();
+      if(nx.select){ try { nx.select(); } catch(_){} }
+    } else {
+      t.blur();                                // dernier champ : ferme le clavier
+    }
+  });
+})();
+
 </script>
 </body>
 </html>

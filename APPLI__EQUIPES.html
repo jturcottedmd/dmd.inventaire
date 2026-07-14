@@ -141,7 +141,47 @@ function getDeviceId(){ try{ return localStorage.getItem('inv:deviceId') || ''; 
 function isDeviceAdmin(){ try{ return localStorage.getItem('inv:isAdmin') === '1'; }catch(e){ return false; } }
 async function setAdmin(on){ try{ localStorage.setItem('inv:isAdmin', on?'1':'0'); }catch(e){} }
 function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
+// Notation d'adresse standard, ex. : 1100 av. André-Champagne, St-Bruno, Qc
+const ADRESSE_EX = '1100 av. André-Champagne, St-Bruno, Qc';
+function formatAdresse(s){
+  s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s;
+  s=s.replace(/\s*,\s*/g,', ');
+  var ST={avenue:'av.',ave:'av.',av:'av.',boulevard:'boul.',boul:'boul.',bd:'boul.',rue:'rue',chemin:'ch.',ch:'ch.',route:'rte',rte:'rte',rang:'rang',montee:'mtée',place:'pl.',impasse:'imp.'};
+  var PART={de:1,du:1,des:1,la:1,le:1,les:1,l:1,d:1,a:1,au:1,aux:1,et:1,sur:1,sous:1};
+  function deacc(w){ return w.toLocaleLowerCase('fr').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\./g,''); }
+  function cap(w){ return w?w.charAt(0).toLocaleUpperCase('fr')+w.slice(1):w; }
+  var segs=s.split(', ');
+  return segs.map(function(seg,si){
+    var last=si===segs.length-1;
+    return seg.split(' ').filter(Boolean).map(function(w,wi){
+      var d=deacc(w);
+      if(ST[d]!==undefined) return ST[d];
+      if(last && (d==='qc'||d==='quebec')) return 'Qc';
+      return w.split('-').map(function(pp,pi){
+        if(/\d/.test(pp)) return pp.toLocaleUpperCase('fr');
+        var dp=deacc(pp);
+        if(dp==='st'||dp==='saint') return 'St';
+        if(dp==='ste'||dp==='sainte') return 'Ste';
+        if(PART[dp] && !(wi===0 && pi===0)) return dp;
+        return cap(pp.toLocaleLowerCase('fr'));
+      }).join('-');
+    }).join(' ');
+  }).join(', ');
+}
 function normNom(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim(); }
+// Synchronise un nom saisi avec l'orthographe exacte de la liste (repertoire + formations)
+window.__dmdCanonNom = function(raw){
+  var s = formatNom(raw); if(!s) return s;
+  try{
+    var list = (typeof people !== 'undefined' && Array.isArray(people)) ? people : [];
+    var k = normNom(raw);
+    var exact = list.filter(function(n){ return normNom(n) === k; });
+    if(exact.length) return formatNom(exact[0]);
+    var near = list.filter(function(n){ return nomsProches(n, raw); });
+    if(near.length === 1) return formatNom(near[0]);
+  }catch(_){}
+  return s;
+};
 function nomsProches(n1,n2){ const w1=normNom(n1).split(' ').filter(Boolean), w2=normNom(n2).split(' ').filter(Boolean); if(!w1.length||!w2.length) return false; const common=w1.filter(w=>w2.includes(w)); return common.length>=Math.min(2,Math.min(w1.length,w2.length)); }
 
 const storage = {
@@ -289,12 +329,12 @@ function renderTeam(){
   let html='<div class="card"><h3>🏗 Infos du chantier — '+escapeHtml(teamLabel(currentTeam))+'</h3>';
   if(admin){
     html += '<div class="field-label">N° de projet</div><input class="inp" data-ti="projet" value="'+escapeAttr(info.projet||'')+'" placeholder="ex : 2026-142">';
-    html += '<div class="field-label">Contremaître</div><input class="inp" data-ti="contremaitre" value="'+escapeAttr(info.contremaitre||'')+'" placeholder="Nom du contremaître">';
-    html += '<div class="field-label">Adresse du chantier</div><input class="inp" data-ti="adresse" value="'+escapeAttr(info.adresse||'')+'" placeholder="Adresse">';
+    html += '<div class="field-label">Contremaître</div><input class="inp" data-ti="contremaitre" data-fmt="nom" value="'+escapeAttr(info.contremaitre||'')+'" placeholder="Nom du contremaître">';
+    html += '<div class="field-label">Adresse du chantier</div><input class="inp" data-ti="adresse" data-fmt="adresse" value="'+escapeAttr(info.adresse||'')+'" placeholder="'+escapeAttr(ADRESSE_EX)+'">';
   } else {
     html += '<div class="field-label">N° de projet</div><div class="ro-val">'+(info.projet?escapeHtml(info.projet):'<span class="muted">—</span>')+'</div>';
     html += '<div class="field-label">Contremaître</div><div class="ro-val">'+(info.contremaitre?escapeHtml(formatNom(info.contremaitre)):'<span class="muted">—</span>')+'</div>';
-    html += '<div class="field-label">Adresse du chantier</div><div class="ro-val">'+(info.adresse?escapeHtml(info.adresse):'<span class="muted">—</span>')+'</div>';
+    html += '<div class="field-label">Adresse du chantier</div><div class="ro-val">'+(info.adresse?escapeHtml(formatAdresse(info.adresse)):'<span class="muted">—</span>')+'</div>';
   }
   html += '</div>';
 
@@ -361,7 +401,7 @@ function openAddMember(teamId, presetNom){
   box.innerHTML =
     '<h3>➕ Ajouter à '+escapeHtml(teamLabel(teamId))+'</h3>' +
     '<div class="field-label">Nom de l\'employé</div>' +
-    '<input class="inp" id="amNom" placeholder="Chercher ou saisir un nom…" value="'+escapeAttr(presetNom||'')+'" autocomplete="off">' +
+    '<input class="inp" id="amNom" data-fmt="nom" placeholder="Chercher ou saisir un nom…" value="'+escapeAttr(presetNom||'')+'" autocomplete="off">' +
     '<div class="sugg" id="amSugg" style="display:none;"></div>' +
     '<div class="field-label">Rôle</div>' +
     '<select class="sel" id="amRole">'+ROLES.map(r=>'<option value="'+escapeAttr(r)+'">'+escapeHtml(r)+'</option>').join('')+'</select>' +
@@ -443,8 +483,8 @@ async function exporterExcel(){
   teams.forEach(t=>{
     const info=teamInfo[t.id]||{};
     const mem=members.filter(m=>m.teamId===t.id).sort((a,b)=>ROLES.indexOf(a.role)-ROLES.indexOf(b.role) || formatNom(a.nom).localeCompare(formatNom(b.nom),'fr'));
-    if(!mem.length){ aoa.push([t.label, info.projet||'', formatNom(info.contremaitre)||'', info.adresse||'', '', '']); }
-    mem.forEach(m=> aoa.push([t.label, info.projet||'', formatNom(info.contremaitre)||'', info.adresse||'', m.role, formatNom(m.nom)]));
+    if(!mem.length){ aoa.push([t.label, info.projet||'', formatNom(info.contremaitre)||'', formatAdresse(info.adresse), '', '']); }
+    mem.forEach(m=> aoa.push([t.label, info.projet||'', formatNom(info.contremaitre)||'', formatAdresse(info.adresse), m.role, formatNom(m.nom)]));
   });
   const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:16},{wch:12},{wch:22},{wch:30},{wch:26},{wch:24}];
   XLSX.utils.book_append_sheet(wb, ws, 'Équipes');
@@ -474,6 +514,79 @@ document.addEventListener('keydown', function(e){
     document.addEventListener('visibilitychange', async ()=>{ if(!document.hidden){ await Promise.all([ loadTeamInfos(), loadMembers(), loadPool(), loadPunchTeams() ]); renderTabs(); renderTeam(); } });
   }catch(e){ console.error(e); document.getElementById('wrap').innerHTML='<div class="empty">Impossible de charger les équipes.</div>'; }
 })();
+
+/* ==== DMD : Entree = champ suivant + correction auto du champ ==== */
+(function(){
+  if (window.__dmdEnterNext) return; window.__dmdEnterNext = true;
+  var NAV_SCOPE = '.modal, #modalBox, .card, form, .panel, .sheet, .edit-form';
+  var SKIP = {button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,range:1,color:1,hidden:1,image:1};
+  function navigable(el){
+    if(!el || el.tagName !== 'INPUT') return false;
+    var ty = (el.getAttribute('type') || 'text').toLowerCase();
+    return !SKIP[ty];
+  }
+  function visibleField(el){
+    if(el.disabled || el.readOnly) return false;
+    var ty = (el.getAttribute('type') || 'text').toLowerCase();
+    if(ty === 'hidden' || ty === 'file') return false;
+    return el.offsetParent !== null;
+  }
+  // Applique la correction d'ecriture au champ : majuscules, nom synchronise de la liste, adresse, telephone
+  function fmtField(el){
+    if(!el || el.tagName !== 'INPUT') return;
+    var kind = el.getAttribute('data-fmt');
+    if(!kind && (el.getAttribute('type') || '').toLowerCase() === 'tel') kind = 'tel';
+    if(!kind) return;
+    var v = el.value; if(v == null) return;
+    var out = v;
+    try{
+      if(kind === 'nom'){
+        if(typeof window.__dmdCanonNom === 'function') out = window.__dmdCanonNom(v);
+        else if(typeof window.formatNom === 'function') out = window.formatNom(v);
+      } else if(kind === 'adresse'){
+        if(typeof window.formatAdresse === 'function') out = window.formatAdresse(v);
+      } else if(kind === 'tel'){
+        if(typeof window.formatTel === 'function') out = window.formatTel(v);
+      }
+    }catch(_){ out = v; }
+    if(out != null && out !== v){
+      el.value = out;
+      try{ el.dispatchEvent(new Event('input', {bubbles:true})); }catch(_){}
+    }
+  }
+  window.__dmdFmtField = fmtField;
+  // Fleche "suivant" sur le clavier mobile, uniquement dans un formulaire
+  document.addEventListener('focusin', function(e){
+    var t = e.target;
+    if(navigable(t) && t.closest(NAV_SCOPE) && !t.hasAttribute('enterkeyhint')){
+      t.setAttribute('enterkeyhint', 'next');
+    }
+  });
+  // Corrige aussi quand on quitte le champ autrement (toucher ailleurs, bouton Enregistrer)
+  document.addEventListener('focusout', function(e){ fmtField(e.target); });
+  // Entree : corrige le champ puis passe au champ suivant du meme formulaire
+  document.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter' || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey) return;
+    if(e.defaultPrevented) return;            // respecte les gestionnaires existants (chat, ajout employe...)
+    var t = e.target;
+    if(!navigable(t)) return;                  // laisse tranquilles les textarea et les champs de recherche
+    var scope = t.closest(NAV_SCOPE);
+    if(!scope) return;
+    fmtField(t);                               // correction immediate du champ courant
+    var fields = [].slice.call(scope.querySelectorAll('input, select, textarea')).filter(visibleField);
+    var i = fields.indexOf(t);
+    if(i < 0) return;
+    e.preventDefault();
+    if(i < fields.length - 1){
+      var nx = fields[i + 1];
+      nx.focus();
+      if(nx.select){ try { nx.select(); } catch(_){} }
+    } else {
+      t.blur();                                // dernier champ : ferme le clavier
+    }
+  });
+})();
+
 </script>
 </body>
 </html>

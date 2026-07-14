@@ -458,6 +458,79 @@ document.addEventListener('keydown', function(e){
   }
   loadConsents();
 })();
+
+/* ==== DMD : Entree = champ suivant + correction auto du champ ==== */
+(function(){
+  if (window.__dmdEnterNext) return; window.__dmdEnterNext = true;
+  var NAV_SCOPE = '.modal, #modalBox, .card, form, .panel, .sheet, .edit-form';
+  var SKIP = {button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,range:1,color:1,hidden:1,image:1};
+  function navigable(el){
+    if(!el || el.tagName !== 'INPUT') return false;
+    var ty = (el.getAttribute('type') || 'text').toLowerCase();
+    return !SKIP[ty];
+  }
+  function visibleField(el){
+    if(el.disabled || el.readOnly) return false;
+    var ty = (el.getAttribute('type') || 'text').toLowerCase();
+    if(ty === 'hidden' || ty === 'file') return false;
+    return el.offsetParent !== null;
+  }
+  // Applique la correction d'ecriture au champ : majuscules, nom synchronise de la liste, adresse, telephone
+  function fmtField(el){
+    if(!el || el.tagName !== 'INPUT') return;
+    var kind = el.getAttribute('data-fmt');
+    if(!kind && (el.getAttribute('type') || '').toLowerCase() === 'tel') kind = 'tel';
+    if(!kind) return;
+    var v = el.value; if(v == null) return;
+    var out = v;
+    try{
+      if(kind === 'nom'){
+        if(typeof window.__dmdCanonNom === 'function') out = window.__dmdCanonNom(v);
+        else if(typeof window.formatNom === 'function') out = window.formatNom(v);
+      } else if(kind === 'adresse'){
+        if(typeof window.formatAdresse === 'function') out = window.formatAdresse(v);
+      } else if(kind === 'tel'){
+        if(typeof window.formatTel === 'function') out = window.formatTel(v);
+      }
+    }catch(_){ out = v; }
+    if(out != null && out !== v){
+      el.value = out;
+      try{ el.dispatchEvent(new Event('input', {bubbles:true})); }catch(_){}
+    }
+  }
+  window.__dmdFmtField = fmtField;
+  // Fleche "suivant" sur le clavier mobile, uniquement dans un formulaire
+  document.addEventListener('focusin', function(e){
+    var t = e.target;
+    if(navigable(t) && t.closest(NAV_SCOPE) && !t.hasAttribute('enterkeyhint')){
+      t.setAttribute('enterkeyhint', 'next');
+    }
+  });
+  // Corrige aussi quand on quitte le champ autrement (toucher ailleurs, bouton Enregistrer)
+  document.addEventListener('focusout', function(e){ fmtField(e.target); });
+  // Entree : corrige le champ puis passe au champ suivant du meme formulaire
+  document.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter' || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey) return;
+    if(e.defaultPrevented) return;            // respecte les gestionnaires existants (chat, ajout employe...)
+    var t = e.target;
+    if(!navigable(t)) return;                  // laisse tranquilles les textarea et les champs de recherche
+    var scope = t.closest(NAV_SCOPE);
+    if(!scope) return;
+    fmtField(t);                               // correction immediate du champ courant
+    var fields = [].slice.call(scope.querySelectorAll('input, select, textarea')).filter(visibleField);
+    var i = fields.indexOf(t);
+    if(i < 0) return;
+    e.preventDefault();
+    if(i < fields.length - 1){
+      var nx = fields[i + 1];
+      nx.focus();
+      if(nx.select){ try { nx.select(); } catch(_){} }
+    } else {
+      t.blur();                                // dernier champ : ferme le clavier
+    }
+  });
+})();
+
 </script>
 </body>
 </html>

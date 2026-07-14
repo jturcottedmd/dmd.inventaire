@@ -153,7 +153,7 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
     <input type="text" id="fType" placeholder="Ex. : Cariste / Nacelle, SIMDUT, Secourisme…" autocomplete="off">
 
     <label>Endroit</label>
-    <input type="text" id="fLieu" placeholder="Ex. : Centre de formation, chantier, en ligne…" autocomplete="off">
+    <input type="text" id="fLieu" data-fmt="adresse" placeholder="Ex. : 1100 av. André-Champagne, St-Bruno, Qc / en ligne…" autocomplete="off">
 
     <div class="dates-row">
       <div>
@@ -166,10 +166,21 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
       </div>
     </div>
 
+    <div class="dates-row">
+      <div>
+        <label>Heure de début</label>
+        <input type="time" id="fHDebut">
+      </div>
+      <div>
+        <label>Heure de fin</label>
+        <input type="time" id="fHFin">
+      </div>
+    </div>
+
     <label>Employé(s) inscrit(s)</label>
     <div class="emp-picker">
       <div class="emp-input-row">
-        <input type="text" id="fEmpInput" placeholder="Chercher ou saisir un nom…" autocomplete="off">
+        <input type="text" id="fEmpInput" data-fmt="nom" placeholder="Chercher ou saisir un nom…" autocomplete="off">
         <button type="button" id="fEmpAdd" title="Ajouter">＋</button>
       </div>
       <div class="suggest" id="fSuggest" style="display:none;"></div>
@@ -177,7 +188,7 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
     </div>
 
     <label>Notes (optionnel)</label>
-    <textarea id="fNotes" placeholder="Heure, horaire, matériel à apporter, personne-ressource…"></textarea>
+    <textarea id="fNotes" placeholder="Matériel à apporter, personne-ressource…"></textarea>
 
     <div class="m-err" id="fError">&nbsp;</div>
     <button class="m-btn save" id="fSave">Enregistrer</button>
@@ -200,6 +211,19 @@ function withTimeout(promise, ms, label){
 }
 function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
+// Synchronise un nom saisi avec l'orthographe exacte du repertoire (sinon simple mise en majuscules)
+window.__dmdCanonNom = function(raw){
+  var s = formatNom(raw); if(!s) return s;
+  try{
+    var list = (typeof _repNames !== 'undefined' && Array.isArray(_repNames)) ? _repNames : [];
+    var k = normNom(raw);
+    var exact = list.filter(function(n){ return normNom(n) === k; });
+    if(exact.length) return formatNom(exact[0]);
+    var near = list.filter(function(n){ return nomsProches(n, raw); });
+    if(near.length === 1) return formatNom(near[0]);
+  }catch(_){}
+  return s;
+};
 
 // ================== STOCKAGE (clé partagée Supabase inv_store) ==================
 const FORM_KEY = 'inv:formationsPlan'; // { items:[...] }
@@ -257,6 +281,15 @@ function frDate(s){
   const [y,m,d] = s.split('-'); if(!y) return s;
   const mois = ['janv.','févr.','mars','avr.','mai','juin','juill.','août','sept.','oct.','nov.','déc.'];
   return parseInt(d,10) + ' ' + (mois[parseInt(m,10)-1]||'') + ' ' + y;
+}
+// Heure "HH:MM" -> "7h30"
+function frHeure(h){ if(!h) return ''; const p=String(h).split(':'); if(p.length<2) return h; return parseInt(p[0],10)+'h'+p[1]; }
+function heuresLine(it){
+  const a=frHeure(it.heureDebut), b=frHeure(it.heureFin);
+  if(a && b) return 'De <b>'+a+'</b> à <b>'+b+'</b>';
+  if(a) return 'À partir de <b>'+a+'</b>';
+  if(b) return 'Jusqu\'à <b>'+b+'</b>';
+  return '';
 }
 
 // ================== RÉPERTOIRE (pour suggérer des noms à l'admin) ==================
@@ -320,6 +353,7 @@ function cardHtml(it){
       '<span class="badge '+st+'">'+(st==='encours'?'En cours':'En attente')+'</span></div>' +
     '<div class="meta">📍 <b>'+escapeHtml(it.lieu||'—')+'</b><br>' +
       '🗓️ Du <b>'+frDate(it.debut)+'</b> au <b>'+frDate(it.fin)+'</b>' +
+      (heuresLine(it) ? '<br>🕐 '+heuresLine(it) : '') +
       (it.notes ? '<br>📝 '+escapeHtml(it.notes) : '') + '</div>' +
     (emps ? '<div class="emps">'+emps+'</div>' : '<div class="meta" style="font-style:italic;color:var(--logo-grey);">Aucun employé inscrit.</div>') +
     (admin ? '<div class="actions"><button class="btn-edit" data-edit="'+it.id+'">✎ Modifier</button><button class="btn-del" data-del="'+it.id+'">🗑 Retirer</button></div>' : '') +
@@ -338,6 +372,8 @@ function openModal(id){
   document.getElementById('fLieu').value  = it ? (it.lieu||'')  : '';
   document.getElementById('fDebut').value = it ? (it.debut||'') : '';
   document.getElementById('fFin').value   = it ? (it.fin||'')   : '';
+  document.getElementById('fHDebut').value = it ? (it.heureDebut||'') : '';
+  document.getElementById('fHFin').value   = it ? (it.heureFin||'')   : '';
   document.getElementById('fNotes').value = it ? (it.notes||'') : '';
   _selEmps = it ? (it.employes||[]).slice() : [];
   document.getElementById('fEmpInput').value = '';
@@ -355,8 +391,9 @@ function renderSelEmps(){
   });
 }
 function addEmp(name){
-  const clean = String(name||'').replace(/\s+/g,' ').trim();
+  let clean = String(name||'').replace(/\s+/g,' ').trim();
   if(!clean) return;
+  clean = (typeof window.__dmdCanonNom === 'function') ? window.__dmdCanonNom(clean) : formatNom(clean);
   if(_selEmps.some(n => normNom(n) === normNom(clean))) return;
   _selEmps.push(clean); renderSelEmps();
   document.getElementById('fEmpInput').value = '';
@@ -377,6 +414,8 @@ async function saveItem(){
   const lieu  = document.getElementById('fLieu').value.replace(/\s+/g,' ').trim();
   const debut = document.getElementById('fDebut').value;
   const fin   = document.getElementById('fFin').value;
+  const heureDebut = document.getElementById('fHDebut').value;
+  const heureFin   = document.getElementById('fHFin').value;
   const notes = document.getElementById('fNotes').value.trim();
   const err = document.getElementById('fError');
 
@@ -387,7 +426,7 @@ async function saveItem(){
   if(!_selEmps.length){ err.textContent = 'Ajoute au moins un employé inscrit.'; return; }
 
   const rec = { id:_editing || ('f_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)),
-    type, lieu, debut, fin, notes, employes:_selEmps.slice() };
+    type, lieu, debut, fin, heureDebut, heureFin, notes, employes:_selEmps.slice() };
 
   if(_editing){ const i = _items.findIndex(x => x.id === _editing); if(i>=0) _items[i] = rec; }
   else{ _items.push(rec); }
@@ -428,6 +467,79 @@ document.getElementById('overlay').addEventListener('click', e => { if(e.target.
   if(isDeviceAdmin()) await loadRepNames();
   render();
 })();
+
+/* ==== DMD : Entree = champ suivant + correction auto du champ ==== */
+(function(){
+  if (window.__dmdEnterNext) return; window.__dmdEnterNext = true;
+  var NAV_SCOPE = '.modal, #modalBox, .card, form, .panel, .sheet, .edit-form';
+  var SKIP = {button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,range:1,color:1,hidden:1,image:1};
+  function navigable(el){
+    if(!el || el.tagName !== 'INPUT') return false;
+    var ty = (el.getAttribute('type') || 'text').toLowerCase();
+    return !SKIP[ty];
+  }
+  function visibleField(el){
+    if(el.disabled || el.readOnly) return false;
+    var ty = (el.getAttribute('type') || 'text').toLowerCase();
+    if(ty === 'hidden' || ty === 'file') return false;
+    return el.offsetParent !== null;
+  }
+  // Applique la correction d'ecriture au champ : majuscules, nom synchronise de la liste, adresse, telephone
+  function fmtField(el){
+    if(!el || el.tagName !== 'INPUT') return;
+    var kind = el.getAttribute('data-fmt');
+    if(!kind && (el.getAttribute('type') || '').toLowerCase() === 'tel') kind = 'tel';
+    if(!kind) return;
+    var v = el.value; if(v == null) return;
+    var out = v;
+    try{
+      if(kind === 'nom'){
+        if(typeof window.__dmdCanonNom === 'function') out = window.__dmdCanonNom(v);
+        else if(typeof window.formatNom === 'function') out = window.formatNom(v);
+      } else if(kind === 'adresse'){
+        if(typeof window.formatAdresse === 'function') out = window.formatAdresse(v);
+      } else if(kind === 'tel'){
+        if(typeof window.formatTel === 'function') out = window.formatTel(v);
+      }
+    }catch(_){ out = v; }
+    if(out != null && out !== v){
+      el.value = out;
+      try{ el.dispatchEvent(new Event('input', {bubbles:true})); }catch(_){}
+    }
+  }
+  window.__dmdFmtField = fmtField;
+  // Fleche "suivant" sur le clavier mobile, uniquement dans un formulaire
+  document.addEventListener('focusin', function(e){
+    var t = e.target;
+    if(navigable(t) && t.closest(NAV_SCOPE) && !t.hasAttribute('enterkeyhint')){
+      t.setAttribute('enterkeyhint', 'next');
+    }
+  });
+  // Corrige aussi quand on quitte le champ autrement (toucher ailleurs, bouton Enregistrer)
+  document.addEventListener('focusout', function(e){ fmtField(e.target); });
+  // Entree : corrige le champ puis passe au champ suivant du meme formulaire
+  document.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter' || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey) return;
+    if(e.defaultPrevented) return;            // respecte les gestionnaires existants (chat, ajout employe...)
+    var t = e.target;
+    if(!navigable(t)) return;                  // laisse tranquilles les textarea et les champs de recherche
+    var scope = t.closest(NAV_SCOPE);
+    if(!scope) return;
+    fmtField(t);                               // correction immediate du champ courant
+    var fields = [].slice.call(scope.querySelectorAll('input, select, textarea')).filter(visibleField);
+    var i = fields.indexOf(t);
+    if(i < 0) return;
+    e.preventDefault();
+    if(i < fields.length - 1){
+      var nx = fields[i + 1];
+      nx.focus();
+      if(nx.select){ try { nx.select(); } catch(_){} }
+    } else {
+      t.blur();                                // dernier champ : ferme le clavier
+    }
+  });
+})();
+
 </script>
 </body>
 </html>

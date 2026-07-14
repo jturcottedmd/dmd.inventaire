@@ -206,12 +206,12 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 <div class="overlay" id="overlay">
   <div class="modal">
     <h3>👤 Mes infos</h3>
-    <input type="text" id="idNom" placeholder="Prénom Nom" autocomplete="name">
+    <input type="text" id="idNom" data-fmt="nom" placeholder="Prénom Nom" autocomplete="name">
     <input type="tel" id="idTel" placeholder="Téléphone" autocomplete="tel">
     <input type="email" id="idCourriel" placeholder="Courriel" autocomplete="email">
     <div style="margin-top:9px; border-top:1px dashed var(--line); padding-top:9px;">
       <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:#ff9d8f; margin-bottom:3px;">🆘 Contact d'urgence <span style="color:var(--paper-dim); font-weight:600; text-transform:none; letter-spacing:0;">— obligatoire</span></div>
-      <input type="text" id="idUrgNom" placeholder="Contact d'urgence — Prénom Nom" autocomplete="off">
+      <input type="text" id="idUrgNom" data-fmt="nom" placeholder="Contact d'urgence — Prénom Nom" autocomplete="off">
       <input type="tel" id="idUrgTel" placeholder="Contact d'urgence — Téléphone" autocomplete="off">
       <input type="text" id="idUrgLien" placeholder="Lien (conjoint, parent, ami…) — optionnel" autocomplete="off">
       <div style="font-size:11px; color:var(--paper-dim); line-height:1.4; margin-top:3px;">Visible par tes collègues <b style="color:var(--paper-dim);">seulement</b> en cas d'incident sur un chantier. Avise cette personne que son numéro est enregistré à cette fin.</div>
@@ -848,6 +848,79 @@ document.addEventListener('keydown', function(e){
     list.innerHTML = '<div class="empty">Impossible de charger le répertoire. Vérifie ta connexion et réessaie.</div>';
   }
 })();
+
+/* ==== DMD : Entree = champ suivant + correction auto du champ ==== */
+(function(){
+  if (window.__dmdEnterNext) return; window.__dmdEnterNext = true;
+  var NAV_SCOPE = '.modal, #modalBox, .card, form, .panel, .sheet, .edit-form';
+  var SKIP = {button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,range:1,color:1,hidden:1,image:1};
+  function navigable(el){
+    if(!el || el.tagName !== 'INPUT') return false;
+    var ty = (el.getAttribute('type') || 'text').toLowerCase();
+    return !SKIP[ty];
+  }
+  function visibleField(el){
+    if(el.disabled || el.readOnly) return false;
+    var ty = (el.getAttribute('type') || 'text').toLowerCase();
+    if(ty === 'hidden' || ty === 'file') return false;
+    return el.offsetParent !== null;
+  }
+  // Applique la correction d'ecriture au champ : majuscules, nom synchronise de la liste, adresse, telephone
+  function fmtField(el){
+    if(!el || el.tagName !== 'INPUT') return;
+    var kind = el.getAttribute('data-fmt');
+    if(!kind && (el.getAttribute('type') || '').toLowerCase() === 'tel') kind = 'tel';
+    if(!kind) return;
+    var v = el.value; if(v == null) return;
+    var out = v;
+    try{
+      if(kind === 'nom'){
+        if(typeof window.__dmdCanonNom === 'function') out = window.__dmdCanonNom(v);
+        else if(typeof window.formatNom === 'function') out = window.formatNom(v);
+      } else if(kind === 'adresse'){
+        if(typeof window.formatAdresse === 'function') out = window.formatAdresse(v);
+      } else if(kind === 'tel'){
+        if(typeof window.formatTel === 'function') out = window.formatTel(v);
+      }
+    }catch(_){ out = v; }
+    if(out != null && out !== v){
+      el.value = out;
+      try{ el.dispatchEvent(new Event('input', {bubbles:true})); }catch(_){}
+    }
+  }
+  window.__dmdFmtField = fmtField;
+  // Fleche "suivant" sur le clavier mobile, uniquement dans un formulaire
+  document.addEventListener('focusin', function(e){
+    var t = e.target;
+    if(navigable(t) && t.closest(NAV_SCOPE) && !t.hasAttribute('enterkeyhint')){
+      t.setAttribute('enterkeyhint', 'next');
+    }
+  });
+  // Corrige aussi quand on quitte le champ autrement (toucher ailleurs, bouton Enregistrer)
+  document.addEventListener('focusout', function(e){ fmtField(e.target); });
+  // Entree : corrige le champ puis passe au champ suivant du meme formulaire
+  document.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter' || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey) return;
+    if(e.defaultPrevented) return;            // respecte les gestionnaires existants (chat, ajout employe...)
+    var t = e.target;
+    if(!navigable(t)) return;                  // laisse tranquilles les textarea et les champs de recherche
+    var scope = t.closest(NAV_SCOPE);
+    if(!scope) return;
+    fmtField(t);                               // correction immediate du champ courant
+    var fields = [].slice.call(scope.querySelectorAll('input, select, textarea')).filter(visibleField);
+    var i = fields.indexOf(t);
+    if(i < 0) return;
+    e.preventDefault();
+    if(i < fields.length - 1){
+      var nx = fields[i + 1];
+      nx.focus();
+      if(nx.select){ try { nx.select(); } catch(_){} }
+    } else {
+      t.blur();                                // dernier champ : ferme le clavier
+    }
+  });
+})();
+
 </script>
 </body>
 </html>
