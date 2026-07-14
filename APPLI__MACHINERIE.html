@@ -43,7 +43,7 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 
 .tabs{ display:flex; gap:6px; padding:10px 14px 2px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .tab{ flex:0 0 auto; padding:9px 15px; border-radius:20px; border:1.5px solid var(--line); background:var(--asphalt-2); color:var(--paper-dim); font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:15px; letter-spacing:0.7px; text-transform:uppercase; cursor:pointer; }
-.tab.active{ background:var(--brick); border-color:var(--brick-line); color:var(--paper); }
+.tab.active{ background:var(--brick); border-color:var(--brick-line); color:var(--paper); font-size:17.5px; font-weight:800; }
 /* Pastilles d'alerte sur les onglets (comme l'inventaire) */
 .tab .tcount{ margin-left:6px; font-family:'Barlow',sans-serif; font-size:11.5px; font-weight:700; border-radius:10px; padding:1px 7px; background:var(--danger-red); color:#fff; vertical-align:middle; }
 .tab .tcount.orange{ background:var(--safety-yellow); color:#232221; }
@@ -326,17 +326,81 @@ function mergeEventLists(rec, srv){
   });
   return rec;
 }
+const _myFields = {};   // key -> Set des champs simples modifiés par CET appareil (pour l'auto-réparation)
 async function saveMachine(m, rec){
   const key = machineKey(m);
   rec.ident = m.ident||''; rec.nom = m.nom; rec.cat = m.cat;
+  // note les champs simples que NOUS modifions (différents du dernier état serveur connu)
+  const snap0 = _srvSnap[key] || {};
+  SCALAR_FIELDS.forEach(f => {
+    if(JSON.stringify(rec[f]!==undefined?rec[f]:null) !== snap0[f]) (_myFields[key]=_myFields[key]||new Set()).add(f);
+  });
   setSaveStatus('saving');
   try{
     const r = await storage.get('inv:machine:'+key, true);
-    if(r && r.value){ mergeEventLists(rec, JSON.parse(r.value)); }
+    if(r && r.value){
+      const srv = JSON.parse(r.value);
+      mergeEventLists(rec, srv);
+      // Fusion des champs simples (vérif, huile, tune-up, localisation) : si un AUTRE
+      // appareil a changé un champ que NOUS n'avons pas touché, on garde sa valeur au
+      // lieu de l'écraser avec notre ancienne copie.
+      const snap = _srvSnap[key] || {};
+      const emptyV = v => v===undefined || v===null || v==='';
+      SCALAR_FIELDS.forEach(f => {
+        const srvV = JSON.stringify(srv && srv[f]!==undefined ? srv[f] : null);
+        const locV = JSON.stringify(rec[f]!==undefined ? rec[f] : null);
+        if(srvV !== snap[f] && locV === snap[f]){
+          // Un autre admin a changé ce champ après nous. On adopte SA valeur — SAUF si
+          // c'est un vide qui effacerait une valeur que NOUS avons posée (copie périmée).
+          const sv = srv ? srv[f] : undefined;
+          const mineSet = _myFields[key] && _myFields[key].has(f);
+          if(!(mineSet && emptyV(sv) && !emptyV(rec[f]))) rec[f] = sv;
+        }
+      });
+    }
   }catch(e){}
   records[key] = rec;
   const res = await storage.set('inv:machine:'+key, JSON.stringify(rec), true);
+  if(res){ _srvSnap[key] = snapScalars(rec); _machVerifyCount[key] = 0; scheduleMachineVerify(m, key); }   // nouveau cycle de vérification à chaque sauvegarde
   setSaveStatus(res ? 'ok' : 'err');
+}
+
+// ---- Auto-réparation anti-écrasement (même principe que l'inventaire) ----
+// Si plusieurs admins enregistrent la MÊME machine dans la même seconde, le dernier
+// écrit peut écraser les autres malgré la fusion (fenêtre lecture->écriture).
+// Quelques secondes après chaque sauvegarde, on relit la fiche serveur : si un de NOS
+// bris/réparations/inspections ou une de NOS valeurs a disparu, on ré-enregistre (fusion).
+const _machVerifyTimers = {}; const _machVerifyCount = {};
+function scheduleMachineVerify(m, key){
+  _machVerifyCount[key] = _machVerifyCount[key] || 0;
+  if(_machVerifyCount[key] >= 5) return;                     // plafond anti-boucle (remis à 0 à chaque nouvelle sauvegarde)
+  clearTimeout(_machVerifyTimers[key]);
+  _machVerifyTimers[key] = setTimeout(async () => {
+    try{
+      const local = records[key]; if(!local) return;
+      const r = await storage.get('inv:machine:'+key, true);
+      if(!r || !r.value) return;
+      const srv = JSON.parse(r.value); if(!srv) return;
+      const srvDel = new Set(srv.del || []);
+      let lost = false;
+      // nos entrées d'événements présentes localement doivent exister côté serveur
+      ['bris','reparations','inspections'].forEach(f => {
+        const srvIds = new Set((srv[f]||[]).map(x => x && x.id));
+        (local[f]||[]).forEach(x => { if(x && x.id && !srvDel.has(x.id) && !srvIds.has(x.id)) lost = true; });
+      });
+      // nos champs simples : réparer SEULEMENT si le serveur est revenu à vide alors que
+      // nous avions enregistré une valeur (écrasement par une copie périmée). Si un autre
+      // admin a mis une AUTRE valeur non vide, c'est un conflit légitime : dernier gagne.
+      (_myFields[key] || new Set()).forEach(f => {
+        const mine = local[f]; const theirs = srv[f];
+        const empty = (v) => v===undefined || v===null || v==='';
+        if(!empty(mine) && empty(theirs)) lost = true;
+      });
+      _machVerifyCount[key]++;
+      if(lost){ await saveMachine({ident:local.ident, nom:local.nom, cat:local.cat}, local); }
+      else if(_machVerifyCount[key] < 4){ scheduleMachineVerify(m, key); }   // repasse : un écrasement peut arriver après
+    }catch(e){}
+  }, (1800 + Math.random()*2200) * Math.max(1, (_machVerifyCount[key]||0) * 2));
 }
 
 async function loadTeams(){
@@ -362,12 +426,15 @@ async function loadCatalog(){
   }catch(e){}
   catalog = Object.values(byKey);
 }
+let _srvSnap = {};   // key -> copie des champs scalaires tels que lus du serveur (pour fusion 3 voies)
+const SCALAR_FIELDS = ['verif','huile','tuneup','loc'];
+function snapScalars(rec){ const o={}; SCALAR_FIELDS.forEach(f=>{ o[f]=JSON.stringify(rec&&rec[f]!==undefined?rec[f]:null); }); return o; }
 async function loadRecords(){
   records = {};
   try{
     const res = await withTimeout(_sb.from('inv_store').select('key,value').like('key','inv:machine:%'), 12000, 'machines');
     if(res && Array.isArray(res.data)){
-      res.data.forEach(r => { try{ const rec=JSON.parse(r.value); if(rec) records[r.key.replace('inv:machine:','')]=rec; }catch(e){} });
+      res.data.forEach(r => { try{ const rec=JSON.parse(r.value); if(rec){ const k=r.key.replace('inv:machine:',''); records[k]=rec; _srvSnap[k]=snapScalars(rec); } }catch(e){} });
     }
   }catch(e){ console.error(e); }
 }
@@ -388,7 +455,20 @@ function extForMachine(m){
   const k = machineKey(m);
   return Object.values(extincteurs).find(e => e && e.machineKey === k) || null;
 }
+// Relit la fiche serveur juste avant d'écrire : l'historique des deux appareils est
+// fusionné au lieu que le dernier écrase l'autre (assignations simultanées).
 async function saveExtincteur(e){
+  try{
+    const r = await storage.get('inv:extincteur:'+e.num, true);
+    if(r && r.value){
+      const srv = JSON.parse(r.value);
+      if(srv && Array.isArray(srv.history)){
+        const seen = new Set((e.history||[]).map(h=>h && (h.date+'|'+h.action)));
+        srv.history.forEach(h => { if(h && !seen.has(h.date+'|'+h.action)) (e.history=e.history||[]).push(h); });
+        e.history.sort((a,b)=>String((b&&b.date)||'').localeCompare(String((a&&a.date)||'')));
+      }
+    }
+  }catch(err){}
   extincteurs[String(e.num)] = e;
   return await storage.set('inv:extincteur:'+e.num, JSON.stringify(e), true);
 }
@@ -713,7 +793,14 @@ function openDetail(key){
 
 function wireDetail(m, key){
   const rec = records[key];
-  const reopen = () => { renderSummary(); renderTabs(); renderList(); openDetail(key); };
+  const reopen = () => {
+    // Mémorise quelles sections (Bris, Réparations…) étaient dépliées pour les rouvrir
+    // après le rafraîchissement — avant, chaque enregistrement repliait tout.
+    const openSecs = [];
+    document.querySelectorAll('#modalBox details.sec').forEach((d,i) => { if(d.open) openSecs.push(i); });
+    renderSummary(); renderTabs(); renderList(); openDetail(key);
+    document.querySelectorAll('#modalBox details.sec').forEach((d,i) => { if(openSecs.indexOf(i)!==-1) d.open = true; });
+  };
 
   // Extincteur assigné (Lift/Fraco) — assignation / remplacement / retrait
   const extAssign = document.getElementById('extAssign');
@@ -721,7 +808,7 @@ function wireDetail(m, key){
     const cur = extForMachine(m);
     const saisie = prompt('Numéro de l\'extincteur à assigner à '+(m.ident||m.nom)+' :', cur ? String(cur.num) : '');
     if(saisie == null) return;
-    const num = String(saisie).replace(/[^\d]/g,'');
+    const num = String(saisie).replace(/[^\d]/g,'').replace(/^0+(?=\d)/,'');   // même normalisation que l'assignation (« 05 » = « 5 »)
     if(!num){ alert('Entre un numéro d\'extincteur (ex. 12).'); return; }
     const other = Object.values(extincteurs).find(x => x && String(x.num) === num && x.machineKey && x.machineKey !== machineKey(m));
     if(other && !confirm('L\'extincteur #'+num+' est présentement sur '+(other.machineIdent||other.machineNom||'une autre machine')+'.\nLe déplacer sur '+(m.ident||m.nom)+' ?')) return;
@@ -737,7 +824,7 @@ function wireDetail(m, key){
   // (La localisation & l'équipe sont automatiques — plus de déplacement manuel ici.)
   // Vérif annuelle
   const vfIn = document.getElementById('vfInput');
-  if(vfIn) vfIn.addEventListener('input', () => { const p=vfIn.selectionStart; vfIn.value=formatVerif(vfIn.value); });
+  if(vfIn) vfIn.addEventListener('input', () => { const p=vfIn.selectionStart; const before=vfIn.value; vfIn.value=formatVerif(vfIn.value); const delta=vfIn.value.length-before.length; try{ vfIn.setSelectionRange(Math.max(0,p+delta), Math.max(0,p+delta)); }catch(e){} });   // garde le curseur en place pendant le reformatage
   const vfSave = document.getElementById('vfSave');
   if(vfSave) vfSave.onclick = async () => { rec.verif = formatVerif(document.getElementById('vfInput').value); await saveMachine(m, rec); reopen(); };
   // Bris

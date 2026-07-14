@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Programme de prévention — Maçonnerie DMD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --asphalt:#232221; --asphalt-2:#2f2d2b; --paper:#f3efe6; --paper-dim:#d9d2c2;
+  --brick:#8a2f31; --brick-line:#5e2022; --logo-grey:#656263; --line:#46433f;
+  --safety-yellow:#f2b705; --ok-green:#4c7a3f; --danger-red:#c0392b;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-family:'Barlow',sans-serif;min-height:100%;-webkit-text-size-adjust:100%;}
+#app{min-height:100vh; display:flex; flex-direction:column; max-width:760px; margin:0 auto; background:var(--asphalt);}
+.hdr{
+  display:flex; align-items:center; gap:10px; padding:13px 15px; background-color:#6e2325; position:sticky; top:0; z-index:30;
+  background-image:linear-gradient(rgba(0,0,0,0.12) 2px,transparent 2px),linear-gradient(90deg,rgba(0,0,0,0.12) 2px,transparent 2px);
+  background-size:38px 20px; border-bottom:3px solid var(--brick-line);
+}
+.back{ color:var(--paper); text-decoration:none; font-size:22px; line-height:1; padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.25); }
+.hdr-txt{ display:flex; flex-direction:column; min-width:0; flex:1; }
+.hdr-title{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:21px; letter-spacing:0.5px; margin:0; line-height:1.05; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hdr-sub{ font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--paper-dim); margin-top:1px; }
+.hbtn{ flex:0 0 auto; background:rgba(0,0,0,0.25); border:1px solid rgba(0,0,0,0.3); color:var(--paper); border-radius:8px; padding:8px 11px; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; white-space:nowrap; }
+
+.toolbar{ display:flex; gap:8px; padding:10px 14px 4px; align-items:center; }
+.toolbar input{ flex:1; padding:10px 13px; border-radius:10px; border:1.5px solid var(--line); background:var(--asphalt-2); color:var(--paper); font-size:15px; font-family:'Barlow',sans-serif; }
+.toolbar input:focus{ outline:none; border-color:var(--paper-dim); }
+.fs-btn{ flex:0 0 auto; width:40px; padding:9px 0; text-align:center; border-radius:10px; border:1.5px solid var(--line); background:var(--asphalt-2); color:var(--paper); cursor:pointer; font-weight:700; }
+
+.wrap{ padding:8px 14px 40px; flex:1; }
+.empty{ color:var(--logo-grey); font-size:14.5px; font-style:italic; padding:34px 12px; text-align:center; line-height:1.6; }
+.notice{ background:rgba(242,183,5,0.09); border:1px solid rgba(242,183,5,0.35); border-radius:11px; padding:12px 14px; font-size:13.5px; color:var(--paper-dim); line-height:1.55; margin:14px 0; }
+
+/* Table des matières */
+.doc-head{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:13px; padding:14px 16px; margin:10px 0 14px; }
+.doc-title{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:21px; letter-spacing:0.4px; }
+.doc-meta{ font-size:12.5px; color:var(--paper-dim); margin-top:4px; line-height:1.5; }
+.photo-link{ display:inline-flex; align-items:center; gap:8px; margin-top:10px; background:var(--asphalt); border:1.5px solid var(--line); color:var(--paper); border-radius:10px; padding:9px 13px; text-decoration:none; font-size:14px; font-weight:600; }
+.toc-group{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:14px; text-transform:uppercase; letter-spacing:0.7px; color:var(--paper-dim); margin:15px 2px 6px; }
+.toc-item{ display:flex; align-items:center; gap:10px; background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:11px; padding:11px 13px; margin:7px 0; cursor:pointer; }
+.toc-item:active{ border-color:var(--paper-dim); }
+.toc-item.lu{ border-left:4px solid var(--ok-green); }
+.toc-num{ flex:0 0 auto; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13px; color:var(--safety-yellow); background:var(--asphalt); border:1px solid var(--line); border-radius:7px; padding:2px 8px; }
+.toc-txt{ flex:1; font-size:15px; font-weight:600; line-height:1.3; }
+.toc-sub{ margin-left:22px; }
+.toc-sub .toc-txt{ font-weight:500; font-size:14px; color:var(--paper-dim); }
+.resume-btn{ width:100%; padding:13px; border:none; border-radius:11px; background:var(--safety-yellow); color:#232221; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:16px; text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; margin:4px 0 4px; }
+
+/* Lecture d'une section */
+.reader{ display:none; }
+.reader.show{ display:block; }
+.toclist.hide{ display:none; }
+.sec-title{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:22px; margin:12px 0 4px; color:var(--safety-yellow); letter-spacing:0.4px; }
+.sec-body{ font-size:var(--fs,16px); line-height:1.65; }
+.sec-body h1,.sec-body h2,.sec-body h3,.sec-body h4{ font-family:'Barlow Condensed',sans-serif; letter-spacing:0.4px; line-height:1.25; color:var(--paper); margin:20px 0 8px; }
+.sec-body h1{ font-size:1.5em; } .sec-body h2{ font-size:1.32em; } .sec-body h3{ font-size:1.18em; color:var(--safety-yellow); } .sec-body h4{ font-size:1.06em; }
+.sec-body p{ margin:9px 0; }
+.sec-body ul,.sec-body ol{ padding-left:22px; margin:8px 0; }
+.sec-body li{ margin:4px 0; }
+.sec-body table{ border-collapse:collapse; width:100%; margin:12px 0; font-size:0.92em; display:block; overflow-x:auto; }
+.sec-body th,.sec-body td{ border:1px solid var(--line); padding:6px 9px; text-align:left; vertical-align:top; }
+.sec-body th{ background:var(--asphalt-2); font-weight:700; }
+.sec-body img{ max-width:100%; height:auto; border-radius:8px; margin:8px 0; }
+.sec-body mark{ background:var(--safety-yellow); color:#232221; border-radius:3px; padding:0 2px; }
+.sec-nav{ display:flex; gap:8px; margin:22px 0 8px; }
+.sec-nav button{ flex:1; padding:12px; border:1.5px solid var(--line); border-radius:11px; background:var(--asphalt-2); color:var(--paper); font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:14.5px; text-transform:uppercase; letter-spacing:0.4px; cursor:pointer; }
+.sec-nav button:disabled{ opacity:0.35; }
+.sec-loading{ text-align:center; color:var(--paper-dim); padding:26px; }
+
+/* Résultats de recherche */
+.sr-item{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:11px; padding:11px 13px; margin:8px 0; cursor:pointer; }
+.sr-sec{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13px; color:var(--safety-yellow); text-transform:uppercase; letter-spacing:0.5px; }
+.sr-ext{ font-size:13.5px; color:var(--paper-dim); margin-top:4px; line-height:1.5; }
+.sr-ext b{ color:var(--paper); background:rgba(242,183,5,0.25); border-radius:3px; padding:0 2px; }
+
+.foot{ padding:16px; font-size:11.5px; color:var(--logo-grey); text-align:center; line-height:1.5; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="hdr">
+    <a class="back" href="./index.html" aria-label="Accueil">←</a>
+    <div class="hdr-txt">
+      <h1 class="hdr-title" id="hTitle">Programme de prévention</h1>
+      <div class="hdr-sub" id="hSub">Santé & sécurité — Maçonnerie DMD</div>
+    </div>
+    <button class="hbtn" id="tocBtn" style="display:none;">☰ Table</button>
+  </div>
+
+  <div class="toolbar" id="toolbar" style="display:none;">
+    <input type="search" id="search" placeholder="🔍 Chercher dans le programme…" autocomplete="off">
+    <button class="fs-btn" id="fsMinus" title="Réduire le texte">A−</button>
+    <button class="fs-btn" id="fsPlus" title="Agrandir le texte">A+</button>
+  </div>
+
+  <div class="wrap">
+    <div id="tocList" class="toclist"><div class="empty">Chargement du programme…</div></div>
+    <div id="searchResults" style="display:none;"></div>
+    <div id="reader" class="reader">
+      <div class="sec-title" id="secTitle"></div>
+      <div class="sec-body" id="secBody"></div>
+      <div class="sec-nav">
+        <button id="prevSec">‹ Section précédente</button>
+        <button id="nextSec">Section suivante ›</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">Document de référence interne — en cas de divergence, la version signée officielle prévaut.</div>
+</div>
+
+<script>
+// ============================================================================
+// LECTEUR DU PROGRAMME DE PRÉVENTION (multi-documents : PPE, PPC…)
+// Contenu statique ./prevention/ déployé avec l'appli :
+//   manifest.json           -> { documents:[{id,titre,sousTitre,version,date,photoPdf,sections:[{id,titre,file,niveau}]}] }
+//   sN.html                 -> une section, chargée à la demande
+//   index_recherche.json    -> texte brut par section (chargé seulement si on cherche)
+//   media/…                 -> images compressées (lazy loading)
+// Servi par le CDN Vercel : rapide, cache navigateur, AUCUNE consommation Supabase.
+// ============================================================================
+const BASE = './prevention/';
+function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
+
+let manifest=null, docs=[], curDoc=null, curIdx=-1, searchIndex=null, searchIndexLoading=null;
+const secCache={};
+
+function getFs(){ try{ return parseInt(localStorage.getItem('prev:fs')||'16',10)||16; }catch(e){ return 16; } }
+function setFs(v){ v=Math.max(13,Math.min(24,v)); try{ localStorage.setItem('prev:fs',String(v)); }catch(e){} document.documentElement.style.setProperty('--fs', v+'px'); }
+function posKey(){ return 'prev:pos:'+(curDoc?curDoc.id:'d'); }
+function getPos(){ try{ return JSON.parse(localStorage.getItem(posKey())||'null'); }catch(e){ return null; } }
+function setPos(idx){ try{ localStorage.setItem(posKey(), JSON.stringify({ idx, t:Date.now() })); }catch(e){} }
+function luSet(){ try{ return new Set(JSON.parse(localStorage.getItem('prev:lus:'+(curDoc?curDoc.id:'d'))||'[]')); }catch(e){ return new Set(); } }
+function markLu(id){ try{ const s=luSet(); s.add(id); localStorage.setItem('prev:lus:'+(curDoc?curDoc.id:'d'), JSON.stringify([...s])); }catch(e){} }
+
+async function fetchJson(url){ const r=await fetch(url,{cache:'no-cache'}); if(!r.ok) throw new Error('http '+r.status); return r.json(); }
+async function fetchText(url){ const r=await fetch(url); if(!r.ok) throw new Error('http '+r.status); return r.text(); }
+
+// ================== CHOIX DU DOCUMENT (PPE / PPC) ==================
+function renderDocPicker(){
+  const el=document.getElementById('tocList');
+  let h='<div class="toc-group">Documents disponibles</div>';
+  docs.forEach((d,i)=>{
+    h+='<div class="toc-item" data-doc="'+i+'"><span class="toc-num">'+escapeHtml((d.id||'').toUpperCase())+'</span>'
+      +'<span class="toc-txt">'+escapeHtml(d.titre)+'<br><span style="font-weight:500;font-size:12.5px;color:var(--paper-dim);">'
+      +(d.version?('Version '+escapeHtml(d.version)+' · '):'')+d.sections.length+' sections</span></span></div>';
+  });
+  el.innerHTML=h;
+  el.querySelectorAll('[data-doc]').forEach(x=>x.onclick=()=>selectDoc(parseInt(x.getAttribute('data-doc'),10)));
+}
+function selectDoc(i){
+  curDoc=docs[i]; curIdx=-1;
+  document.getElementById('toolbar').style.display='';
+  document.getElementById('hTitle').textContent=curDoc.titre.length>34 ? (curDoc.id||'').toUpperCase() : curDoc.titre;
+  document.getElementById('hSub').textContent=(curDoc.version?('Version '+curDoc.version+' · '):'')+(curDoc.sousTitre||'Santé & sécurité');
+  document.getElementById('tocBtn').style.display = docs.length>1 ? '' : 'none';
+  renderToc();
+}
+
+// ================== TABLE DES MATIÈRES ==================
+function renderToc(){
+  const el=document.getElementById('tocList');
+  el.classList.remove('hide');
+  document.getElementById('reader').classList.remove('show');
+  document.getElementById('searchResults').style.display='none';
+  const lus=luSet();
+  let h='';
+  h+='<div class="doc-head"><div class="doc-title">'+escapeHtml(curDoc.titre)+'</div>'
+    +'<div class="doc-meta">'+(curDoc.version?('Version '+escapeHtml(curDoc.version)+' · '):'')+(curDoc.date?('Mise à jour : '+escapeHtml(curDoc.date)+' · '):'')
+    +curDoc.sections.length+' sections</div>'
+    +(curDoc.photoPdf?('<a class="photo-link" href="'+escapeAttr(BASE+curDoc.photoPdf)+'" target="_blank" rel="noopener">📎 '+escapeHtml(curDoc.photoPdfLabel||'Annexe photo (PDF)')+'</a>'):'')
+    +'</div>';
+  const pos=getPos();
+  if(pos && pos.idx>=0 && pos.idx<curDoc.sections.length){
+    h+='<button class="resume-btn" id="resumeBtn">▶ Reprendre la lecture — '+escapeHtml(curDoc.sections[pos.idx].titre)+'</button>';
+  }
+  curDoc.sections.forEach((s,i)=>{
+    const sub=(s.niveau||1)>1;
+    h+='<div class="toc-item'+(sub?' toc-sub':'')+(lus.has(s.id)?' lu':'')+'" data-i="'+i+'">'
+      +'<span class="toc-num">'+(i+1)+'</span><span class="toc-txt">'+escapeHtml(s.titre)+'</span>'
+      +(lus.has(s.id)?'<span style="color:var(--ok-green);font-size:15px;">✓</span>':'')
+      +'</div>';
+  });
+  el.innerHTML=h;
+  el.querySelectorAll('[data-i]').forEach(x=>x.onclick=()=>openSection(parseInt(x.getAttribute('data-i'),10)));
+  const rb=document.getElementById('resumeBtn'); if(rb) rb.onclick=()=>openSection(getPos().idx);
+  document.getElementById('tocBtn').style.display = docs.length>1 ? '' : 'none';
+}
+
+// ================== LECTURE D'UNE SECTION ==================
+async function openSection(i, highlight){
+  if(!curDoc || i<0 || i>=curDoc.sections.length) return;
+  curIdx=i; const s=curDoc.sections[i];
+  document.getElementById('tocList').classList.add('hide');
+  document.getElementById('searchResults').style.display='none';
+  const rd=document.getElementById('reader'); rd.classList.add('show');
+  document.getElementById('tocBtn').style.display='';
+  document.getElementById('secTitle').textContent=(i+1)+'. '+s.titre;
+  const body=document.getElementById('secBody');
+  body.innerHTML='<div class="sec-loading">Chargement de la section…</div>';
+  window.scrollTo(0,0);
+  try{
+    if(!secCache[s.id]) secCache[s.id]=await fetchText(BASE+s.file);
+    let html=secCache[s.id].replace(/src="media\//g, 'src="'+BASE+'media/');   // les images vivent dans ./prevention/media/
+    if(highlight){
+      try{
+        const re=new RegExp('('+highlight.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');
+        html=html.replace(/(>[^<]+<)/g, seg=>seg.replace(re,'<mark>$1</mark>'));
+      }catch(e){}
+    }
+    body.innerHTML=html;
+    if(highlight){ const m=body.querySelector('mark'); if(m) setTimeout(()=>m.scrollIntoView({behavior:'smooth',block:'center'}),120); }
+    markLu(s.id); setPos(i);
+  }catch(e){
+    body.innerHTML='<div class="empty">Impossible de charger cette section.<br>Vérifie ta connexion puis réessaie.</div>';
+  }
+  document.getElementById('prevSec').disabled = (i<=0);
+  document.getElementById('nextSec').disabled = (i>=curDoc.sections.length-1);
+  document.getElementById('prevSec').onclick=()=>openSection(i-1);
+  document.getElementById('nextSec').onclick=()=>openSection(i+1);
+}
+function backToToc(){
+  if(document.getElementById('reader').classList.contains('show') || document.getElementById('searchResults').style.display!=='none'){
+    document.getElementById('search').value='';
+    renderToc(); window.scrollTo(0,0); return;
+  }
+  if(docs.length>1){ // depuis la TOC : retour au choix du document
+    curDoc=null; document.getElementById('toolbar').style.display='none';
+    document.getElementById('hTitle').textContent='Programme de prévention';
+    document.getElementById('hSub').textContent='Santé & sécurité — Maçonnerie DMD';
+    document.getElementById('tocBtn').style.display='none';
+    document.getElementById('reader').classList.remove('show');
+    document.getElementById('tocList').classList.remove('hide');
+    renderDocPicker();
+  }
+}
+document.getElementById('tocBtn').onclick=backToToc;
+
+// ================== RECHERCHE (index chargé à la demande) ==================
+async function ensureSearchIndex(){
+  if(searchIndex) return searchIndex;
+  if(searchIndexLoading) return searchIndexLoading;
+  searchIndexLoading = fetchJson(BASE+'index_recherche.json').then(j=>{ searchIndex=j; return j; }).catch(()=>{ searchIndexLoading=null; return null; });
+  return searchIndexLoading;
+}
+function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+let _sTimer=null;
+document.getElementById('search').addEventListener('input', ()=>{ clearTimeout(_sTimer); _sTimer=setTimeout(doSearch, 260); });
+async function doSearch(){
+  if(!curDoc) return;
+  const q=document.getElementById('search').value.trim();
+  const box=document.getElementById('searchResults');
+  if(q.length<3){ box.style.display='none'; if(curIdx<0) document.getElementById('tocList').classList.remove('hide'); return; }
+  box.style.display=''; document.getElementById('tocList').classList.add('hide');
+  document.getElementById('reader').classList.remove('show');
+  document.getElementById('tocBtn').style.display='';
+  box.innerHTML='<div class="sec-loading">Recherche…</div>';
+  const idxAll=await ensureSearchIndex();
+  const idx = idxAll && Array.isArray(idxAll.documents) ? (idxAll.documents.find(d=>d.id===curDoc.id)||{}) : idxAll;
+  if(!idx || !Array.isArray(idx.sections)){ box.innerHTML='<div class="empty">Recherche indisponible (index non déployé).</div>'; return; }
+  const nq=norm(q); const out=[];
+  idx.sections.forEach(sec=>{
+    const nt=norm(sec.texte||''); let from=0, count=0;
+    while(count<3){
+      const p=nt.indexOf(nq, from); if(p===-1) break;
+      const a=Math.max(0,p-60), b=Math.min(nt.length,p+nq.length+80);
+      out.push({ id:sec.id, titre:sec.titre, ext:(sec.texte||'').slice(a,b), q });
+      from=p+nq.length; count++;
+    }
+  });
+  if(!out.length){ box.innerHTML='<div class="empty">Aucun résultat pour « '+escapeHtml(q)+' ».</div>'; return; }
+  const secIdxById={}; curDoc.sections.forEach((s,i)=>secIdxById[s.id]=i);
+  box.innerHTML='<div class="toc-group">'+out.length+' résultat'+(out.length>1?'s':'')+'</div>'+out.slice(0,60).map(r=>{
+    let ext=escapeHtml(r.ext);
+    try{ const re=new RegExp('('+r.q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'); ext=ext.replace(re,'<b>$1</b>'); }catch(e){}
+    return '<div class="sr-item" data-sid="'+escapeAttr(r.id)+'"><div class="sr-sec">'+escapeHtml(r.titre)+'</div><div class="sr-ext">… '+ext+' …</div></div>';
+  }).join('');
+  box.querySelectorAll('[data-sid]').forEach(el=>el.onclick=()=>{ const i=secIdxById[el.getAttribute('data-sid')]; if(i!==undefined) openSection(i, q); });
+}
+
+// ================== TAILLE DU TEXTE ==================
+document.getElementById('fsMinus').onclick=()=>setFs(getFs()-1);
+document.getElementById('fsPlus').onclick=()=>setFs(getFs()+1);
+
+// ================== DÉMARRAGE ==================
+(async function(){
+  setFs(getFs());
+  try{ manifest=await fetchJson(BASE+'manifest.json'); }catch(e){ manifest=null; }
+  // rétro-compatibilité : ancien format à un seul document { sections:[...] }
+  if(manifest && Array.isArray(manifest.sections)) manifest={ documents:[manifest] };
+  docs = manifest && Array.isArray(manifest.documents) ? manifest.documents.filter(d=>d && Array.isArray(d.sections) && d.sections.length) : [];
+  if(!docs.length){
+    document.getElementById('tocList').innerHTML =
+      '<div class="notice">📘 <b>Le programme de prévention n\'est pas encore chargé dans l\'application.</b><br><br>'+
+      'Le document Word officiel (et son annexe photo PDF) seront convertis et ajoutés ici.</div>';
+    return;
+  }
+  if(docs.length===1){ selectDoc(0); }
+  else{ renderDocPicker(); }
+})();
+</script>
+</body>
+</html>

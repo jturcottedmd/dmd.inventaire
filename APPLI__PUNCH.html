@@ -125,7 +125,7 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 /* Onglets Mes heures + banque de temps */
 .mh-tabs{ display:flex; gap:6px; margin:2px 0 10px; }
 .mh-tab{ flex:1; padding:10px; border-radius:10px 10px 0 0; border:1.5px solid var(--line); border-bottom:none; background:var(--asphalt-2); color:var(--paper-dim); font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13.5px; text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; }
-.mh-tab.active{ background:var(--brick); border-color:var(--brick-line); color:var(--paper); }
+.mh-tab.active{ background:var(--brick); border-color:var(--brick-line); color:var(--paper); font-size:16px; font-weight:800; }
 .wnav-wide{ justify-content:space-between; margin-bottom:10px; }
 .bq-statut{ display:flex; align-items:center; gap:10px; background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:12px; padding:10px 13px; font-size:14px; margin-bottom:10px; }
 .bq-statut > span:first-child{ flex:1; }
@@ -433,11 +433,18 @@ function updateTimers(){
   const today = new Date(); today.setHours(0,0,0,0);
   const todayMs = today.getTime(), tomMs = todayMs + 86400000;
   let dayT=0, weekT=0;
+  // Heures découpées par fenêtre (jour / semaine) : un punch qui chevauche minuit compte
+  // ses heures d'après-minuit dans « Aujourd'hui » au lieu d'afficher 0 h.
+  function segHoursIn(s, winStart, winEnd){
+    const st = new Date(s.start).getTime(); if(isNaN(st)) return 0;
+    const en = s.end ? new Date(s.end).getTime() : now;
+    if(isNaN(en)) return 0;
+    const a = Math.max(st, winStart), b = Math.min(en, winEnd);
+    return b>a ? (b-a)/3600000 : 0;
+  }
   mySegments.forEach(s => {
-    const st = new Date(s.start).getTime(); if(isNaN(st)) return;
-    const h = segHours(s, now);
-    if(st>=wkStart && st<wkEnd) weekT += h;
-    if(st>=todayMs && st<tomMs) dayT += h;
+    weekT += segHoursIn(s, wkStart, wkEnd);
+    dayT  += segHoursIn(s, todayMs, tomMs);
   });
   const dEl=document.getElementById('todayTot'), wEl=document.getElementById('weekTot');
   if(dEl) dEl.textContent = fmtH(dayT);
@@ -535,21 +542,25 @@ async function startPunch(){
     if(!choice){ choice = await chooseAssignment(); }
     if(!choice){ return; }
     _pendingLoc=null; _pendingInRadius=null; _pendingOutside=false;
-    if(choice.type==='chantier'){
-      // Avertissement stylisé (look S.S.T.) : une formation est prévue aujourd'hui.
-      // L'employé peut tout de même puncher sur le chantier.
+    // Avertissement stylisé (look S.S.T.) : une formation est prévue aujourd'hui.
+    // S'affiche pour TOUT type de punch, sauf si l'employé punche justement sa formation.
+    // L'employé peut tout de même continuer.
+    if(choice.type!=='formation'){
       const ft = myFormationsOn(dateStr(new Date()));
       if(ft.length){
+        const surChantier = (choice.type==='chantier');
         const proceed = await sstConfirm({
           icon:'📚',
           title:'Formation prévue aujourd\'hui',
-          sub:'D\'après le plan, tu devrais être en formation. Tu peux tout de même puncher sur le chantier.',
+          sub:'D\'après le plan, tu as une formation aujourd\'hui'+(surChantier?'. Tu peux tout de même puncher sur le chantier.':'. Tu peux tout de même puncher.'),
           detail:formationDetail(ft[0]),
-          okLabel:'🏗 Puncher quand même sur le chantier',
+          okLabel:surChantier?'🏗 Puncher quand même sur le chantier':'Puncher quand même',
           cancelLabel:'Annuler'
         });
         if(!proceed) return;
       }
+    }
+    if(choice.type==='chantier'){
       const g = await checkChantierGeo(choice.teamId, 'in');
       if(!g) return;
       _pendingLoc=g.loc; _pendingInRadius=g.inRadius; _pendingOutside=g.outside;
@@ -580,6 +591,12 @@ async function checkChantierGeo(teamId, mode){
   }
   if(!site || site.lat==null){
     if(mode==='in'){
+      // Premier punch = TA position devient le point de référence du chantier pour toute
+      // l'équipe. On demande confirmation pour éviter qu'un punch fait de la maison
+      // enregistre une mauvaise position (tous les collègues seraient ensuite « hors rayon »).
+      if(!confirm('📍 Premier punch de ce chantier.\n\nTa position ACTUELLE deviendra le point de référence (rayon '+RADIUS_M+' m) pour toute l\'équipe.\n\nEs-tu bien SUR le chantier en ce moment ?')){
+        return { loc:pos, inRadius:null, outside:true };   // punch permis, mais sans définir le point
+      }
       await saveSite(teamId, pos);
       alert('📍 Position du chantier enregistrée (premier punch). Les prochains punchs seront comparés à ce point.');
       return { loc:pos, inRadius:true, outside:false };
@@ -752,15 +769,21 @@ function renderAdminBar(){
   document.getElementById('admToggle').onclick = async () => { _adminOpen = !_adminOpen; renderAdminBar(); if(_adminOpen) await renderAdminZone(); };
   if(_adminOpen) renderAdminZone();   // recharge la zone si elle est ouverte
 }
+let _admScanCache = null, _admScanTs = 0;   // cache 60 s : les flèches ‹ › ne re-téléchargent plus tout l'historique à chaque tap
 async function renderAdminZone(){
   const z = document.getElementById('admZone'); if(!z) return;
   z.innerHTML = '<div class="admin-zone"><h3>🔑 Heures — semaine affichée</h3><div class="empty">Chargement…</div></div>';
-  const rows = await storage.like('punch:');
+  let rows, srows;
+  if(_admScanCache && (Date.now()-_admScanTs) < 60000){ rows=_admScanCache.rows; srows=_admScanCache.srows; }
+  else{
+    rows = await storage.like('punch:');
+    srows = await storage.like('punch_statut:');
+    _admScanCache={rows,srows}; _admScanTs=Date.now();
+  }
   const all = [];
   rows.forEach(r => { try{ const s=JSON.parse(r.value); if(s&&s.start){ s._key=r.key; all.push(s); } }catch(e){} });
   // Statuts déjà enregistrés (par appareil) pour les sélecteurs admin
   _statutsAll = {};
-  const srows = await storage.like('punch_statut:');
   srows.forEach(r => { try{ _statutsAll[r.key.slice('punch_statut:'.length)] = (JSON.parse(r.value).statut||''); }catch(e){} });
   const wkStart = startOfWeek(new Date(), weekOffset).getTime(), wkEnd = wkStart + 7*86400000;
   const now = Date.now();
@@ -874,7 +897,13 @@ document.getElementById('tabBtnSemaine').onclick = () => switchTab('semaine');
     renderAll();
     tickTimer = setInterval(updateTimers, 1000);
     document.addEventListener('visibilitychange', async () => {
-      if(!document.hidden){ await Promise.all([ loadMySegments(), loadSites(), loadFormationsPlan(), loadTeamSecteurs(), loadMyStatut() ]); renderAll(); }
+      if(document.hidden) return;
+      // Ne pas tout re-rendre pendant qu'un punch est en cours dans une modale (choix
+      // d'affectation, avertissement formation…) : ça recréait le bouton et cassait le flux.
+      const ov = document.getElementById('overlay');
+      if(ov && ov.classList.contains('show')) return;
+      await Promise.all([ loadMySegments(), loadSites(), loadFormationsPlan(), loadTeamSecteurs(), loadMyStatut() ]);
+      renderAll();
     });
   }catch(e){ console.error(e); document.getElementById('punchCard').innerHTML='<div class="pc-state">Impossible de démarrer le pointage.</div>'; }
 })();

@@ -309,6 +309,14 @@ const APPS = [
     soon:false
   },
   {
+    id:'inspections',
+    nom:'Inspection quotidienne',
+    desc:'Machinerie · scies · échafaudage · madriers',
+    icon:'inspections',
+    href:'./APPLI__INSPECTIONS.html',   // <-- fiches d'inspection quotidienne par machine / équipe
+    soon:false
+  },
+  {
     id:'chat',
     nom:'Chat',
     desc:'Discussion de chantier',
@@ -349,6 +357,14 @@ const APPS = [
     soon:true
   },
   {
+    id:'prevention',
+    nom:'Programme de prévention',
+    desc:'Santé & sécurité — document officiel',
+    icon:'prevention',
+    href:'./APPLI__PREVENTION.html',   // <-- lecteur du programme de prévention (contenu statique ./prevention/)
+    soon:false
+  },
+  {
     id:'confidentialite',
     nom:'Politiques',
     desc:'Confidentialité & Loi 25',
@@ -370,6 +386,18 @@ const ICONS = {
     <path d="M12 48c0-7 5.4-12 12-12s12 5 12 12" stroke="${P}" stroke-width="3" stroke-linecap="round"/>
     <path d="M38 46c.6-5.5 4.6-9 9.5-9 5 0 8.9 3.6 9.5 9" stroke="${Y}" stroke-width="3" stroke-linecap="round"/>
   </svg>`,
+  // Bouclier avec croix (programme de prévention)
+  prevention: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M32 8 12 16v14c0 13 8.5 22 20 26 11.5-4 20-13 20-26V16L32 8z" stroke="${P}" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M32 22v16M24 30h16" stroke="${Y}" stroke-width="3.5" stroke-linecap="round"/>
+  </svg>`,
+  // Presse-papier avec crochet (inspection quotidienne)
+  inspections: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="16" y="14" width="32" height="40" rx="3" stroke="${P}" stroke-width="3"/>
+    <rect x="25" y="10" width="14" height="8" rx="2" stroke="${Y}" stroke-width="3"/>
+    <path d="M23 30l4 4 8-9" stroke="${Y}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M23 44h18" stroke="${G}" stroke-width="3" stroke-linecap="round"/>
+  </svg>`,
   // Chariot/palette d'équipements
   inventaire: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
     <rect x="10" y="26" width="20" height="16" rx="2" stroke="${Y}" stroke-width="3"/>
@@ -378,13 +406,6 @@ const ICONS = {
     <circle cx="18" cy="52" r="3.5" fill="${G}"/>
     <circle cx="46" cy="52" r="3.5" fill="${G}"/>
     <path d="M15 26v-4M25 26v-4" stroke="${Y}" stroke-width="3" stroke-linecap="round"/>
-  </svg>`,
-  // Chapeau de graduation (formation)
-  formations: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M32 14 8 24l24 10 24-10-24-10z" stroke="${P}" stroke-width="3" stroke-linejoin="round"/>
-    <path d="M18 29v11c0 3.3 6.3 6 14 6s14-2.7 14-6V29" stroke="${Y}" stroke-width="3" stroke-linejoin="round"/>
-    <path d="M56 24v12" stroke="${G}" stroke-width="3" stroke-linecap="round"/>
-    <circle cx="56" cy="39" r="2.5" fill="${G}"/>
   </svg>`,
   // Facture / reçu avec montant
   factures: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -548,6 +569,7 @@ function normNom(s){
   return (s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
     .replace(/[.,\-]/g,' ').replace(/\s+/g,' ').trim();
 }
+function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function levenshtein(a, b){
   if(a === b) return 0;
   if(!a || !b) return (a.length + b.length);
@@ -839,9 +861,23 @@ document.getElementById('togglePass').addEventListener('click', function(){
 function _fmtOnlyDigits(s){ return String(s==null?'':s).replace(/\D/g,''); }
 function formatTel(s){ const d=_fmtOnlyDigits(s); let n=d; if(n.length===11 && n[0]==='1') n=n.slice(1); if(n.length===10) return '('+n.slice(0,3)+')'+n.slice(3,6)+'-'+n.slice(6); return String(s==null?'':s).trim(); }
 function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
+// Synchronise un nom saisi avec l'orthographe exacte de la liste des employés (roster : formations Excel + ajouts).
+// Peu importe la casse, les accents ou l'ordre prénom/nom : renvoie « Prénom Nom » en casse propre.
+window.__dmdCanonNom = function(raw){
+  var s = formatNom(raw); if(!s) return s;
+  try{
+    var pool = (Array.isArray(_rosterNames) ? _rosterNames : []);
+    var k = normNom(raw);
+    var exact = pool.filter(function(n){ return normNom(n)===k; });
+    if(exact.length) return formatNom(exact[0]);
+    var near = pool.filter(function(n){ return nomsProches(n, raw); });
+    if(near.length===1) return formatNom(near[0]);
+  }catch(_){}
+  return s;
+};
 document.getElementById('idSave').addEventListener('click', async () => {
   const idErr = document.getElementById('idError');
-  const nom = formatNom(document.getElementById('idNom').value);
+  let nom = formatNom(document.getElementById('idNom').value);
   const tel = formatTel(document.getElementById('idTel').value);
   const courriel = document.getElementById('idCourriel').value.trim();
   const urgNom = formatNom(document.getElementById('idUrgNom').value);
@@ -851,13 +887,15 @@ document.getElementById('idSave').addEventListener('click', async () => {
   if(!tel){ idErr.textContent = 'Le numéro de téléphone est obligatoire.'; return; }
   if(!urgNom || !urgTel){ idErr.textContent = "Le contact d'urgence (nom et téléphone) est obligatoire."; return; }
   // Contrôle d'accès : le nom doit figurer dans la liste des employés (sauf appareil admin)
+  if(!_rosterLoaded){ idErr.textContent = 'Vérification de la liste des employés…'; await loadRoster(); }
   if(!isDeviceAdmin()){
-    if(!_rosterLoaded){ idErr.textContent = 'Vérification de la liste des employés…'; await loadRoster(); }
     if(!isOnRoster(nom)){
       idErr.innerHTML = "Ton nom n'apparaît pas dans la liste des employés de Maçonnerie DMD. Vérifie l'orthographe (Prénom Nom) ou demande à ton administrateur de t'ajouter.";
       return;
     }
   }
+  // Synchronise l'orthographe du nom avec la liste (même personne, peu importe la graphie ou l'Excel) → « Prénom Nom »
+  nom = __dmdCanonNom(document.getElementById('idNom').value);
   idErr.innerHTML = '&nbsp;';
   saveIdentity({ nom, tel, courriel, urgence:{ nom:urgNom, tel:urgTel, lien:urgLien } });
 });

@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Inspection quotidienne — Maçonnerie DMD</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://toajegeqsqulnhdwkajm.supabase.co" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --asphalt:#232221; --asphalt-2:#2f2d2b; --paper:#f3efe6; --paper-dim:#d9d2c2;
+  --brick:#8a2f31; --brick-line:#5e2022; --logo-grey:#656263; --line:#46433f;
+  --safety-yellow:#f2b705; --ok-green:#4c7a3f; --ok-soft:#6fae5d; --danger-red:#c0392b; --amber:#e0952b;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-family:'Barlow',sans-serif;min-height:100%;-webkit-text-size-adjust:100%;}
+#app{min-height:100vh; display:flex; flex-direction:column; max-width:620px; margin:0 auto; background:var(--asphalt);}
+.hdr{
+  display:flex; align-items:center; gap:10px; padding:13px 15px; background-color:#6e2325;
+  background-image:linear-gradient(rgba(0,0,0,0.12) 2px,transparent 2px),linear-gradient(90deg,rgba(0,0,0,0.12) 2px,transparent 2px);
+  background-size:38px 20px; border-bottom:3px solid var(--brick-line);
+}
+.back{ color:var(--paper); text-decoration:none; font-size:22px; line-height:1; padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.25); }
+.hdr-txt{ display:flex; flex-direction:column; }
+.hdr-title{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:22px; letter-spacing:0.5px; margin:0; line-height:1.05; }
+.hdr-sub{ font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--paper-dim); margin-top:1px; }
+.adm-toggle{ margin-left:auto; flex:0 0 auto; background:rgba(0,0,0,0.25); border:1px solid rgba(0,0,0,0.3); color:var(--paper); border-radius:8px; padding:8px 11px; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; white-space:nowrap; }
+.adm-toggle.on{ background:var(--safety-yellow); color:#232221; border-color:var(--safety-yellow); }
+
+.tabs{ display:flex; gap:6px; padding:10px 14px 2px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.tab{ flex:0 0 auto; padding:9px 15px; border-radius:20px; border:1.5px solid var(--line); background:var(--asphalt-2); color:var(--paper-dim); font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:15px; letter-spacing:0.5px; text-transform:uppercase; cursor:pointer; }
+.tab.active{ background:var(--brick); border-color:var(--brick-line); color:var(--paper); font-size:17.5px; font-weight:800; }
+
+.wrap{ padding:12px 14px 30px; }
+.teamsel{ display:flex; align-items:center; gap:9px; margin:4px 0 12px; }
+.teamsel label{ font-size:12px; text-transform:uppercase; letter-spacing:0.5px; color:var(--paper-dim); font-weight:700; }
+.teamsel select{ flex:1; padding:10px 12px; border-radius:9px; border:1.5px solid var(--line); background:var(--asphalt-2); color:var(--paper); font-family:'Barlow',sans-serif; font-size:15px; }
+.mine-badge{ font-size:11px; font-weight:700; color:#232221; background:var(--safety-yellow); border-radius:12px; padding:2px 8px; text-transform:uppercase; letter-spacing:0.4px; }
+.ro-note{ font-size:12.5px; color:var(--amber); background:rgba(224,149,43,0.1); border:1px solid rgba(224,149,43,0.35); border-radius:9px; padding:8px 11px; margin-bottom:11px; line-height:1.4; }
+
+.grp-title{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:15px; text-transform:uppercase; letter-spacing:0.7px; color:var(--paper-dim); margin:16px 2px 7px; display:flex; align-items:center; gap:8px; }
+.card{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:13px; padding:12px 14px; margin:9px 0; cursor:pointer; }
+.card:active{ border-color:var(--paper-dim); }
+.card-top{ display:flex; align-items:center; gap:9px; }
+.card-ident{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13px; background:var(--asphalt); border:1px solid var(--line); color:var(--safety-yellow); border-radius:7px; padding:2px 8px; flex:0 0 auto; }
+.card-nom{ font-weight:600; font-size:16px; }
+.card-form{ font-size:12px; color:var(--paper-dim); margin-top:2px; }
+.weekdots{ display:flex; gap:5px; margin-top:10px; }
+.wd{ flex:1; text-align:center; }
+.wd .d{ font-size:10px; color:var(--logo-grey); text-transform:uppercase; }
+.wd .dot{ width:14px; height:14px; border-radius:50%; margin:3px auto 0; background:var(--line); }
+.dot.green{ background:var(--ok-soft); } .dot.red{ background:var(--danger-red); } .dot.amber{ background:var(--amber); } .dot.future{ background:transparent; border:1px dashed var(--line); }
+.empty{ color:var(--logo-grey); font-size:14px; font-style:italic; padding:20px 6px; text-align:center; }
+
+.btn{ width:100%; padding:12px; border:none; border-radius:10px; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:16px; text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; margin-top:9px; background:var(--asphalt); color:var(--paper-dim); border:1.5px solid var(--line); }
+.btn.primary{ background:var(--safety-yellow); color:#232221; border:none; }
+.btn.brick{ background:var(--brick); color:var(--paper); border:none; }
+.btn.danger{ background:#5a2a2a; color:#ffd7d7; border:none; }
+
+.hist-item{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:11px; padding:10px 12px; margin:8px 0; display:flex; align-items:center; gap:10px; cursor:pointer; }
+.hist-main{ flex:1; min-width:0; }
+.hist-date{ font-weight:700; font-size:15px; }
+.hist-sub{ font-size:12.5px; color:var(--paper-dim); margin-top:2px; }
+.hi-dot{ width:12px; height:12px; border-radius:50%; flex:0 0 auto; }
+
+/* Overlay / modale */
+.overlay{ display:none; position:fixed; inset:0; background:rgba(0,0,0,0.74); z-index:60; align-items:flex-start; justify-content:center; padding:18px 10px; overflow-y:auto; }
+.overlay.show{ display:flex; }
+.modal{ background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:16px; padding:16px; width:100%; max-width:560px; }
+.modal h3{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:20px; margin:0 0 4px; letter-spacing:0.5px; }
+.m-meta{ font-size:12.5px; color:var(--paper-dim); margin-bottom:10px; line-height:1.45; }
+.field-label{ font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--paper-dim); margin:9px 0 3px; }
+.inp{ width:100%; padding:10px 11px; border-radius:9px; border:1.5px solid var(--line); background:var(--asphalt); color:var(--paper); font-size:15px; font-family:'Barlow',sans-serif; }
+textarea.inp{ resize:vertical; min-height:52px; }
+
+.wknav{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 0; }
+.wknav button{ background:var(--asphalt); border:1.5px solid var(--line); color:var(--paper); border-radius:9px; padding:8px 12px; font-size:16px; cursor:pointer; }
+.wknav button:disabled{ opacity:0.35; }
+.wknav .lbl{ flex:1; text-align:center; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:15px; text-transform:uppercase; letter-spacing:0.5px; }
+.daychips{ display:flex; gap:4px; margin:6px 0 12px; }
+.daychip{ flex:1; text-align:center; padding:7px 2px; border-radius:9px; border:1.5px solid var(--line); background:var(--asphalt); cursor:pointer; }
+.daychip.sel{ border-color:var(--safety-yellow); background:rgba(242,183,5,0.12); }
+.daychip.future{ opacity:0.32; }
+.daychip .dn{ font-size:10.5px; text-transform:uppercase; color:var(--paper-dim); font-weight:700; }
+.daychip .dd{ font-size:14px; font-weight:700; }
+.daychip .cdot{ width:8px; height:8px; border-radius:50%; margin:3px auto 0; background:var(--line); }
+
+.itbl{ margin-top:6px; }
+.igroup{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--safety-yellow); margin:12px 0 5px; padding-bottom:3px; border-bottom:1px solid var(--line); }
+.irow{ padding:7px 0; border-bottom:1px dashed var(--line); }
+.irow .it-lbl{ font-size:14px; line-height:1.35; margin-bottom:6px; }
+.st-btns{ display:flex; gap:6px; }
+.st{ flex:1; padding:8px 4px; border-radius:8px; border:1.5px solid var(--line); background:var(--asphalt); color:var(--paper-dim); font-size:13px; font-weight:700; cursor:pointer; text-align:center; }
+.st.ok.on{ background:var(--ok-green); border-color:var(--ok-green); color:#fff; }
+.st.anomalie.on{ background:var(--danger-red); border-color:var(--danger-red); color:#fff; }
+.st.na.on{ background:var(--logo-grey); border-color:var(--logo-grey); color:#fff; }
+.qtyrow{ display:flex; gap:8px; margin-top:6px; }
+.qtyrow .qf{ flex:1; }
+.qtyrow .qf .field-label{ margin:0 0 2px; }
+.roflag{ pointer-events:none; opacity:0.75; }
+.save-status{ font-size:12.5px; color:var(--ok-soft); min-height:16px; margin-top:6px; text-align:center; }
+
+.gate{ position:fixed; inset:0; z-index:1000; display:none; align-items:center; justify-content:center; padding:28px; text-align:center; background:var(--asphalt); color:var(--paper-dim); }
+.gate.show{ display:flex; }
+</style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<div id="app">
+  <div class="hdr">
+    <a class="back" href="./index.html" aria-label="Accueil">←</a>
+    <div class="hdr-txt">
+      <h1 class="hdr-title">Inspection quotidienne</h1>
+      <div class="hdr-sub">Machinerie · scies · échafaudage · madriers</div>
+    </div>
+    <button id="exportBtn" style="display:none;background:#4c7a3f;color:#f3efe6;border:none;border-radius:8px;padding:8px 11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;white-space:nowrap;">⬇ Excel</button>
+    <button class="adm-toggle" id="admToggle">🔑 Admin</button>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div class="wrap" id="wrap"><div class="empty">Chargement…</div></div>
+</div>
+
+<div class="overlay" id="overlay"><div class="modal" id="modalBox"></div></div>
+<div class="gate" id="gate">Connexion requise. Redirection…</div>
+
+<script>
+// ================== CONFIG ==================
+const SUPABASE_URL = "https://toajegeqsqulnhdwkajm.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvYWplZ2Vxc3F1bG5oZHdrYWptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1OTY1OTQsImV4cCI6MjA5OTE3MjU5NH0.LBLVG--c1d9V_ZRw-h_ATZE2SUX3OAP7lf0SxMqPqNE";
+const ADMIN_CODE = "DMD-ADMIN";
+let _sb=null; try{ if(window.supabase&&window.supabase.createClient){ _sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY); } }catch(e){ console.error(e); }
+function withTimeout(p,ms,l){ return Promise.race([Promise.resolve(p),new Promise((_,r)=>setTimeout(()=>r(new Error('timeout:'+(l||''))),ms))]); }
+function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
+function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu,function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
+function normNom(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim(); }
+function nomsProches(n1,n2){ const w1=normNom(n1).split(' ').filter(Boolean),w2=normNom(n2).split(' ').filter(Boolean); if(!w1.length||!w2.length) return false; const c=w1.filter(w=>w2.includes(w)); return c.length>=Math.min(2,Math.min(w1.length,w2.length)); }
+function slug(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function getDeviceId(){ try{ let v=localStorage.getItem('inv:deviceId'); if(!v){ v='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); localStorage.setItem('inv:deviceId',v);} return v; }catch(e){ return 'dev_'+Math.random().toString(36).slice(2,10); } }
+function myName(){ try{ const v=localStorage.getItem('inv:deviceUser'); if(v){ const u=JSON.parse(v); if(u){ if(u.chantier) return 'Tablette de chantier'; if(u.nom) return u.nom; } } }catch(e){} return 'Appareil '+getDeviceId().slice(-4); }
+function isDeviceAdmin(){ try{ return localStorage.getItem('inv:isAdmin')==='1'; }catch(e){ return false; } }
+function setAdmin(on){ try{ localStorage.setItem('inv:isAdmin', on?'1':'0'); }catch(e){} }
+
+const storage = {
+  async get(k){ try{ const r=await withTimeout(_sb.from('inv_store').select('value').eq('key',k).maybeSingle(),8000,'get'); const {data,error}=r||{}; if(error){console.error(error);return null;} return data?{key:k,value:data.value}:null; }catch(e){ return null; } },
+  async set(k,value){ const {error}=await _sb.from('inv_store').upsert({key:k,value,updated_at:new Date().toISOString()}); if(error){console.error(error);return null;} return {key:k,value}; },
+  async del(k){ const {error}=await _sb.from('inv_store').delete().eq('key',k); return !error; },
+  async like(prefix){ try{ const r=await withTimeout(_sb.from('inv_store').select('key,value').like('key',prefix+'%'),12000,'like'); return (r&&Array.isArray(r.data))?r.data:[]; }catch(e){ return []; } }
+};
+
+// ================== DATES / SEMAINE (lundi -> dimanche) ==================
+function pad(n){ return String(n).padStart(2,'0'); }
+function isoDate(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function todayISO(){ return isoDate(new Date()); }
+function mondayOf(d){ const x=new Date(d); const off=(x.getDay()+6)%7; x.setDate(x.getDate()-off); x.setHours(0,0,0,0); return x; }
+function addDays(iso,n){ const d=new Date(iso+'T00:00:00'); d.setDate(d.getDate()+n); return isoDate(d); }
+const DAYNAMES=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+function weekDays(weekStart){ const out=[]; for(let i=0;i<7;i++) out.push(addDays(weekStart,i)); return out; }
+function frDate(iso){ if(!iso) return ''; const d=new Date(iso+'T00:00:00'); if(isNaN(d)) return iso; return d.toLocaleDateString('fr-CA',{day:'numeric',month:'short'}); }
+
+// ================== FICHES ==================
+const STATUS_DEF = { def:[['ok','OK'],['anomalie','Anomalie'],['na','N.A.']], madriers:[['ok','Conforme'],['anomalie','Défaut (rejet)']] };
+const FORMS = {
+  chariot:{ label:"Chariot élévateur", kind:'machine', header:['noSerie','marque','charge','horometre'], groups:[
+    {title:"État général — à l'arrêt", items:["Manuel de l'utilisateur","Pneus, roues (entailles, écrous desserrés, pression)","Niveau des fluides (freins, transmission, hydraulique, moteur, refroidissement)","Système hydraulique (boyaux, fuites)","Système d'alimentation en carburant","Bouteille de propane fixée solidement (si applicable)","Batteries (bornes)","Courroies","Soudures (fissures)","Fourches (bon état, même hauteur, alignement)","Dosseret de charge","Autocollants, avertissements et plaque signalétique","Toit de protection","Moyens d'accès (marches, porte)","Ceinture de sécurité","Extincteur (si applicable)","Rapporteur d'angle","Charte de levage","Propreté (cabine, rétroviseurs)"]},
+    {title:"État général — en marche", items:["Freins (service avant/arrière, stationnement)","Système d'éclairage, feux de position","Témoins lumineux et instruments","Klaxon, avertisseur de marche arrière","Essuie-glaces","Essai à vide de toutes les commandes","Stabilisateurs de mise à niveau (si applicable)","Volant de direction (jeu < ¼ tour)","Commandes hydrauliques répondent bien","Systèmes d'élévation et d'inclinaison","Direction (tous les modes)","Transmission, direction et gamme de vitesse","Tout autre élément spécifié par le fabricant"]}
+  ]},
+  fraco:{ label:"FRACO — plateforme sur mât", kind:'machine', header:['noSerie','typeUnite'], groups:[
+    {title:"Items inspectés", items:["Périmètre de sécurité au sol","Stabilité du sol entourant la base","Nivellement de la base et verticalité du mât","Stabilisateurs / cales de bois","Pneus et jantes / direction, entraînements","Dégagement latéral et vertical de la plateforme","Condition du câble d'alimentation de la plateforme","Structure des sections de ponts et de porte-à-faux","Structure du mât (rail / barreaux)","Boulons, écrous et goupille de sécurité","Condition du plancher de la plateforme","Condition des madriers / attaches à madriers","Longerons","Garde-corps et grillage de protection","Fin de mât et arrêt de descente mécanique","Solidité des ancrages : boulons et goupilles en place","Distribution des charges sur la plateforme","Panneau d'avertissement / autocollants","Niveau de carburant / huile moteur et hydraulique","Condition des boyaux hydrauliques","Présence de fuites","Condition du filage électrique","Batterie et câbles bien fixés","Manuel d'utilisation, grille d'inspection quotidienne","Fonctionnement de la plateforme / mécanisme de sécurité","Fonctionnement du FRH, état du câble et du crochet","Charge maintenue","Bouton d'arrêt d'urgence","Descente d'urgence"]}
+  ]},
+  scie_gaz:{ label:"Scie à gaz / découpeuse", kind:'machine', header:['noSerie','marque','modele'], groups:[
+    {title:"Visuel et opérationnel", items:["Étiquettes lisibles","Poignées et éléments de retenue propres","Poignée de lancement et corde en bon état","Vis et boulons bien serrés","Bouchon et réservoir de carburant étanches","Capot protecteur, levier de réglage et butoir en bon état","Supports en caoutchouc en bonne condition","Système antivibration fonctionnel","Meule appropriée à la tâche et au matériau","Meule en bon état (arêtes, bords, corps)","Date de la meule en résine non expirée (si indiquée)","Conçue pour l'eau si indiquée","Sens de rotation de la meule diamantée vérifié","Vitesse de la meule ≥ celle de la découpeuse","Diamètre d'alésage compatible avec l'arbre","Bague d'espacement conforme (si présente)","Gâchettes de blocage et d'accélérateur ressorties","ON/OFF, curseur combiné fonctionnel","Levier de l'étrangleur (choke) fonctionnel","Pompe d'amorçage manuelle étanche et fonctionnelle","Soupape de décompression (primer) fonctionnelle","Prise d'eau étanche et orifices d'arrosage non obstrués"]},
+    {title:"État après utilisation et nettoyage", items:["Meule tourne lentement au ralenti — IMPORTANT","Performance normale (pas de vibrations anormales)","Orifices d'arrosage non obstrués"]},
+    {title:"Chariot (si applicable)", items:["Commande des gaz du chariot en bon état","Verrouillage de la poignée repliable fonctionnel","Roues en bon état","Guide de profondeur de coupe en bon état","Adaptateur de la découpeuse au chariot aligné","Réservoir et raccords d'eau étanches"]}
+  ]},
+  scie_chaine:{ label:"Scie à chaîne", kind:'machine', header:['noSerie','marque','modele'], groups:[
+    {title:"Visuel et opérationnel", items:["Étiquettes lisibles","Arrêt de chaîne","Poignées et éléments de retenue propres","Poignée de lancement et corde","Protège-main avant et arrière (sans fissure)","Réservoir de carburant étanche, aucune fuite","Pompe d'amorçage manuelle (si présente)","Couvercles de protection bien fixés","Boulons bien serrés","Griffe d'abattage fonctionnelle","Silencieux (grille pare-étincelles) propre","Système anti-vibration","Interrupteur arrêt / marche","Soupape de décompression fonctionnelle (si présente)","Chaîne appropriée","Chaîne affûtée, limiteurs de profondeur ajustés","Tension de la chaîne adéquate"]},
+    {title:"État au démarrage (après inspection et nettoyage)", items:["Chaîne ne tourne pas au ralenti — IMPORTANT","Frein de chaîne fonctionnel","Gâchette d'accélérateur fonctionne librement","Blocage de gâchette d'accélérateur fonctionnel","Performance normale (démarrage et coupe)","Lubrification de la chaîne fonctionnelle"]}
+  ]},
+  echafaudage:{ label:"Échafaudage à cadres métalliques", kind:'global', icon:'🪜', header:['chantier','emplacement'], groups:[
+    {title:"Sécurité", items:["Système d'arrêt de chute (harnais relié à un ancrage, si requis)"]},
+    {title:"Madriers / planchers", items:["Étampe de conformité (CSA, NFPA cat. 1)","Défauts / dommages matériel (voir fiche Madriers)"]},
+    {title:"Autres composantes métalliques (état et quantité)", qty:true, items:["Plaques et vérins","Cadres","Croisillons","Équerres","Tubes","Raccords","Poteaux garde-corps","Lisses garde-corps","Échelles (moyen d'accès)","Poulie","Stabilisateurs","Amarrages"]}
+  ]},
+  madriers:{ label:"Madriers d'échafaudage", kind:'global', icon:'🪵', status:'madriers', header:['lieu'], groups:[
+    {title:"Observation de défauts entraînant le rejet des madriers", items:["Fente (plus longue que sa largeur)","Gerce (plus longue que la largeur)","Roulure (> 50 mm / 2 po de profondeur)","Trait de scie (> 8 mm / 5⁄16 po)","Nœud lâche (> 38 mm / 1½ po)","Nœud encastré ou entremêlé (> 50 mm / 2 po)","Flache / creux (25 mm / 1 po sur plus du ¼ de la longueur)","Pourriture (bois altéré, piqué, carie)","Déformation (arc, torsion, cambrure, voilement)"]}
+  ]}
+};
+const HEADER_LABELS = { noSerie:'N° de série', marque:'Marque', modele:'Modèle', charge:'Charge nominale', horometre:'Horomètre', typeUnite:"Type d'unité (mono/bi mât…)", chantier:'Chantier', emplacement:'Emplacement', lieu:'Lieu de travail' };
+function statusOptions(form){ const f=FORMS[form]; return STATUS_DEF[(f&&f.status)||'def']; }
+function itemsFlat(form){ const out=[]; (FORMS[form].groups||[]).forEach((g,gi)=>g.items.forEach((it,ii)=>out.push({gi,ii,key:'g'+gi+'_'+ii,label:it,qty:!!g.qty}))); return out; }
+
+// ================== ÉTAT ==================
+let teams=[], teamLabelMap={}, myTeamId=null, isAdmin=false;
+let catalog=[], catByName={}, identsByName={}, teamMachines={};
+let units=[];              // {unitKey, teamId, name, cat, form, ident}
+let currentTab='machines';
+let curTeamSel=null;
+
+const STD_TEAMS=[{id:'team_1',label:'Équipe 1'},{id:'team_2',label:'Équipe 2'},{id:'team_3',label:'Équipe 3'},{id:'team_4',label:'Équipe 4'},{id:'team_5',label:'Équipe 5'},{id:'team_6',label:'Équipe 6'},{id:'reno_1',label:'Réno 1'},{id:'reno_2',label:'Réno 2'},{id:'entrepot',label:'Entrepôt'},{id:'administration',label:'Administration'}];
+
+async function loadTeams(){
+  try{ const r=await storage.get('inv:teams'); if(r&&r.value){ const p=JSON.parse(r.value); if(Array.isArray(p)&&p.length) teams=p; } }catch(e){}
+  if(!teams.length) teams=STD_TEAMS.slice();
+  teamLabelMap={}; teams.forEach(t=>teamLabelMap[t.id]=t.label);
+}
+function teamLabel(id){ return teamLabelMap[id]||id; }
+
+async function loadCatalog(){
+  try{ const r=await storage.get('inv:machineCatalog'); if(r&&r.value){ const p=JSON.parse(r.value); if(p&&Array.isArray(p.machines)) catalog=p.machines; } }catch(e){ catalog=[]; }
+  catByName={}; identsByName={};
+  catalog.forEach(m=>{ const k=normNom(m.nom); if(!(k in catByName)) catByName[k]=m.cat; (identsByName[k]=identsByName[k]||[]).push(m.ident||''); });
+}
+async function loadTeamMachines(){
+  teamMachines={};
+  const rows=await storage.like('inv:machines:');
+  rows.forEach(r=>{
+    const mm=r.key.match(/^inv:machines:(.+):MACHINERIE$/); if(!mm) return;
+    try{ const v=JSON.parse(r.value); if(v&&Array.isArray(v.actifs)) teamMachines[mm[1]]=v.actifs; }catch(e){}
+  });
+}
+function formForMachine(cat,nom){
+  const n=normNom(nom);
+  if(cat==='Fraco') return 'fraco';
+  if(cat==='Lift') return 'chariot';
+  if(cat==='Scie'){ if(/chain|chaine|husqvarna/.test(n)) return 'scie_chaine'; return 'scie_gaz'; }
+  return null;   // Mixeur ou inconnu : aucune fiche d'inspection
+}
+function buildUnits(){
+  units=[];
+  const orderedTeams=teams.map(t=>t.id);
+  orderedTeams.forEach(teamId=>{
+    const actifs=teamMachines[teamId]||[]; const occ={};
+    actifs.forEach(name=>{
+      const k=normNom(name); const cat=catByName[k]; const form=formForMachine(cat,name); if(!form) return;
+      occ[k]=(occ[k]||0)+1; const idx=occ[k];
+      const ids=identsByName[k]||[]; const ident=ids[idx-1]||(ids[0]||'');
+      // Clé STABLE : l'identifiant catalogue (L02, F04, S14…) quand il existe — l'historique
+      // ne se détache pas si l'ordre ou le nombre de machines de l'équipe change.
+      const stable = ids[idx-1] ? slug(ids[idx-1]) : (slug(name)+'|'+idx);
+      units.push({ unitKey:teamId+'|'+stable, teamId, name, cat, form, ident:ident+(ids.length>1&&!ids[idx-1]?(' #'+idx):'') });
+    });
+  });
+}
+function unitsForTeam(teamId){ return units.filter(u=>u.teamId===teamId); }
+
+// ---- équipe de l'utilisateur (registre inv:teammember) ----
+async function loadMyTeam(){
+  const me=myName(); if(!me||me==='Tablette de chantier'||/^Appareil /.test(me)){ myTeamId=null; return; }
+  const rows=await storage.like('inv:teammember:'); const members=[];
+  rows.forEach(r=>{ try{ const m=JSON.parse(r.value); if(m&&m.nom&&m.teamId) members.push(m); }catch(e){} });
+  const hit=members.find(m=>normNom(m.nom)===normNom(me)); if(hit){ myTeamId=hit.teamId; return; }
+  const near=members.filter(m=>nomsProches(m.nom,me)); if(near.length===1) myTeamId=near[0].teamId;
+}
+function canFillTeam(teamId){ return isAdmin || (myTeamId && teamId===myTeamId); }
+
+// ================== ONGLETS ==================
+const TABS=[{id:'machines',label:'Machinerie & scies'},{id:'echafaudage',label:'Échafaudage'},{id:'madriers',label:'Madriers'}];
+function renderTabs(){
+  document.getElementById('tabs').innerHTML = TABS.map(t=>'<div class="tab'+(t.id===currentTab?' active':'')+'" data-tab="'+t.id+'">'+escapeHtml(t.label)+'</div>').join('');
+  document.querySelectorAll('#tabs .tab').forEach(el=>el.onclick=()=>{ currentTab=el.getAttribute('data-tab'); renderTabs(); renderTab(); });
+}
+function renderTab(){
+  if(currentTab==='machines') renderMachines();
+  else renderGlobal(currentTab);
+}
+
+// ================== ONGLET MACHINES ==================
+let weekCache={};   // unitKey -> {weekStart -> record}
+function renderMachines(){
+  const wrap=document.getElementById('wrap');
+  if(curTeamSel==null) curTeamSel = myTeamId || (teams[0]&&teams[0].id);
+  let html='';
+  html+='<div class="teamsel"><label>Équipe</label><select id="teamSel">'+teams.map(t=>'<option value="'+escapeAttr(t.id)+'"'+(t.id===curTeamSel?' selected':'')+'>'+escapeHtml(t.label)+(t.id===myTeamId?' — mon équipe':'')+'</option>').join('')+'</select></div>';
+  const canFill=canFillTeam(curTeamSel);
+  if(!canFill) html+='<div class="ro-note">🔒 Lecture seule — tu peux remplir uniquement les inspections des machines de ton équipe'+(myTeamId?(' ('+escapeHtml(teamLabel(myTeamId))+')'):'')+'.</div>';
+  const list=unitsForTeam(curTeamSel);
+  if(!list.length){
+    html+='<div class="empty">Aucune machine assignée à cette équipe dans l\'inventaire.<br>Les machines proviennent de la sélection par équipe de la tuile Inventaire (onglet Machinerie).</div>';
+  } else {
+    const byForm={};
+    list.forEach(u=>{ (byForm[u.form]=byForm[u.form]||[]).push(u); });
+    ['chariot','fraco','scie_gaz','scie_chaine'].forEach(fk=>{
+      if(!byForm[fk]) return;
+      html+='<div class="grp-title">'+escapeHtml(FORMS[fk].label)+'</div>';
+      byForm[fk].forEach(u=>{ html+=unitCard(u); });
+    });
+  }
+  wrap.innerHTML=html;
+  document.getElementById('teamSel').onchange=e=>{ curTeamSel=e.target.value; renderMachines(); };
+  wrap.querySelectorAll('[data-unit]').forEach(el=>el.onclick=()=>openWeek(el.getAttribute('data-unit')));
+  // charge les enregistrements de la semaine courante pour colorer les pastilles
+  loadWeekDotsFor(list);
+}
+function unitCard(u){
+  const ws=isoDate(mondayOf(new Date())); const rec=(weekCache[u.unitKey]||{})[ws];
+  const days=weekDays(ws); const today=todayISO();
+  let dots='';
+  days.forEach((d,i)=>{
+    let cls='dot ';
+    if(d>today) cls+='future';
+    else{ const st=dayStatus(rec,d); cls+=st; }
+    dots+='<div class="wd"><div class="d">'+DAYNAMES[i]+'</div><div class="'+cls+'"></div></div>';
+  });
+  return '<div class="card" data-unit="'+escapeAttr(u.unitKey)+'"><div class="card-top">'+(u.ident?'<span class="card-ident">'+escapeHtml(u.ident)+'</span>':'')+'<div><div class="card-nom">'+escapeHtml(u.name)+'</div><div class="card-form">'+escapeHtml(FORMS[u.form].label)+'</div></div></div><div class="weekdots">'+dots+'</div></div>';
+}
+function dayStatus(rec,d){
+  if(!rec||!rec.days||!rec.days[d]) return '';   // vide
+  const ans=rec.days[d].answers||{}; let filled=0,anom=0;
+  for(const k in ans){ if(ans[k]){ filled++; if(ans[k]==='anomalie') anom++; } }
+  if(!filled) return '';
+  if(anom>0) return 'red';
+  return 'green';
+}
+async function loadWeekDotsFor(list){
+  const ws=isoDate(mondayOf(new Date()));
+  const missing=list.filter(u=>!(weekCache[u.unitKey] && weekCache[u.unitKey][ws]!==undefined));
+  if(!missing.length) return;
+  const teamAtStart=curTeamSel;
+  // Chargement en PARALLÈLE (une requête par unité, toutes en même temps) — fini le
+  // chargement séquentiel qui faisait attendre les pastilles avec 10+ machines.
+  await Promise.all(missing.map(async u=>{
+    try{ const r=await storage.get('inv:insp:'+u.form+':'+u.unitKey+':'+ws);
+      weekCache[u.unitKey]=weekCache[u.unitKey]||{};
+      weekCache[u.unitKey][ws]= r&&r.value ? JSON.parse(r.value) : null;
+    }catch(e){ weekCache[u.unitKey]=weekCache[u.unitKey]||{}; weekCache[u.unitKey][ws]=null; }
+  }));
+  if(currentTab==='machines' && curTeamSel===teamAtStart) renderMachines();
+}
+
+// ---- Grille hebdo d'une unité ----
+let fillState=null;   // { u, weekStart, rec, selDay, answers }
+async function openWeek(unitKey){
+  const u=units.find(x=>x.unitKey===unitKey); if(!u) return;
+  const weekStart=isoDate(mondayOf(new Date()));
+  await loadWeek(u,weekStart, todayISO());
+}
+async function loadWeek(u, weekStart, selDay){
+  const r=await storage.get('inv:insp:'+u.form+':'+u.unitKey+':'+weekStart);
+  const rec = r&&r.value ? JSON.parse(r.value) : { form:u.form, unitKey:u.unitKey, teamId:u.teamId, name:u.name, ident:u.ident, weekStart, header:{}, days:{} };
+  weekCache[u.unitKey]=weekCache[u.unitKey]||{}; weekCache[u.unitKey][weekStart]=rec;
+  const today=todayISO();
+  // jour sélectionné par défaut : aujourd'hui s'il est dans la semaine, sinon dernier jour <= aujourd'hui
+  const days=weekDays(weekStart);
+  if(!selDay || selDay>today) { selDay = days.filter(d=>d<=today).pop() || days[0]; }
+  fillState={ u, weekStart, rec, selDay, answers:Object.assign({}, (rec.days[selDay]&&rec.days[selDay].answers)||{}) };
+  renderWeekModal();
+}
+function renderWeekModal(){
+  const {u,weekStart,rec,selDay}=fillState; const canFill=canFillTeam(u.teamId);
+  const days=weekDays(weekStart); const today=todayISO();
+  const thisMonday=isoDate(mondayOf(new Date()));
+  let h='<h3>'+escapeHtml(u.name)+'</h3>';
+  h+='<div class="m-meta">'+(u.ident?('<b>'+escapeHtml(u.ident)+'</b> · '):'')+escapeHtml(FORMS[u.form].label)+' · '+escapeHtml(teamLabel(u.teamId))+'</div>';
+  // navigation semaine
+  const canNext = weekStart < thisMonday;
+  h+='<div class="wknav"><button id="wkPrev">‹</button><div class="lbl">Semaine du '+frDate(weekStart)+' au '+frDate(addDays(weekStart,6))+'</div><button id="wkNext"'+(canNext?'':' disabled')+'>›</button></div>';
+  // en-tête (une fois par semaine)
+  if((FORMS[u.form].header||[]).length){
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+    (FORMS[u.form].header||[]).forEach(f=>{
+      h+='<div style="flex:1;min-width:44%;"><div class="field-label">'+escapeHtml(HEADER_LABELS[f]||f)+'</div><input class="inp" data-hdr="'+f+'" value="'+escapeAttr((rec.header&&rec.header[f])||'')+'"'+(canFill?'':' disabled')+'></div>';
+    });
+    h+='</div>';
+  }
+  // sélecteur de jour
+  h+='<div class="daychips">';
+  days.forEach((d,i)=>{
+    const fut=d>today; const sel=d===selDay;
+    h+='<div class="daychip'+(sel?' sel':'')+(fut?' future':'')+'" data-day="'+d+'"><div class="dn">'+DAYNAMES[i]+'</div><div class="dd">'+d.slice(8)+'</div><div class="cdot '+(fut?'future':dayStatus(rec,d))+'"></div></div>';
+  });
+  h+='</div>';
+  const future = selDay>today;
+  if(future){ h+='<div class="ro-note">Ce jour n\'est pas encore arrivé — remplissage indisponible.</div>'; }
+  // légende
+  h+='<div style="font-size:11.5px;color:var(--paper-dim);margin:2px 0 4px;">Inspecteur : <b>'+escapeHtml(formatNom(myName()))+'</b> · Légende : OK · Anomalie (X) · N.A.</div>';
+  // items
+  h+='<div class="itbl'+((canFill&&!future)?'':' roflag')+'">';
+  (FORMS[u.form].groups||[]).forEach((g,gi)=>{
+    h+='<div class="igroup">'+escapeHtml(g.title)+'</div>';
+    g.items.forEach((it,ii)=>{ h+=itemRow(u.form,'g'+gi+'_'+ii,it,fillState.answers['g'+gi+'_'+ii]); });
+  });
+  h+='</div>';
+  h+='<div class="save-status" id="saveStatus"></div>';
+  if(canFill&&!future) h+='<button class="btn primary" id="saveDay">💾 Enregistrer le '+DAYNAMES[days.indexOf(selDay)]+' '+frDate(selDay)+'</button>';
+  h+='<button class="btn" id="closeM">Fermer</button>';
+  const box=document.getElementById('modalBox'); box.innerHTML=h;
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('overlay').onclick=e=>{ if(e.target.id==='overlay'){ if(!confirmDiscard()) return; closeModal(); } };
+  document.getElementById('closeM').onclick=()=>{ if(!confirmDiscard()) return; closeModal(); };
+  document.getElementById('wkPrev').onclick=()=>{ if(!confirmDiscard()) return; loadWeek(u, addDays(weekStart,-7), null); };
+  if(canNext) document.getElementById('wkNext').onclick=()=>{ if(!confirmDiscard()) return; loadWeek(u, addDays(weekStart,7), null); };
+  box.querySelectorAll('.daychip').forEach(el=>el.onclick=()=>{ const d=el.getAttribute('data-day'); if(d>today) return; // futur bloqué
+    if(d===fillState.selDay) return;
+    if(!confirmDiscard()) return;                     // réponses cochées mais pas enregistrées -> on demande avant de les perdre
+    fillState.selDay=d; fillState.answers=Object.assign({},(rec.days[d]&&rec.days[d].answers)||{}); renderWeekModal(); });
+  if(canFill&&!future){
+    box.querySelectorAll('.st').forEach(b=>b.onclick=()=>{ const k=b.getAttribute('data-k'); const v=b.getAttribute('data-v'); fillState.answers[k]=(fillState.answers[k]===v?'':v); paintItem(k); });
+    const sd=document.getElementById('saveDay'); if(sd) sd.onclick=saveDay;
+  }
+}
+// Des réponses ont-elles été cochées sans être enregistrées ? (comparaison avec la version sauvegardée du jour)
+function hasUnsaved(){
+  if(!fillState) return false;
+  const saved=(fillState.rec.days[fillState.selDay]&&fillState.rec.days[fillState.selDay].answers)||{};
+  const cur=fillState.answers||{};
+  const keys=new Set(Object.keys(saved).concat(Object.keys(cur)));
+  for(const k of keys){ if((saved[k]||'')!==(cur[k]||'')) return true; }
+  return false;
+}
+function confirmDiscard(){
+  if(!hasUnsaved()) return true;
+  return confirm('Des réponses cochées ne sont pas enregistrées.\n\nQuitter sans enregistrer ? (OK = abandonner, Annuler = rester)');
+}
+function itemRow(form,key,label,val){
+  const opts=statusOptions(form);
+  let btns=opts.map(o=>'<div class="st '+o[0]+(val===o[0]?' on':'')+'" data-k="'+key+'" data-v="'+o[0]+'">'+escapeHtml(o[1])+'</div>').join('');
+  return '<div class="irow" data-row="'+key+'"><div class="it-lbl">'+escapeHtml(label)+'</div><div class="st-btns">'+btns+'</div></div>';
+}
+function paintItem(key){
+  const row=document.querySelector('.irow[data-row="'+key+'"]'); if(!row) return;
+  row.querySelectorAll('.st').forEach(b=>b.classList.toggle('on', b.getAttribute('data-v')===fillState.answers[key]));
+}
+async function saveDay(){
+  const {u,weekStart,selDay}=fillState;
+  const ss=document.getElementById('saveStatus'); if(ss) ss.textContent='Enregistrement…';
+  // FUSION : on relit l'enregistrement serveur juste avant d'écrire et on n'y remplace
+  // QUE le jour sauvegardé (+ l'en-tête). Deux inspecteurs sur la même machine la même
+  // semaine ne s'effacent plus mutuellement (ex. le lundi de l'un écrasé par le mardi de l'autre).
+  const storeKey='inv:insp:'+u.form+':'+u.unitKey+':'+weekStart;
+  let rec=null;
+  try{ const fr=await storage.get(storeKey); if(fr&&fr.value) rec=JSON.parse(fr.value); }catch(e){}
+  if(!rec) rec={ form:u.form, unitKey:u.unitKey, teamId:u.teamId, name:u.name, ident:u.ident, weekStart, header:{}, days:{} };
+  const hdr=rec.header||{}; document.querySelectorAll('[data-hdr]').forEach(inp=>{ hdr[inp.getAttribute('data-hdr')]=inp.value.trim(); });
+  rec.header=hdr;
+  rec.days=rec.days||{};
+  rec.days[selDay]={ answers:Object.assign({},fillState.answers), inspecteur:formatNom(myName()), deviceId:getDeviceId(), ts:new Date().toISOString() };
+  rec.maj=new Date().toISOString();
+  const r=await storage.set(storeKey, JSON.stringify(rec));
+  if(r){ weekCache[u.unitKey]=weekCache[u.unitKey]||{}; weekCache[u.unitKey][weekStart]=rec; fillState.rec=rec; renderWeekModal(); const ss2=document.getElementById('saveStatus'); if(ss2) ss2.textContent='✓ Inspection du '+frDate(selDay)+' enregistrée'; }
+  else if(ss) ss.textContent='Échec de l\'enregistrement — réessaie.';
+}
+
+// ================== ONGLETS GLOBAUX (échafaudage / madriers) ==================
+let globalCache={};
+async function renderGlobal(form){
+  const wrap=document.getElementById('wrap'); const f=FORMS[form];
+  wrap.innerHTML='<button class="btn brick" id="newInsp">＋ Nouvelle inspection — '+escapeHtml(f.label)+'</button><div class="empty">Chargement de l\'historique…</div>';
+  document.getElementById('newInsp').onclick=()=>openGlobalForm(form,null);
+  const rows=await storage.like('inv:insp:'+form+':g:');
+  if(currentTab!==form) return;   // l'utilisateur a changé d'onglet pendant le chargement : ne pas écraser l'affichage
+  const list=rows.map(r=>{ try{ const v=JSON.parse(r.value); v._key=r.key; return v; }catch(e){ return null; } }).filter(Boolean).sort((a,b)=>(b.ts||'').localeCompare(a.ts||''));
+  globalCache[form]={}; list.forEach(x=>globalCache[form][x._key]=x);
+  let h='<button class="btn brick" id="newInsp2">＋ Nouvelle inspection — '+escapeHtml(f.label)+'</button>';
+  if(!list.length){ h+='<div class="empty">Aucune inspection enregistrée pour le moment.</div>'; }
+  else{
+    h+='<div class="grp-title">Historique ('+list.length+')</div>';
+    list.forEach(x=>{
+      const anom=inspHasAnomalie(x); const dot=anom?'red':'green';
+      const sub=[x.header&&(x.header.chantier||x.header.lieu||x.header.emplacement), 'par '+formatNom(x.inspecteur||'—')].filter(Boolean).join(' · ');
+      h+='<div class="hist-item" data-k="'+escapeAttr(x._key)+'"><div class="hi-dot '+dot+'" style="background:var(--'+(dot==='red'?'danger-red':'ok-soft')+');"></div><div class="hist-main"><div class="hist-date">'+escapeHtml(frDate(x.date)||'')+(x.teamId?(' · '+escapeHtml(teamLabel(x.teamId))):'')+'</div><div class="hist-sub">'+escapeHtml(sub)+'</div></div></div>';
+    });
+  }
+  wrap.innerHTML=h;
+  document.getElementById('newInsp2').onclick=()=>openGlobalForm(form,null);
+  wrap.querySelectorAll('[data-k]').forEach(el=>el.onclick=()=>openGlobalForm(form, globalCache[form][el.getAttribute('data-k')]));
+}
+function inspHasAnomalie(x){ const a=x.answers||{}; for(const k in a){ if(a[k]==='anomalie') return true; } return false; }
+function openGlobalForm(form, existing){
+  const f=FORMS[form]; const ro=!!existing; // existing = lecture seule (déjà soumise)
+  const answers = existing ? Object.assign({},existing.answers||{}) : {};
+  const qty = existing ? Object.assign({},existing.qty||{}) : {};
+  const hdr = existing ? Object.assign({},existing.header||{}) : {};
+  const st = { form, existing, answers, qty, hdr };
+  window._gform=st;
+  let h='<h3>'+(f.icon||'')+' '+escapeHtml(f.label)+'</h3>';
+  h+='<div class="m-meta">Compagnie : <b>Maçonnerie DMD</b> · Inspecteur : <b>'+escapeHtml(formatNom((existing&&existing.inspecteur)||myName()))+'</b></div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+  h+='<div style="flex:1;min-width:44%;"><div class="field-label">Date</div><input class="inp" id="gDate" type="date" value="'+escapeAttr((existing&&existing.date)||todayISO())+'" max="'+todayISO()+'"'+(ro?' disabled':'')+'></div>';
+  (f.header||[]).forEach(fld=>{ h+='<div style="flex:1;min-width:44%;"><div class="field-label">'+escapeHtml(HEADER_LABELS[fld]||fld)+'</div><input class="inp" data-gh="'+fld+'" value="'+escapeAttr(hdr[fld]||'')+'"'+(ro?' disabled':'')+'></div>'; });
+  h+='</div>';
+  h+='<div style="font-size:11.5px;color:var(--paper-dim);margin:8px 0 2px;">Légende : '+statusOptions(form).map(o=>escapeHtml(o[1])).join(' · ')+'</div>';
+  h+='<div class="itbl'+(ro?' roflag':'')+'">';
+  (f.groups||[]).forEach((g,gi)=>{
+    h+='<div class="igroup">'+escapeHtml(g.title)+'</div>';
+    g.items.forEach((it,ii)=>{
+      const key='g'+gi+'_'+ii;
+      h+='<div class="irow" data-row="'+key+'"><div class="it-lbl">'+escapeHtml(it)+'</div>';
+      if(g.qty){ h+='<div class="qtyrow"><div class="qf"><div class="field-label">Attendu</div><input class="inp" data-qa="'+key+'" inputmode="numeric" value="'+escapeAttr((qty[key]&&qty[key].a)||'')+'"'+(ro?' disabled':'')+'></div><div class="qf"><div class="field-label">Réel</div><input class="inp" data-qr="'+key+'" inputmode="numeric" value="'+escapeAttr((qty[key]&&qty[key].r)||'')+'"'+(ro?' disabled':'')+'></div></div>'; }
+      const opts=statusOptions(form);
+      h+='<div class="st-btns">'+opts.map(o=>'<div class="st '+o[0]+(answers[key]===o[0]?' on':'')+'" data-k="'+key+'" data-v="'+o[0]+'">'+escapeHtml(o[1])+'</div>').join('')+'</div></div>';
+    });
+  });
+  h+='</div>';
+  h+='<div class="field-label">Commentaires / correctifs</div><textarea class="inp" id="gComment"'+(ro?' disabled':'')+'>'+escapeHtml((existing&&existing.commentaires)||'')+'</textarea>';
+  h+='<div class="save-status" id="saveStatus"></div>';
+  if(!ro) h+='<button class="btn primary" id="gSave">💾 Enregistrer l\'inspection</button>';
+  if(ro && isAdmin) h+='<button class="btn danger" id="gDel">🗑️ Supprimer cette inspection</button>';
+  h+='<button class="btn" id="closeM">Fermer</button>';
+  const box=document.getElementById('modalBox'); box.innerHTML=h;
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('overlay').onclick=e=>{ if(e.target.id==='overlay') closeModal(); };
+  document.getElementById('closeM').onclick=closeModal;
+  if(!ro){
+    box.querySelectorAll('.st').forEach(b=>b.onclick=()=>{ const k=b.getAttribute('data-k'),v=b.getAttribute('data-v'); st.answers[k]=(st.answers[k]===v?'':v); const row=box.querySelector('.irow[data-row="'+k+'"]'); row.querySelectorAll('.st').forEach(x=>x.classList.toggle('on',x.getAttribute('data-v')===st.answers[k])); });
+    document.getElementById('gSave').onclick=()=>saveGlobal(st);
+  }
+  if(ro && isAdmin){ document.getElementById('gDel').onclick=async()=>{ if(!confirm('Supprimer cette inspection ?')) return; await storage.del(existing._key); closeModal(); renderGlobal(form); }; }
+}
+async function saveGlobal(st){
+  const box=document.getElementById('modalBox');
+  const hdr={}; box.querySelectorAll('[data-gh]').forEach(inp=>hdr[inp.getAttribute('data-gh')]=inp.value.trim());
+  const qty={}; box.querySelectorAll('[data-qa]').forEach(inp=>{ const k=inp.getAttribute('data-qa'); qty[k]=qty[k]||{}; qty[k].a=inp.value.trim(); }); box.querySelectorAll('[data-qr]').forEach(inp=>{ const k=inp.getAttribute('data-qr'); qty[k]=qty[k]||{}; qty[k].r=inp.value.trim(); });
+  const rec={ form:st.form, teamId:myTeamId||'', inspecteur:formatNom(myName()), deviceId:getDeviceId(), date:document.getElementById('gDate').value||todayISO(), header:hdr, answers:st.answers, qty, commentaires:document.getElementById('gComment').value.trim(), ts:new Date().toISOString() };
+  const ss=document.getElementById('saveStatus'); if(ss) ss.textContent='Enregistrement…';
+  const key='inv:insp:'+st.form+':g:'+rec.ts.replace(/[:.]/g,'')+'_'+uid();
+  const r=await storage.set(key, JSON.stringify(rec));
+  if(r){ closeModal(); renderGlobal(st.form); } else if(ss) ss.textContent='Échec — réessaie.';
+}
+function closeModal(){ document.getElementById('overlay').classList.remove('show'); document.getElementById('overlay').onclick=null; }
+
+// ================== ADMIN ==================
+function refreshAdminLabel(){ const b=document.getElementById('admToggle'); if(!b) return; b.classList.toggle('on',isAdmin); b.textContent=isAdmin?'🔑 Admin activé':'🔑 Admin'; }
+document.getElementById('admToggle').onclick=async()=>{
+  if(isAdmin){ setAdmin(false); isAdmin=false; refreshAdminLabel(); renderTab(); return; }
+  const c=prompt('Code admin :'); if(c==null) return;
+  if(c.trim()===ADMIN_CODE){ setAdmin(true); isAdmin=true; refreshAdminLabel(); renderTab(); } else alert('Code incorrect.');
+};
+
+// ================== EXPORT EXCEL (Ctrl+X, admin) ==================
+let _xlsxLoading=null;
+function ensureXLSX(){ if(window.XLSX) return Promise.resolve(); if(_xlsxLoading) return _xlsxLoading; _xlsxLoading=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js'; s.onload=()=>res(); s.onerror=()=>{ _xlsxLoading=null; rej(new Error('xlsx')); }; document.head.appendChild(s); }); return _xlsxLoading; }
+async function exporterExcel(){
+  const btn=document.getElementById('exportBtn'); const old=btn?btn.textContent:'';
+  if(btn){ btn.textContent='...'; btn.disabled=true; }
+  try{
+    try{ await ensureXLSX(); }catch(e){ alert('Module Excel indisponible.'); return; }
+    const rows=await storage.like('inv:insp:');
+    if(!rows.length){ alert('Aucune inspection à exporter.'); return; }
+    const aoa=[['Fiche','Machine/Ident','Équipe','Date','Élément','Statut','Inspecteur','Commentaire']];
+    rows.forEach(r=>{
+      let v; try{ v=JSON.parse(r.value); }catch(e){ return; }
+      const form=(r.key.split(':')[2])||''; const flabel=(FORMS[form]&&FORMS[form].label)||form;
+      const items=itemsFlat(form);
+      if(v.days){ // hebdo machine
+        Object.keys(v.days).sort().forEach(d=>{ const dd=v.days[d]; const ans=dd.answers||{};
+          items.forEach(it=>{ if(ans[it.key]) aoa.push([flabel, (v.ident?v.ident+' ':'')+(v.name||''), teamLabel(v.teamId), d, it.label, statLabel(form,ans[it.key]), formatNom(dd.inspecteur||''), '']); });
+        });
+      } else { // global
+        const ans=v.answers||{};
+        items.forEach(it=>{ if(ans[it.key]) aoa.push([flabel, (v.header&&(v.header.chantier||v.header.lieu||v.header.emplacement))||'', teamLabel(v.teamId||''), v.date||'', it.label, statLabel(form,ans[it.key]), formatNom(v.inspecteur||''), v.commentaires||'']); });
+      }
+    });
+    const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:26},{wch:22},{wch:16},{wch:12},{wch:52},{wch:14},{wch:20},{wch:30}];
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Inspections');
+    const d=new Date(); XLSX.writeFile(wb,'Inspections_DMD_'+d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'.xlsx');
+    if(btn) btn.style.display='none';
+  }catch(e){ console.error(e); alert('Erreur pendant l\'export.'); }
+  finally{ if(btn){ btn.textContent=old||'⬇ Excel'; btn.disabled=false; } }
+}
+function statLabel(form,v){ const o=statusOptions(form).find(x=>x[0]===v); return o?o[1]:v; }
+document.getElementById('exportBtn').addEventListener('click',exporterExcel);
+document.addEventListener('keydown',function(e){
+  if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&!e.altKey&&(e.key==='x'||e.key==='X')){
+    const el=document.activeElement; if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.isContentEditable)) return;
+    try{ if(localStorage.getItem('inv:isAdmin')!=='1') return; }catch(err){ return; }
+    e.preventDefault(); const btn=document.getElementById('exportBtn'); if(btn){ btn.style.display=''; btn.focus(); }
+  }
+});
+
+// ================== DÉMARRAGE ==================
+(async function(){
+  if(!_sb){ document.getElementById('wrap').innerHTML='<div class="empty">Connexion au serveur impossible.</div>'; return; }
+  try{ const {data}=await withTimeout(_sb.auth.getSession(),8000,'sess'); }catch(e){}
+  isAdmin=isDeviceAdmin(); refreshAdminLabel();
+  renderTabs();
+  try{
+    await Promise.all([ loadTeams(), loadCatalog(), loadTeamMachines(), loadMyTeam() ]);
+    buildUnits();
+    if(myTeamId && !unitsForTeam(myTeamId).length){ /* mon équipe sans machines : on garde la sélection quand même */ }
+    renderTab();
+  }catch(e){ console.error(e); document.getElementById('wrap').innerHTML='<div class="empty">Impossible de charger les données.</div>'; }
+})();
+
+/* ==== DMD : Entree = champ suivant + correction auto du champ ==== */
+(function(){
+  if (window.__dmdEnterNext) return; window.__dmdEnterNext = true;
+  var NAV_SCOPE='.modal, #modalBox, .card, form, .panel, .sheet, .edit-form';
+  var SKIP={button:1,submit:1,reset:1,checkbox:1,radio:1,file:1,range:1,color:1,hidden:1,image:1};
+  function navigable(el){ if(!el||el.tagName!=='INPUT') return false; var ty=(el.getAttribute('type')||'text').toLowerCase(); return !SKIP[ty]; }
+  function visibleField(el){ if(el.disabled||el.readOnly) return false; var ty=(el.getAttribute('type')||'text').toLowerCase(); if(ty==='hidden'||ty==='file') return false; return el.offsetParent!==null; }
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Enter'||e.shiftKey||e.altKey||e.ctrlKey||e.metaKey) return;
+    if(e.defaultPrevented) return;
+    var t=e.target; if(!navigable(t)) return;
+    var scope=t.closest(NAV_SCOPE); if(!scope) return;
+    var fields=[].slice.call(scope.querySelectorAll('input, select, textarea')).filter(visibleField);
+    var i=fields.indexOf(t); if(i<0) return;
+    e.preventDefault();
+    if(i<fields.length-1){ var nx=fields[i+1]; nx.focus(); if(nx.select){ try{nx.select();}catch(_){} } } else { t.blur(); }
+  });
+})();
+</script>
+</body>
+</html>

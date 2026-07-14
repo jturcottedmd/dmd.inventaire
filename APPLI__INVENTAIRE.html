@@ -310,6 +310,8 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
   background:var(--safety-orange);
   border-color:var(--safety-orange);
   color:var(--paper);
+  font-size:17.5px;
+  font-weight:800;
 }
 /* Onglet Santé & Sécurité — toujours rouge */
 .tab-sst{
@@ -321,6 +323,8 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
   background:var(--danger-red);
   border-color:var(--danger-red);
   color:#fff;
+  font-size:17.5px;
+  font-weight:800;
 }
 .team-color-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:middle; }
 .team-band{ display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:8px; margin-bottom:10px; font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; color:#fff; font-size:16px; }
@@ -1371,13 +1375,76 @@ async function ensureTeamCatLoaded(teamId, cat){
   return arr;
 }
 
+// Un timer PAR équipe|catégorie : avant, un seul timer global faisait qu'une modification
+// suivie d'un changement d'équipe/onglet dans la demi-seconde ANNULAIT la sauvegarde précédente.
+const saveTimers = {};          // 'team|cat' -> timeout
+const dirtyIdx = {};            // 'team|cat' -> Set des index modifiés localement (fusion à l'écriture)
+function markDirtyIdx(teamId, cat, idx){ const k=teamId+'|'+cat; (dirtyIdx[k]=dirtyIdx[k]||new Set()).add(idx); }
+// Rafraîchissement différé des pastilles d'alerte (onglets + barre d'équipes) : ces calculs
+// parcourent TOUTES les équipes × catégories × articles — trop lourd à chaque frappe.
+let _badgeTimer = null;
+function scheduleBadgeRefresh(){
+  clearTimeout(_badgeTimer);
+  _badgeTimer = setTimeout(() => { try{ renderTabs(); renderTeamBar(); }catch(e){} }, 700);
+}
+
+// ---- Auto-réparation anti-écrasement ----
+// Après une sauvegarde, plusieurs personnes qui enregistraient la MÊME liste au même
+// moment peuvent s'être écrasées (dernier-écrit-gagne sur la clé). Quelques secondes
+// plus tard, chaque appareil relit la copie serveur : si une de SES valeurs a disparu,
+// il la ré-applique (fusion). Tous les appareils convergent ainsi sans rien perdre.
+const _verifyTimers = {}; const _verifyCount = {};
+function scheduleSaveVerify(teamId, cat){
+  const k = teamId + '|' + cat;
+  _verifyCount[k] = (_verifyCount[k]||0);
+  if(_verifyCount[k] >= 5) return;                       // plafond anti-boucle (remis à 0 à chaque sauvegarde)
+  clearTimeout(_verifyTimers[k]);
+  _verifyTimers[k] = setTimeout(async () => {
+    try{
+      const dirty = dirtyIdx[k]; if(!dirty || !dirty.size) return;
+      const local = perTeamState[teamId] && perTeamState[teamId][cat]; if(!local) return;
+      const r = await window.storage.get('inv:' + teamId + ':' + cat, true);
+      if(!r || !r.value) return;
+      const srv = JSON.parse(r.value); if(!Array.isArray(srv)) return;
+      let lost = false;
+      dirty.forEach(i => { if(i < local.length && JSON.stringify(srv[i]||null) !== JSON.stringify(local[i]||null)) lost = true; });
+      _verifyCount[k]++;
+      if(lost){ scheduleSaveTeamCat(teamId, cat); }
+      else if(_verifyCount[k] < 5){ scheduleSaveVerify(teamId, cat); }   // repasse plus tard : un écrasement peut arriver APRÈS la 1re vérif
+    }catch(e){}
+  }, (1800 + Math.random()*2200) * Math.max(1, (_verifyCount[k]||0) * 2));   // passes de plus en plus espacées
+}
 function scheduleSaveTeamCat(teamId, cat){
   const statusEl = document.getElementById('saveStatus');
   statusEl.textContent = 'Modif...';
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
+  const k = teamId + '|' + cat;
+  clearTimeout(saveTimers[k]);
+  saveTimers[k] = setTimeout(async () => {
     try{
-      await window.storage.set('inv:' + teamId + ':' + cat, JSON.stringify(perTeamState[teamId][cat]), true);
+      // FUSION : on relit la copie serveur et on n'y applique que les index modifiés ICI.
+      // Deux personnes qui remplissent la même liste en même temps ne s'écrasent plus.
+      const local = perTeamState[teamId][cat];
+      let merged = local;
+      const dirty = dirtyIdx[k];
+      try{
+        const r = await window.storage.get('inv:' + teamId + ':' + cat, true);
+        if(r && r.value && dirty && dirty.size){
+          const srv = JSON.parse(r.value);
+          if(Array.isArray(srv)){
+            // Fusion EN PLACE (même objet tableau) : les cartes déjà affichées gardent
+            // leur référence — les frappes en cours ne sont jamais orphelines.
+            for(let idx = 0; idx < srv.length; idx++){
+              if(!dirty.has(idx) && srv[idx] !== undefined) local[idx] = srv[idx];
+            }
+            merged = local;
+          }
+        }
+      }catch(e){}
+      await window.storage.set('inv:' + teamId + ':' + cat, JSON.stringify(merged), true);
+      // NOTE : on NE vide PAS `dirty` — les index touchés sur cet appareil sont ré-affirmés
+      // à chaque sauvegarde de la session. Si une écriture concurrente a fait perdre une
+      // valeur pendant la course initiale, la prochaine modification la répare d'elle-même.
+      _verifyCount[teamId+'|'+cat] = 0; scheduleSaveVerify(teamId, cat);   // nouveau cycle d'auto-réparation à chaque sauvegarde
       statusEl.textContent = 'Enregistré ✓';
       setTimeout(() => { if(statusEl.textContent === 'Enregistré ✓') statusEl.textContent = '\u00A0'; }, 1500);
     }catch(e){
@@ -1566,14 +1633,18 @@ async function saveDeviceUser(obj){
 async function loadPeopleDirectory(){
   const people = [];
   try{
-    const listed = await window.storage.list('inv:person:', true);
-    const keys = (listed && listed.keys) || [];
-    for(const k of keys){
+    // UNE seule requête pour toutes les fiches (avant : une requête réseau PAR personne,
+    // en série — le répertoire mettait plusieurs secondes à s'ouvrir sur mobile).
+    const req = _sb.from('inv_store').select('key,value').like('key','inv:person:%');
+    const timeout = new Promise((resolve) => setTimeout(() => resolve({ __timeout:true }), 12000));
+    const res = await Promise.race([req, timeout]);
+    const rows = (res && !res.__timeout && Array.isArray(res.data)) ? res.data : [];
+    rows.forEach(row => {
       try{
-        const r = await window.storage.get(k, true);
-        if(r && r.value){ const p = JSON.parse(r.value); if(p){ p._key = k; if(!p.id){ p.id = k.replace('inv:person:',''); } people.push(p); } }
+        const p = JSON.parse(row.value);
+        if(p){ p._key = row.key; if(!p.id){ p.id = row.key.replace('inv:person:',''); } people.push(p); }
       }catch(e){}
-    }
+    });
   }catch(e){}
   // tri par nom
   people.sort((a,b) => (a.nom||'').localeCompare(b.nom||'', 'fr'));
@@ -2035,11 +2106,12 @@ function renderTabs(){
 
 function matchesSearch(name, query){
   if(!query) return true;
-  const q = query.toLowerCase();
-  // On découpe le nom en mots ; un article correspond si l'un de ses mots
-  // COMMENCE par ce qui est tapé (pas juste s'il le contient au milieu).
+  // On découpe AUSSI la requête en mots : « extincteur 5 » trouve « Extincteur 5 »
+  // (avant, une recherche à plusieurs mots ne retournait jamais rien).
   const mots = name.toLowerCase().split(/[\s\-/(),.]+/).filter(Boolean);
-  return mots.some(m => m.startsWith(q));
+  const qMots = query.toLowerCase().split(/[\s\-/(),.]+/).filter(Boolean);
+  if(!qMots.length) return true;
+  return qMots.every(q => mots.some(m => m.startsWith(q)));
 }
 
 /* ---- Rendering: List (team mode vs total mode) ---- */
@@ -2355,6 +2427,7 @@ function renderTeamList(){
     if(openIndex === i){
       body.querySelectorAll('input[data-field]').forEach(inp => {
         inp.addEventListener('input', () => {
+          if(!st[i]) st[i] = defaultItemState(it);   // garde : état pas encore chargé (connexion lente) -> pas de crash
           // Confirmation une fois par article si on modifie une autre équipe
           if(!confirmForeignEdit(i)){
             inp.value = st[i][inp.dataset.field] || '';  // annule : on remet l'ancienne valeur
@@ -2364,9 +2437,9 @@ function renderTeamList(){
           st[i][inp.dataset.field] = inp.value;
           st[i]._by = deviceUserLabel();   // qui a modifié
           st[i]._at = Date.now();          // quand
+          markDirtyIdx(currentTeam, currentCat, i);
           scheduleSaveTeamCat(currentTeam, currentCat);
-          renderTabs();
-          renderTeamBar();  // met à jour les points rouges d'alerte sur les équipes
+          scheduleBadgeRefresh();  // points rouges/onglets recalculés en différé (fini le lag à chaque frappe)
           // Recalcule la couleur de la barre gauche (rouge/jaune/vert) en direct
           card.classList.remove('filled','missing','edge-red','edge-yellow','edge-green');
           const _edge = edgeClassFor(st[i], it).trim();
@@ -2461,10 +2534,21 @@ function renderTeamList(){
           const extraIdx = i - baseLen;
           extraItems[currentCat].splice(extraIdx, 1);
           await saveExtraItems(currentCat);
+          // Ré-indexe TOUTES les équipes, y compris celles pas encore chargées en mémoire :
+          // avant, leurs données stockées gardaient une ligne de trop et tous les articles
+          // suivants se décalaient d'une case (mauvaises quantités affichées/enregistrées).
           for(const t of teams){
-            if(perTeamState[t.id] && perTeamState[t.id][currentCat]){
-              perTeamState[t.id][currentCat].splice(i, 1);
-              await window.storage.set('inv:' + t.id + ':' + currentCat, JSON.stringify(perTeamState[t.id][currentCat]), true);
+            let arr = (perTeamState[t.id] && perTeamState[t.id][currentCat]) || null;
+            if(!arr){
+              try{
+                const r = await window.storage.get('inv:' + t.id + ':' + currentCat, true);
+                if(r && r.value){ const p = JSON.parse(r.value); if(Array.isArray(p)) arr = p; }
+              }catch(e){}
+            }
+            if(arr && arr.length > i){
+              arr.splice(i, 1);
+              if(perTeamState[t.id]) perTeamState[t.id][currentCat] = arr;
+              await window.storage.set('inv:' + t.id + ':' + currentCat, JSON.stringify(arr), true);
             }
           }
           openIndex = null;
@@ -2499,6 +2583,7 @@ function renderTeamList(){
       body.querySelectorAll('.opt-chip[data-opt]').forEach(chip => {
         chip.addEventListener('click', (e) => {
           e.stopPropagation();
+          if(!st[i]) st[i] = defaultItemState(it);   // garde : état pas encore chargé (connexion lente) -> pas de crash
           if(!confirmForeignEdit(i)) return; // autre équipe : refus -> on ne change rien
           const opt = chip.getAttribute('data-opt');
           if(!Array.isArray(st[i].opts)) st[i].opts = [];
@@ -2520,6 +2605,7 @@ function renderTeamList(){
             if(bits.length){ subEl.textContent = bits.join(' · '); subEl.style.display=''; }
             else { subEl.textContent=''; subEl.style.display='none'; }
           }
+          markDirtyIdx(currentTeam, currentCat, i);
           scheduleSaveTeamCat(currentTeam, currentCat);
         });
       });
@@ -2856,9 +2942,13 @@ async function goToSuggestion(cat, idx){
   }, 60);
 }
 
+let _searchDebounce = null;   // debounce : la liste complète n'est plus reconstruite à chaque caractère
 document.getElementById('search').addEventListener('input', () => {
-  renderSuggestions();  // suggestions globales pendant la frappe
-  renderList();         // filtre aussi l'onglet courant
+  clearTimeout(_searchDebounce);
+  _searchDebounce = setTimeout(() => {
+    renderSuggestions();  // suggestions globales pendant la frappe
+    renderList();         // filtre aussi l'onglet courant
+  }, 180);
 });
 // Ferme les suggestions si on tape Échap
 document.getElementById('search').addEventListener('keydown', (e) => {
@@ -3384,8 +3474,12 @@ async function addExtincteur(){
     try{ await window.storage.set('inv:' + currentTeam + ':' + cat, JSON.stringify(perTeamState[currentTeam][cat]), true); }catch(e){}
   }
   if(currentCat !== cat){ currentCat = cat; await ensureTeamCatLoaded(currentTeam, cat); }
-  openIndex = itemsFor(cat).length - 1;   // ouvre le nouvel extincteur
+  const arr = itemsFor(cat);
+  openIndex = arr.length - 1;   // ouvre le nouvel extincteur
+  // Déplie la section qui contient le nouvel extincteur (sinon il était créé mais invisible)
+  for(let j = openIndex; j >= 0; j--){ if(arr[j] && arr[j].header){ collapsedSections.delete(sectionKey(cat, arr[j].name)); break; } }
   renderTabs(); renderList();
+  setTimeout(() => { const c = document.querySelector('.card.open'); if(c) c.scrollIntoView({behavior:'smooth', block:'center'}); }, 80);
 }
 
 function openAddItemModal(){

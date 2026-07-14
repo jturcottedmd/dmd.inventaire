@@ -243,6 +243,22 @@ function onlyDigits(s){ return String(s==null?'':s).replace(/\D/g,''); }
 function formatTel(s){ const d=onlyDigits(s); let n=d; if(n.length===11 && n[0]==='1') n=n.slice(1); if(n.length===10) return '('+n.slice(0,3)+')'+n.slice(3,6)+'-'+n.slice(6); return String(s==null?'':s).trim(); }
 function telHref(s){ const d=onlyDigits(s); return 'tel:'+(d||String(s==null?'':s).trim()); }
 function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
+// Synchronise un nom saisi avec l'orthographe exacte du répertoire (fiches inv:person) + fichier de formations.
+// Peu importe la casse, les accents ou l'ordre prénom/nom : renvoie « Prénom Nom » en casse propre.
+window.__dmdCanonNom = function(raw){
+  var s = formatNom(raw); if(!s) return s;
+  try{
+    var pool = [];
+    if(typeof people !== 'undefined' && Array.isArray(people)) people.forEach(function(p){ if(p && p.nom) pool.push(p.nom); });
+    if(typeof formationsData !== 'undefined' && formationsData && Array.isArray(formationsData.people)) formationsData.people.forEach(function(p){ if(p && p.nom) pool.push(p.nom); });
+    var k = normNom(raw);
+    var exact = pool.filter(function(n){ return normNom(n)===k; });
+    if(exact.length) return formatNom(exact[0]);
+    var near = pool.filter(function(n){ return nomsProches(n, raw); });
+    if(near.length===1) return formatNom(near[0]);
+  }catch(_){}
+  return s;
+};
 
 // ================== STOCKAGE PARTAGÉ (même logique que l'inventaire) ==================
 // shared=true -> Supabase (partagé entre tous) ; shared=false -> localStorage (cet appareil)
@@ -301,8 +317,14 @@ async function saveFormations(data){
 async function loadRosterAdded(){
   try{ const r = await window.storage.get('inv:roster:added', true); const v = (r && r.value) ? JSON.parse(r.value) : []; rosterAdded = Array.isArray(v) ? v : []; }catch(e){ rosterAdded = []; }
 }
-async function saveRosterAdded(){
-  try{ await window.storage.set('inv:roster:added', JSON.stringify(rosterAdded), true); }catch(e){}
+// Écrit la liste en repartant TOUJOURS de la version serveur la plus récente (fusion),
+// pour que deux admins qui ajoutent/retirent en même temps ne s'écrasent pas mutuellement.
+async function saveRosterAdded(transform){
+  try{
+    await loadRosterAdded();                                   // re-lecture serveur juste avant d'écrire
+    if(typeof transform === 'function') rosterAdded = transform(rosterAdded.slice());
+    await window.storage.set('inv:roster:added', JSON.stringify(rosterAdded), true);
+  }catch(e){}
 }
 // Lit l'Excel croisé « Liste des formations » : en-têtes sur 2 lignes,
 // blocs de 3 lignes par employé (Date / Attestation reçu / Échéance).
@@ -415,9 +437,7 @@ function renderAdminBar(){
           await saveFormations(data);
           // Retire de la liste d'ajout manuel les noms maintenant présents dans l'Excel (fusion)
           if(rosterAdded.length){
-            const before = rosterAdded.length;
-            rosterAdded = rosterAdded.filter(n => !data.people.some(p => normNom(p.nom) === normNom(n) || nomsProches(p.nom, n)));
-            if(rosterAdded.length !== before) await saveRosterAdded();
+            await saveRosterAdded(arr => arr.filter(n => !data.people.some(p => normNom(p.nom) === normNom(n) || nomsProches(p.nom, n))));
           }
           const total = data.people.reduce((n,p) => n + p.forms.length, 0);
           alert(data.people.length + ' employé(s) et ' + total + ' formation(s) importés.');
@@ -440,8 +460,7 @@ function renderAdminBar(){
     const dupAdded = rosterAdded.some(n => normNom(n) === normNom(clean));
     const dupForm = formationsData && Array.isArray(formationsData.people) && formationsData.people.some(p => normNom(p.nom) === normNom(clean));
     if(dupAdded || dupForm){ alert('Cet employé est déjà dans la liste des accès.'); return; }
-    rosterAdded.push(clean);
-    await saveRosterAdded();
+    await saveRosterAdded(arr => arr.some(n => normNom(n)===normNom(clean)) ? arr : arr.concat([clean]));
     renderAdminBar();
     alert('« ' + clean + ' » peut maintenant accéder à l\'application.');
   };
@@ -449,9 +468,9 @@ function renderAdminBar(){
     b.onclick = async () => {
       const i = parseInt(b.getAttribute('data-rm-emp'), 10);
       if(isNaN(i) || i < 0 || i >= rosterAdded.length) return;
-      if(!confirm('Retirer « ' + (rosterAdded[i]||'') + ' » de la liste des accès ?\n\nCette personne ne pourra plus se connecter (sauf si elle est dans le fichier de formations).')) return;
-      rosterAdded.splice(i, 1);
-      await saveRosterAdded();
+      const nomCible = rosterAdded[i] || '';
+      if(!confirm('Retirer « ' + nomCible + ' » de la liste des accès ?\n\nCette personne ne pourra plus se connecter (sauf si elle est dans le fichier de formations).')) return;
+      await saveRosterAdded(arr => arr.filter(n => normNom(n) !== normNom(nomCible)));   // retrait par nom (l'index peut avoir bougé)
       renderAdminBar();
     };
   });
@@ -732,7 +751,8 @@ document.getElementById('idSave').onclick = async () => {
   render();
 };
 
-document.getElementById('search').addEventListener('input', render);
+let _searchTimer=null;   // debounce : évite de reconstruire toute la liste à chaque frappe
+document.getElementById('search').addEventListener('input', () => { clearTimeout(_searchTimer); _searchTimer=setTimeout(render, 180); });
 
 /* ============================================================
    EXPORT EXCEL (Ctrl+X révèle le bouton — même principe que l'inventaire)

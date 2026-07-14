@@ -69,7 +69,8 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 .drawer-panel{ position:absolute; top:0; left:0; bottom:0; width:82%; max-width:330px; background:var(--asphalt-2); border-right:2px solid var(--brick-line); padding:16px 14px; overflow:auto; }
 .drawer h3{ font-family:'Barlow Condensed',sans-serif; font-size:20px; text-transform:uppercase; letter-spacing:1px; margin:4px 0 12px; }
 .chan{ display:flex; align-items:center; gap:9px; padding:11px 12px; border-radius:10px; border:1.5px solid var(--line); background:var(--asphalt); margin-bottom:7px; cursor:pointer; font-weight:600; font-size:15px; }
-.chan.active{ border-color:var(--safety-yellow); color:var(--safety-yellow); }
+.chan.active{ border-color:var(--safety-yellow); color:var(--safety-yellow); font-size:19px; font-weight:800; letter-spacing:0.3px; padding:14px 13px; }
+.chan.active span{ font-weight:800; }
 .chan .cdot{ margin-left:auto; width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
 .chan .cdot.red{ background:var(--danger-red); box-shadow:0 0 0 3px rgba(192,57,43,0.25); }
 .chan .cdot.green{ background:var(--ok-green); }
@@ -131,6 +132,8 @@ function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replac
 function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
 function formatNom(s){ s=String(s==null?'':s).replace(/\s+/g,' ').trim(); if(!s) return s; return s.toLocaleLowerCase('fr').replace(/[\p{L}\p{N}]+/gu, function(w){ return w.charAt(0).toLocaleUpperCase('fr')+w.slice(1); }); }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function normNom(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim(); }
+function nomsProches(n1,n2){ const w1=normNom(n1).split(' ').filter(Boolean), w2=normNom(n2).split(' ').filter(Boolean); if(!w1.length||!w2.length) return false; const common=w1.filter(w=>w2.includes(w)); return common.length>=Math.min(2,Math.min(w1.length,w2.length)); }
 
 function getDeviceId(){ try{ let v=localStorage.getItem('inv:deviceId'); if(!v){ v='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); localStorage.setItem('inv:deviceId',v);} return v; }catch(e){ return 'dev_'+Math.random().toString(36).slice(2,10); } }
 function myName(){ try{ const v=localStorage.getItem('inv:deviceUser'); if(v){ const u=JSON.parse(v); if(u){ if(u.chantier) return 'Tablette de chantier'; if(u.nom) return u.nom; } } }catch(e){} return 'Appareil '+getDeviceId().slice(-4); }
@@ -170,6 +173,28 @@ function allChannels(){
   return base.concat(eq).concat(cus);
 }
 function channelById(id){ return allChannels().find(c => c.id===id) || allChannels()[0]; }
+
+// Trouve le canal de l'équipe de l'utilisateur courant (registre inv:teammember:<id>, écrit par Infos équipe).
+// Retourne l'id de canal 'eq_<teamId>' si trouvé et disponible, sinon null.
+async function findMyTeamChannel(){
+  const me = myName();
+  if(!me || me==='Tablette de chantier' || /^Appareil /.test(me)) return null;
+  try{
+    const r = await withTimeout(_sb.from('inv_store').select('key,value').like('key','inv:teammember:%'), 10000, 'tm');
+    const rows = (r && Array.isArray(r.data)) ? r.data : [];
+    const members = [];
+    rows.forEach(row => { try{ const m=JSON.parse(row.value); if(m && m.nom && m.teamId) members.push(m); }catch(e){} });
+    let teamId = null;
+    const hit = members.find(m => normNom(m.nom)===normNom(me));      // correspondance exacte d'abord
+    if(hit) teamId = hit.teamId;
+    if(!teamId){ const near = members.filter(m => nomsProches(m.nom, me)); if(near.length===1) teamId = near[0].teamId; }
+    if(teamId){
+      const chId = 'eq_' + teamId;
+      if(allChannels().some(c => c.id===chId)) return chId;
+    }
+  }catch(e){}
+  return null;
+}
 
 // ---- Pastilles non lu (rouge) / à jour (vert) par canal ----
 // Date du dernier message de chaque canal : UNE LIGNE PAR CANAL (chatlast:<canal>),
@@ -220,9 +245,10 @@ function seenCount(m){
   return n;
 }
 function markCurrentRead(){
+  // On marque « lu » uniquement jusqu'au dernier message réellement CHARGÉ à l'écran
+  // (pas l'index chatlast:, qui peut être en avance sur ce que l'utilisateur a vu).
   const ks = Object.keys(msgs).sort();
-  const newest = ks.length ? (msgs[ks[ks.length-1]].ts || '') : '';
-  const ts = (lastMsgIndex[currentChan] || '') > newest ? lastMsgIndex[currentChan] : newest;
+  const ts = ks.length ? (msgs[ks[ks.length-1]].ts || '') : '';
   if(ts){
     try{ localStorage.setItem('chat:read:'+currentChan, ts); }catch(e){}
     pushRead(ts);   // publie ma position de lecture (non bloquant)
@@ -288,10 +314,13 @@ async function poll(){
     // par d'autres dans la même seconde (conversation active à plusieurs).
     const rows = await fetchPage(currentChan, { limit:PAGE });
     const added = ingest(rows);
-    // rafraîchit aussi les accusés de lecture du canal courant
-    const readsBefore = JSON.stringify(_reads);
-    await loadReads(currentChan);
-    const readsChanged = JSON.stringify(_reads) !== readsBefore;
+    // Accusés de lecture : seulement quand il y a du nouveau, ou 1 tour sur 3 (allège la charge réseau)
+    let readsChanged = false;
+    if(added || _pollTick === 0){
+      const readsBefore = JSON.stringify(_reads);
+      await loadReads(currentChan);
+      readsChanged = JSON.stringify(_reads) !== readsBefore;
+    }
     if(added || readsChanged){
       const feed = document.getElementById('feed');
       const nearBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 120;
@@ -347,7 +376,9 @@ async function sendMessage(){
   const input = document.getElementById('msgInput');
   const text = input.value.trim();
   if(!text) return;
-  const sendBtn = document.getElementById('sendBtn'); sendBtn.disabled = true;
+  const sendBtn = document.getElementById('sendBtn');
+  if(sendBtn.disabled) return;   // évite le double-envoi (Entrée pressée deux fois pendant l'envoi)
+  sendBtn.disabled = true;
   const ts = new Date().toISOString();
   const key = msgPrefix(currentChan) + ts + '_' + uid();
   try{
@@ -544,7 +575,9 @@ document.addEventListener('keydown', function(e){
   }catch(e){ document.getElementById('feed').innerHTML='<div class="empty">Serveur injoignable.</div>'; return; }
   try{
     await Promise.all([ loadTeams(), loadChannels(), loadAdmin(), loadLastMsgIndex() ]);
-    await switchChannel('general');
+    // Chaque utilisateur arrive automatiquement dans le chat de son équipe ; il peut ensuite changer de canal (☰).
+    const mine = await findMyTeamChannel();
+    await switchChannel(mine || 'general');
     // Démarre/suspend le polling selon la visibilité de l'onglet : rien ne tourne en arrière-plan.
     function startPoll(){ if(!pollTimer) pollTimer = setInterval(poll, POLL_MS); }
     function stopPoll(){ if(pollTimer){ clearInterval(pollTimer); pollTimer = null; } }

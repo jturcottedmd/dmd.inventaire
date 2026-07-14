@@ -428,20 +428,25 @@ async function saveItem(){
   const rec = { id:_editing || ('f_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)),
     type, lieu, debut, fin, heureDebut, heureFin, notes, employes:_selEmps.slice() };
 
-  if(_editing){ const i = _items.findIndex(x => x.id === _editing); if(i>=0) _items[i] = rec; }
-  else{ _items.push(rec); }
-
   const btn = document.getElementById('fSave'); btn.textContent = 'Enregistrement…'; btn.disabled = true;
-  const ok = await savePlan(_items);
+  // Fusion : on relit le plan serveur juste avant d'écrire et on n'y applique QUE cette
+  // formation (par id) — deux admins qui ajoutent/modifient en même temps ne s'écrasent plus.
+  const fresh = await loadPlan();
+  const i = fresh.findIndex(x => x.id === rec.id);
+  if(i >= 0) fresh[i] = rec; else fresh.push(rec);
+  const ok = await savePlan(fresh);
   btn.textContent = 'Enregistrer'; btn.disabled = false;
   if(!ok){ err.textContent = 'Échec de l\'enregistrement. Réessaie.'; return; }
+  _items = fresh;                                    // on ne met la mémoire à jour QU'après le succès
   closeModal(); render();
 }
 async function removeItem(id){
   const it = _items.find(x => x.id === id); if(!it) return;
   if(!confirm('Retirer la formation « '+(it.type||'')+' » ?\nElle disparaîtra pour tous et les rappels associés cesseront.')) return;
-  _items = _items.filter(x => x.id !== id);
-  await savePlan(_items); render();
+  const fresh = (await loadPlan()).filter(x => x.id !== id);   // fusion : suppression par id sur la version serveur
+  const ok = await savePlan(fresh);
+  if(ok) _items = fresh; else alert('Échec de la suppression — réessaie.');
+  render();
 }
 
 // ================== INIT ==================

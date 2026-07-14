@@ -222,12 +222,13 @@ let openHolders = new Set();
 
 async function loadAdmin(){ try{ const r=await storage.get('inv:isAdmin', false); isAdmin=!!(r&&r.value==='1'); }catch(e){ isAdmin=false; } }
 async function loadMonth(){
-  factures = [];
+  const out = [];
   const r = await withTimeout(_sb.from('inv_store').select('key,value').like('key','fact:'+curYM+':%'), 12000, 'factures');
   if(r && Array.isArray(r.data)){
-    r.data.forEach(row => { try{ const f=JSON.parse(row.value); if(f){ f._key=row.key; factures.push(f); } }catch(e){} });
+    r.data.forEach(row => { try{ const f=JSON.parse(row.value); if(f){ f._key=row.key; out.push(f); } }catch(e){} });
   }
-  factures.sort((a,b) => (a.ts||'').localeCompare(b.ts||''));
+  out.sort((a,b) => (a.ts||'').localeCompare(b.ts||''));
+  return out;
 }
 
 // ================== AFFICHAGE ==================
@@ -306,7 +307,17 @@ function renderList(){
   list.querySelectorAll('[data-confall]').forEach(b => b.onclick = confirmAllMine);
 }
 function renderMonth(){ document.getElementById('mLabel').innerHTML = escapeHtml(ymLabel(curYM)) + '<small>' + (isCurrentMonth(curYM) ? 'mois en cours' : 'mois passé') + '</small>'; }
-async function refresh(){ renderMonth(); try{ await loadMonth(); renderSummary(); renderList(); }catch(e){ console.error(e); document.getElementById('list').innerHTML='<div class="empty">Impossible de charger les factures.</div>'; } }
+let _refreshToken = 0;
+async function refresh(){
+  renderMonth();
+  const tok = ++_refreshToken;                     // ignore les chargements périmés (double-tap rapide sur ‹ ›)
+  try{
+    const loaded = await loadMonth();
+    if(tok !== _refreshToken) return;              // un mois plus récent a été demandé entre-temps
+    factures = loaded;
+    renderSummary(); renderList();
+  }catch(e){ if(tok===_refreshToken){ console.error(e); document.getElementById('list').innerHTML='<div class="empty">Impossible de charger les factures.</div>'; } }
+}
 
 // ================== ACTIONS ==================
 function setSaveStatus(state){
@@ -318,12 +329,13 @@ function setSaveStatus(state){
 }
 async function confirmOne(key){
   const f = factures.find(x=>x._key===key); if(!f) return;
-  f.statut='confirmee'; f.confirmeeLe=new Date().toISOString();
-  const rec = Object.assign({}, f); delete rec._key;
+  // On ne marque « confirmée » à l'écran QUE si l'enregistrement serveur a réussi
+  // (sinon une panne réseau affichait une fausse confirmation impossible à refaire).
+  const rec = Object.assign({}, f, { statut:'confirmee', confirmeeLe:new Date().toISOString() }); delete rec._key;
   setSaveStatus('saving');
   const res = await storage.set(key, JSON.stringify(rec), true);
   setSaveStatus(res ? 'ok' : 'err');
-  renderSummary(); renderList();
+  if(res){ f.statut=rec.statut; f.confirmeeLe=rec.confirmeeLe; renderSummary(); renderList(); }
 }
 async function confirmAllMine(){
   const myId=getDeviceId();
@@ -331,10 +343,9 @@ async function confirmAllMine(){
   setSaveStatus('saving');
   let allOk = true;
   for(const f of mine){
-    f.statut='confirmee'; f.confirmeeLe=new Date().toISOString();
-    const rec=Object.assign({},f); delete rec._key;
+    const rec=Object.assign({},f,{ statut:'confirmee', confirmeeLe:new Date().toISOString() }); delete rec._key;
     const res = await storage.set(f._key, JSON.stringify(rec), true);
-    if(!res) allOk = false;
+    if(res){ f.statut=rec.statut; f.confirmeeLe=rec.confirmeeLe; } else { allOk = false; }
   }
   setSaveStatus(allOk ? 'ok' : 'err');
   renderSummary(); renderList();
@@ -345,8 +356,7 @@ async function delOne(key){
   setSaveStatus('saving');
   const res = await storage.del(key);
   setSaveStatus(res ? 'ok' : 'err');
-  factures = factures.filter(x=>x._key!==key);
-  renderSummary(); renderList();
+  if(res){ factures = factures.filter(x=>x._key!==key); renderSummary(); renderList(); }
 }
 
 // ================== AJOUT (photo + compression, comme le chat) ==================
