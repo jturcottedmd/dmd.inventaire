@@ -2209,8 +2209,15 @@ const BASE_CAT_KEYS = CAT_ORDER.filter(k => RAW_DATA[k])
     });
   });
 })();
-const DEFAULT_TEAMS = [1,2,3,4,5,6].map(n => ({id: 'team_' + n, label: 'Équipe ' + n}))
-  .concat([{id:'entrepot', label:'Entrepôt'}]);
+// Liste de référence des équipes.
+// ⚠ DOIT rester identique à STD_TEAMS de la tuile Infos équipe, sinon les deux
+// tuiles n'affichent pas les mêmes équipes quand inv:teams n'existe pas encore.
+const DEFAULT_TEAMS = [
+  {id:'team_1',label:'Équipe 1'},{id:'team_2',label:'Équipe 2'},{id:'team_3',label:'Équipe 3'},
+  {id:'team_4',label:'Équipe 4'},{id:'team_5',label:'Équipe 5'},{id:'team_6',label:'Équipe 6'},
+  {id:'reno_1',label:'Réno 1'},{id:'reno_2',label:'Réno 2'},
+  {id:'entrepot',label:'Entrepôt'},{id:'administration',label:'Administration'}
+];
 const ETATS = ['bon','moyen','mauvais'];
 
 let teams = DEFAULT_TEAMS.slice();
@@ -2464,11 +2471,16 @@ async function loadTeams(){
     const res = await window.storage.get('inv:teams', true);
     teams = res && res.value ? JSON.parse(res.value) : DEFAULT_TEAMS.slice();
   }catch(e){ teams = DEFAULT_TEAMS.slice(); }
-  // S'assure que l'emplacement Entrepôt existe (ajouté après une 1re utilisation)
-  if(!teams.some(t => t.id === 'entrepot')){
-    teams.push({id:'entrepot', label:'Entrepôt'});
-    try{ await saveTeams(); }catch(e){}
-  }
+  // Fusionne les équipes de référence manquantes (Réno 1-2, Entrepôt, Administration…).
+  // Même logique que loadTeams() de la tuile Infos équipe : les équipes de référence
+  // d'abord, dans l'ordre, puis les équipes ajoutées à la main par un admin.
+  const byId = {}; teams.forEach(t => { if(t && t.id) byId[t.id] = t; });
+  let changed = false;
+  DEFAULT_TEAMS.forEach(st => { if(!byId[st.id]){ byId[st.id] = st; changed = true; } });
+  teams = DEFAULT_TEAMS.map(st => byId[st.id])
+    .concat(teams.filter(t => t && t.id && !DEFAULT_TEAMS.some(s => s.id === t.id)))
+    .filter(Boolean);
+  if(changed){ try{ await saveTeams(); }catch(e){} }
 }
 async function saveTeams(){
   try{ await window.storage.set('inv:teams', JSON.stringify(teams), true); }catch(e){}
