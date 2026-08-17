@@ -1,0 +1,34 @@
+{
+  "name": "Maçonnerie DMD",
+  "short_name": "DMD",
+  "description": "Plateforme de chantier — Maçonnerie DMD inc.",
+  "lang": "fr-CA",
+  "dir": "ltr",
+  "start_url": "/DMD.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#232221",
+  "theme_color": "#232221",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icones/dmd-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icones/dmd-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icones/dmd-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

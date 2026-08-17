@@ -8,6 +8,12 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#232221">
 <title>Maçonnerie DMD</title>
+<!-- Installation sur l'écran d'accueil (Android + iPhone/iPad) -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icones/dmd-apple-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icones/dmd-192.png">
+<meta name="apple-mobile-web-app-title" content="DMD">
+<meta name="application-name" content="DMD">
 <style>
   html,body{margin:0;padding:0;height:100%;background:#232221;overflow:hidden;}
   #cadre{border:0;width:100%;height:100%;display:block;background:#232221;}
@@ -13166,6 +13172,30 @@ document.addEventListener('keydown', function(e){
 
   if(ESTRESET.test(location.hash)) reinitialiser();
   else aller((location.hash || '').replace(/^#/, '') || 'accueil', true);
+})();
+</script>
+<script>
+// Mode hors ligne : l'app s'ouvre sur le chantier même sans réception.
+// Ne s'active que sur une vraie adresse (https) — ignoré si on ouvre le fichier
+// directement depuis le téléphone, où les service workers sont interdits.
+(function(){
+  if(!('serviceWorker' in navigator)) return;
+  if(location.protocol !== 'https:' && location.hostname !== 'localhost') return;
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('/sw.js').then(function(reg){
+      // Une nouvelle version déposée sur le serveur prend la main au prochain
+      // démarrage, sans que personne ait à désinstaller quoi que ce soit.
+      reg.addEventListener('updatefound', function(){
+        var sw = reg.installing;
+        if(!sw) return;
+        sw.addEventListener('statechange', function(){
+          if(sw.state === 'installed' && navigator.serviceWorker.controller){
+            try{ sw.postMessage('dmd-maj'); }catch(e){}
+          }
+        });
+      });
+    }).catch(function(e){ console.warn('Hors ligne indisponible :', e); });
+  });
 })();
 </script>
 </body>
