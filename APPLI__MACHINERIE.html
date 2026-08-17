@@ -65,6 +65,7 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 .c-nom{ font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:18px; letter-spacing:0.3px; flex:1; }
 .c-cat{ font-size:10px; letter-spacing:0.5px; text-transform:uppercase; font-weight:700; color:var(--paper-dim); border:1px solid var(--line); border-radius:20px; padding:2px 8px; }
 .c-loc{ margin-top:6px; font-size:13px; color:var(--paper); }
+.c-serie{ margin-top:3px; font-size:11.5px; color:var(--logo-grey); letter-spacing:0.3px; font-variant-numeric:tabular-nums; }
 .c-loc .muted{ color:var(--logo-grey); }
 .c-pills{ margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
 .pill{ font-size:11.5px; font-weight:700; border-radius:20px; padding:3px 9px; border:1px solid var(--line); color:var(--paper-dim); background:var(--asphalt); display:inline-flex; align-items:center; gap:5px; }
@@ -131,7 +132,7 @@ textarea.inp{ min-height:56px; resize:vertical; }
     <a class="back" href="./index.html" aria-label="Retour à l'accueil">←</a>
     <div>
       <h1 class="hdr-title">Machinerie</h1>
-      <div class="hdr-sub">Lift · Fraco · Mixeur · Scie</div>
+      <div class="hdr-sub">Lift · Fraco · Mixeur · Scie · Divers</div>
     </div>
     <button id="exportBtn" style="display:none;margin-left:auto;background:#4c7a3f;color:#f3efe6;border:none;border-radius:6px;padding:7px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;white-space:nowrap;">⬇ Excel</button>
   </div>
@@ -155,56 +156,73 @@ textarea.inp{ min-height:56px; resize:vertical; }
 <script>
 // ================== CATALOGUE EMBARQUÉ (source de secours, tiré de l'inventaire) ==================
 const EMBEDDED_CATALOG = [
-  {ident:"L01",nom:"Skytrak 6036 2008",cat:"Lift",gas:false,vf:true},
-  {ident:"L02",nom:"Skytrak 6042 2006",cat:"Lift",gas:false,vf:true},
-  {ident:"L03",nom:"Skytrak 10054 2008",cat:"Lift",gas:false,vf:true},
-  {ident:"L04",nom:"Skytrak 10054 2021",cat:"Lift",gas:false,vf:true},
-  {ident:"L05",nom:"Skytrak 10054 2025",cat:"Lift",gas:false,vf:true},
-  {ident:"L06",nom:"JLG 2018",cat:"Lift",gas:false,vf:true},
-  {ident:"L07",nom:"Lift shop 1998",cat:"Lift",gas:false,vf:true},
-  {ident:"L08",nom:"Lift shop 2017",cat:"Lift",gas:false,vf:true},
-  {ident:"JE01",nom:"Jigger élec.",cat:"Lift",gas:false,vf:true},
+  {ident:"L01",nom:"Skytrak 6036 2008",cat:"Lift",gas:false,vf:true,serie:"0160033894",plaque:"V58847K-5"},
+  {ident:"L02",nom:"Skytrak 6042 2006",cat:"Lift",gas:false,vf:true,serie:"0160015954",plaque:"V23518E-1"},
+  {ident:"L03",nom:"Skytrak 10054 2008",cat:"Lift",gas:false,vf:true,serie:"0160037340",plaque:"V66339M-0"},
+  {ident:"L04",nom:"Skytrak 10054 2021",cat:"Lift",gas:false,vf:true,serie:"0160110129",plaque:"V74100N-6"},
+  {ident:"L05",nom:"Skytrak 10054 2025",cat:"Lift",gas:false,vf:true,serie:"0160146163"},
+  {ident:"L06",nom:"JLG 2018",cat:"Lift",gas:false,vf:true,serie:"0160081708"},
+  {ident:"L07",nom:"Merlot 27.6TOP 2026",cat:"Lift",gas:false,vf:true,serie:"ZF1P250G2D5003209"},
+  {ident:"LE01",nom:"Lift shop 1998",cat:"Lift",gas:false,vf:true,serie:"5FGC25 71274"},
+  {ident:"LE02",nom:"Lift shop 2017",cat:"Lift",gas:false,vf:true,serie:"8FGCU25 81912"},
   {ident:"JM01",nom:"Jigger man.",cat:"Lift",gas:false,vf:true},
-  {ident:"F01",nom:"20K 2003",cat:"Fraco",gas:false,vf:true},
-  {ident:"F02",nom:"20K 2005",cat:"Fraco",gas:false,vf:true},
-  {ident:"F03",nom:"20K 2014",cat:"Fraco",gas:false,vf:true},
-  {ident:"F04",nom:"20K 2016",cat:"Fraco",gas:false,vf:true},
-  {ident:"F05",nom:"20K 2017 sur essieu",cat:"Fraco",gas:false,vf:true},
-  {ident:"F06",nom:"20k 2025",cat:"Fraco",gas:false,vf:true},
-  {ident:"G01",nom:"Grue FRK 2025",cat:"Fraco",gas:false,vf:true},
-  {ident:"MG01",nom:"Mud hog gaz",cat:"Mixeur",gas:true,vf:false},
-  {ident:"MG02",nom:"Mud hog gaz",cat:"Mixeur",gas:true,vf:false},
-  {ident:"MG03",nom:"Mud hog gaz",cat:"Mixeur",gas:true,vf:false},
+  {ident:"JE01",nom:"Jigger élec.",cat:"Lift",gas:false,vf:true},
+  {ident:"F01",nom:"20K 2003",cat:"Fraco",gas:false,vf:true,serie:"20080830"},
+  {ident:"F02",nom:"20K 2005",cat:"Fraco",gas:false,vf:true,serie:"20050127"},
+  {ident:"F03",nom:"20K 2014",cat:"Fraco",gas:false,vf:true,serie:"20140929"},
+  {ident:"F04",nom:"20K 2016",cat:"Fraco",gas:false,vf:true,serie:"20161050"},
+  {ident:"F05",nom:"20K 2017 sur essieu",cat:"Fraco",gas:false,vf:true,serie:"20211279"},
+  {ident:"F06",nom:"20K 2025",cat:"Fraco",gas:false,vf:true,serie:"20251457"},
+  {ident:"GR01",nom:"Grue FRK 2025",cat:"Fraco",gas:false,vf:true,serie:"40250231"},
+  {ident:"GR02",nom:"Grue FRK 2026",cat:"Fraco",gas:false,vf:true,serie:"40260250"},
+  {ident:"MG01",nom:"Mud hog gaz",cat:"Mixeur",gas:true,vf:false,serie:"EZ-MH12D193370"},
+  {ident:"MG02",nom:"Mud hog gaz",cat:"Mixeur",gas:true,vf:false,serie:"EZ-MH12D203860"},
+  {ident:"MG03",nom:"Mud hog gaz",cat:"Mixeur",gas:true,vf:false,serie:"EZ-MH12D224538"},
   {ident:"MG04",nom:"Mud hog gaz",cat:"Mixeur",gas:true,vf:false},
   {ident:"MG05",nom:"Gros Mathieu gaz",cat:"Mixeur",gas:true,vf:false},
   {ident:"MG06",nom:"Petit Mathieu gaz",cat:"Mixeur",gas:true,vf:false},
   {ident:"MG07",nom:"Mathieu gaz",cat:"Mixeur",gas:true,vf:false},
   {ident:"MG08",nom:"Mathieu gaz",cat:"Mixeur",gas:true,vf:false},
-  {ident:"MG09",nom:"Vieux gros mixeur rouge",cat:"Mixeur",gas:true,vf:false},
-  {ident:"ME01",nom:"Mud hog élec.",cat:"Mixeur",gas:true,vf:false},
-  {ident:"ME02",nom:"Mathieu élec.",cat:"Mixeur",gas:true,vf:false},
-  {ident:"S01",nom:"Scie dépoussiéreur A.B.L.",cat:"Scie",gas:true,vf:false},
-  {ident:"S02",nom:"Scie dépoussiéreur Mathieu élec.",cat:"Scie",gas:true,vf:false},
-  {ident:"S03",nom:"Scie dépoussiéreur Mathieu gaz",cat:"Scie",gas:true,vf:false},
-  {ident:"S04",nom:"Scie clipper 20po sur pied",cat:"Scie",gas:true,vf:false},
-  {ident:"S05",nom:"Scie clipper 20po sur pied",cat:"Scie",gas:true,vf:false},
-  {ident:"S06",nom:"Scie clipper 20po",cat:"Scie",gas:true,vf:false},
-  {ident:"S07",nom:"Scie clipper 14po",cat:"Scie",gas:true,vf:false},
-  {ident:"S08",nom:"Scie IQ",cat:"Scie",gas:true,vf:false},
-  {ident:"S09",nom:"Scie IQ",cat:"Scie",gas:true,vf:false},
-  {ident:"S10",nom:"Scie Mathieu",cat:"Scie",gas:true,vf:false},
-  {ident:"S11",nom:"Scie Mathieu",cat:"Scie",gas:true,vf:false},
-  {ident:"S12",nom:"Scie Mathieu",cat:"Scie",gas:true,vf:false},
-  {ident:"S13",nom:"Scie Mathieu",cat:"Scie",gas:true,vf:false},
-  {ident:"S14",nom:"Cut Quick STIHL",cat:"Scie",gas:true,vf:false},
-  {ident:"S15",nom:"Cut Quick STIHL",cat:"Scie",gas:true,vf:false},
-  {ident:"S16",nom:"Cut Quick STIHL",cat:"Scie",gas:true,vf:false},
-  {ident:"S17",nom:"Cut Quick STIHL",cat:"Scie",gas:true,vf:false},
-  {ident:"S18",nom:"Scie 9po DEWALT",cat:"Scie",gas:true,vf:false},
-  {ident:"S19",nom:"Chainsaw HUSQVARNA",cat:"Scie",gas:true,vf:false},
-  {ident:"S20",nom:"Chainsaw HUSQVARNA",cat:"Scie",gas:true,vf:false}
+  {ident:"MG09",nom:"Mathieu gaz",cat:"Mixeur",gas:true,vf:false},
+  {ident:"MG10",nom:"Vieux gros mixeur rouge",cat:"Mixeur",gas:true,vf:false},
+  {ident:"ME01",nom:"Mud hog élec.",cat:"Mixeur",gas:false,vf:false},
+  {ident:"ME02",nom:"Mathieu élec.",cat:"Mixeur",gas:false,vf:false},
+  {ident:"SE01",nom:"Scie dépoussiéreur A.B.L.",cat:"Scie",gas:false,vf:false},
+  {ident:"SE02",nom:"Scie dépoussiéreur Mathieu élec.",cat:"Scie",gas:false,vf:false},
+  {ident:"SE03",nom:"Scie clipper 20po sur pied",cat:"Scie",gas:false,vf:false},
+  {ident:"SE04",nom:"Scie clipper 20po sur pied",cat:"Scie",gas:false,vf:false},
+  {ident:"SE05",nom:"Scie clipper 20po",cat:"Scie",gas:false,vf:false},
+  {ident:"SE06",nom:"Scie clipper 14po",cat:"Scie",gas:false,vf:false},
+  {ident:"SE07",nom:"Scie IQ",cat:"Scie",gas:false,vf:false},
+  {ident:"SE08",nom:"Scie IQ",cat:"Scie",gas:false,vf:false},
+  {ident:"SE09",nom:"Scie 9po DEWALT",cat:"Scie",gas:false,vf:false},
+  {ident:"SG01",nom:"Scie dépoussiéreur Mathieu gaz",cat:"Scie",gas:true,vf:false},
+  {ident:"SG02",nom:"Scie Mathieu",cat:"Scie",gas:true,vf:false},
+  {ident:"SG03",nom:"Scie Mathieu",cat:"Scie",gas:true,vf:false},
+  {ident:"SG04",nom:"Scie Mathieu",cat:"Scie",gas:true,vf:false},
+  {ident:"SG05",nom:"Scie Mathieu",cat:"Scie",gas:true,vf:false,serie:"04-6537"},
+  {ident:"SG06",nom:"Cut Quick STIHL",cat:"Scie",gas:true,vf:false},
+  {ident:"SG07",nom:"Cut Quick STIHL",cat:"Scie",gas:true,vf:false},
+  {ident:"SG08",nom:"Cut Quick STIHL",cat:"Scie",gas:true,vf:false},
+  {ident:"SG09",nom:"Cut Quick STIHL",cat:"Scie",gas:true,vf:false},
+  {ident:"SG10",nom:"Chainsaw HUSQVARNA",cat:"Scie",gas:true,vf:false},
+  {ident:"SG11",nom:"Chainsaw HUSQVARNA",cat:"Scie",gas:true,vf:false},
+  {ident:"CT01",nom:"Conteneur 1 avec équipement",cat:"Divers",gas:false,vf:false},
+  {ident:"CT02",nom:"Conteneur 2 avec équipement",cat:"Divers",gas:false,vf:false},
+  {ident:"CT03",nom:"Conteneur 3 avec équipement",cat:"Divers",gas:false,vf:false},
+  {ident:"CF01",nom:"Coffre jaune",cat:"Divers",gas:false,vf:false},
+  {ident:"CF02",nom:"Coffre bleu",cat:"Divers",gas:false,vf:false},
+  {ident:"CF03",nom:"Coffre outils noir",cat:"Divers",gas:false,vf:false},
+  {ident:"CF04",nom:"Coffre outils brun",cat:"Divers",gas:false,vf:false},
+  {ident:"MP01",nom:"Machine à pression",cat:"Divers",gas:true,vf:false},
+  {ident:"MP02",nom:"Machine à pression",cat:"Divers",gas:true,vf:false},
+  {ident:"GN01",nom:"Génératrice",cat:"Divers",gas:true,vf:false},
+  {ident:"GN02",nom:"Génératrice",cat:"Divers",gas:true,vf:false},
+  {ident:"GU01",nom:"Guillotine grosse",cat:"Divers",gas:false,vf:false},
+  {ident:"GU02",nom:"Guillotine grosse",cat:"Divers",gas:false,vf:false},
+  {ident:"GU03",nom:"Guillotine grosse",cat:"Divers",gas:false,vf:false}
 ];
-const CATS = ['Lift','Fraco','Mixeur','Scie'];
+const CATS = ['Lift','Fraco','Mixeur','Scie','Divers'];
 const DEFAULT_TEAMS = [1,2,3,4,5,6].map(n => ({id:'team_'+n, label:'Équipe '+n})).concat([{id:'entrepot', label:'Entrepôt'}]);
 
 // ================== CONNEXION SUPABASE (partagée avec les autres apps) ==================
@@ -290,6 +308,24 @@ function entretienStatus(val){
   return {level:'green', label:'À jour ('+months+' mois)'};
 }
 
+// ---- Heures moteur ----
+// rec.heures = [{id,date,h,par}] (relevés successifs) ; rec.heuresProchain = compteur
+// auquel le prochain entretien est dû. C'est l'écart entre les deux qui donne l'alerte.
+function dernierReleve(rec){
+  const l = (rec && rec.heures) || [];
+  if(!l.length) return null;
+  return l.slice().sort((a,b) => String(a.date||'').localeCompare(String(b.date||'')))[l.length-1];
+}
+function heuresStatus(rec){
+  const d = dernierReleve(rec);
+  if(!d) return { level:'grey', label:'Aucun relevé', h:null };
+  const cible = parseFloat(rec && rec.heuresProchain);
+  if(isNaN(cible) || !cible) return { level:'grey', label:d.h+' h', h:d.h };
+  const reste = Math.round(cible - d.h);
+  if(reste < 0)   return { level:'red',    label:'Entretien dépassé de '+(-reste)+' h', h:d.h, reste:reste };
+  if(reste <= 100) return { level:'orange', label:'Entretien dans '+reste+' h',          h:d.h, reste:reste };
+  return { level:'green', label:'Prochain entretien dans '+reste+' h', h:d.h, reste:reste };
+}
 function getDeviceId(){ try{ let v=localStorage.getItem('inv:deviceId'); if(!v){ v='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); localStorage.setItem('inv:deviceId',v); } return v; }catch(e){ return 'dev_'+Math.random().toString(36).slice(2,10); } }
 function parLabel(){ try{ const v=localStorage.getItem('inv:deviceUser'); if(v){ const u=JSON.parse(v); if(u && u.nom) return u.nom; } }catch(e){} return 'Appareil '+getDeviceId().slice(-4); }
 
@@ -303,7 +339,7 @@ let teamChantier = {};          // teamId -> { projet, adresse } (encart chantie
 
 function machineKey(m){ return (m.ident && m.ident.trim()) ? m.ident.trim() : 'nom:'+normNom(m.nom); }
 function recFor(m){ return records[machineKey(m)] || {}; }
-function blankRec(m){ return { ident:m.ident||'', nom:m.nom, cat:m.cat, verif:'', huile:'', tuneup:'', loc:null, histoLoc:[], bris:[], reparations:[], inspections:[] }; }
+function blankRec(m){ return { ident:m.ident||'', nom:m.nom, cat:m.cat, verif:'', huile:'', tuneup:'', loc:null, histoLoc:[], bris:[], reparations:[], inspections:[], heures:[], heuresProchain:'' }; }
 function setSaveStatus(state){
   const el = document.getElementById('saveStatus'); if(!el) return;
   if(state==='saving'){ el.className='save-status'; el.textContent='💾 Enregistrement…'; }
@@ -317,7 +353,7 @@ function setSaveStatus(state){
 // Les entrées supprimées volontairement sont mémorisées dans rec.del pour ne pas revenir.
 function mergeEventLists(rec, srv){
   const del = new Set(rec.del || []);
-  ['bris','reparations','inspections'].forEach(f => {
+  ['bris','reparations','inspections','heures'].forEach(f => {
     const loc = rec[f] || [], remote = (srv && srv[f]) || [];
     const ids = new Set(loc.map(x => x && x.id));
     remote.forEach(x => { if(x && x.id && !ids.has(x.id) && !del.has(x.id)) loc.push(x); });
@@ -384,7 +420,7 @@ function scheduleMachineVerify(m, key){
       const srvDel = new Set(srv.del || []);
       let lost = false;
       // nos entrées d'événements présentes localement doivent exister côté serveur
-      ['bris','reparations','inspections'].forEach(f => {
+      ['bris','reparations','inspections','heures'].forEach(f => {
         const srvIds = new Set((srv[f]||[]).map(x => x && x.id));
         (local[f]||[]).forEach(x => { if(x && x.id && !srvDel.has(x.id) && !srvIds.has(x.id)) lost = true; });
       });
@@ -419,7 +455,9 @@ async function loadCatalog(){
           if(!m || !m.nom) return;
           if(CATS.indexOf(m.cat) === -1) return;
           const k = machineKey(m);
-          if(!byKey[k]) byKey[k] = { ident:m.ident||'', nom:m.nom, cat:m.cat, gas:!!m.gas, vf:!!m.vf };
+          if(!byKey[k]) byKey[k] = { ident:m.ident||'', nom:m.nom, cat:m.cat, gas:!!m.gas, vf:!!m.vf, serie:m.serie||'', plaque:m.plaque||'' };
+          // Machine déjà connue : l'inventaire complète le n° de série / la plaque s'il en a un.
+          else { if(m.serie && !byKey[k].serie) byKey[k].serie = m.serie; if(m.plaque && !byKey[k].plaque) byKey[k].plaque = m.plaque; }
         });
       }
     }
@@ -427,7 +465,7 @@ async function loadCatalog(){
   catalog = Object.values(byKey);
 }
 let _srvSnap = {};   // key -> copie des champs scalaires tels que lus du serveur (pour fusion 3 voies)
-const SCALAR_FIELDS = ['verif','huile','tuneup','loc'];
+const SCALAR_FIELDS = ['verif','huile','tuneup','loc','heuresProchain'];
 function snapScalars(rec){ const o={}; SCALAR_FIELDS.forEach(f=>{ o[f]=JSON.stringify(rec&&rec[f]!==undefined?rec[f]:null); }); return o; }
 async function loadRecords(){
   records = {};
@@ -549,16 +587,18 @@ function machineStatus(m){
     const rank={grey:0,green:1,orange:2,red:3};
     maint = (rank[h.level]>=rank[t.level]) ? h : t;
   }
-  // couleur de bord : pire de (verif si actif), bris ouverts, maintenance
+  const hrs = heuresStatus(rec);
+  // couleur de bord : pire de (verif si actif), bris ouverts, maintenance, heures moteur
   let edge='';
   const levels=[];
   if(verifActive) levels.push(verif.level);
   if(openBris>0) levels.push('red');
   if(maint) levels.push(maint.level);
+  if(hrs.level!=='grey') levels.push(hrs.level);
   if(levels.indexOf('red')!==-1) edge=' edge-red';
   else if(levels.indexOf('orange')!==-1) edge=' edge-yellow';
   else if(levels.indexOf('green')!==-1) edge=' edge-green';
-  return { rec, verif, verifActive, openBris, openRepar, lastInsp, maint, edge };
+  return { rec, verif, verifActive, openBris, openRepar, lastInsp, maint, hrs, edge };
 }
 function locText(rec){
   const l = rec && rec.loc;
@@ -571,19 +611,28 @@ function locText(rec){
   return s;
 }
 function pill(level, text){ return '<span class="pill '+(level||'')+'"><span class="dot '+(level||'grey')+'"></span>'+escapeHtml(text)+'</span>'; }
+// Identification officielle (liste des équipements) : n° de série et, pour les véhicules, la plaque.
+function serieText(m){
+  const bits = [];
+  if(m && m.serie)  bits.push('N° série '+escapeHtml(m.serie));
+  if(m && m.plaque) bits.push('Plaque '+escapeHtml(m.plaque));
+  return bits.length ? '<div class="c-serie">'+bits.join(' · ')+'</div>' : '';
+}
 
 function renderSummary(){
-  let verifDue=0, brisOpen=0, insp0=0;
+  let verifDue=0, brisOpen=0, insp0=0, hrsDue=0;
   const vis = visibleCatalog();
   vis.forEach(m => {
     const st = machineStatus(m);
     if(st.verifActive && (st.verif.level==='red' || st.verif.level==='orange')) verifDue++;
     if(st.openBris>0) brisOpen++;
     if(!st.lastInsp) insp0++;
+    if(st.hrs.level==='red' || st.hrs.level==='orange') hrsDue++;
   });
   document.getElementById('summary').innerHTML =
     '<div class="sum-chip'+(verifDue?' warn':'')+'"><b>'+verifDue+'</b>Vérif. à faire / dues</div>' +
     '<div class="sum-chip'+(brisOpen?' alert':'')+'"><b>'+brisOpen+'</b>Machines avec bris</div>' +
+    '<div class="sum-chip'+(hrsDue?' alert':'')+'"><b>'+hrsDue+'</b>Entretiens dus (heures)</div>' +
     '<div class="sum-chip"><b>'+vis.length+'</b>Machines suivies</div>';
 }
 // Pastilles par onglet : rouge = machines en alerte, jaune = à surveiller, vert = tout est beau
@@ -647,11 +696,13 @@ function renderList(){
     if(st.openRepar>0) pills.push(pill('orange', '🛠 '+st.openRepar+' répar.'));
     pills.push(pill(st.lastInsp?'green':'grey', 'Insp : ' + (st.lastInsp ? fmtDateFR(st.lastInsp.date) : 'aucune')));
     if(st.maint) pills.push(pill(st.maint.level, '🛢 '+st.maint.label));
+    if(st.hrs.h!==null) pills.push(pill(st.hrs.level, '⏱ '+st.hrs.label));
     if(m.cat==='Lift' || m.cat==='Fraco'){ const e = extForMachine(m); pills.push(pill(e?'green':'red', e ? ('🧯 #'+e.num) : '🧯 aucun')); }
     return '<div class="card'+st.edge+'" data-key="'+escapeAttr(machineKey(m))+'">' +
       '<div class="c-top"><span class="c-ident">'+escapeHtml(m.ident||'—')+'</span>' +
         '<span class="c-nom">'+escapeHtml(m.nom)+'</span>' + (q?'<span class="c-cat">'+escapeHtml(m.cat)+'</span>':'') + '</div>' +
       '<div class="c-loc">'+locTextAuto(m)+'</div>' +
+      serieText(m) +
       '<div class="c-pills">'+pills.join('')+'</div>' +
     '</div>';
   }).join('');
@@ -747,6 +798,30 @@ function openDetail(key){
       '<div class="field-label" style="margin-top:12px;">Historique des inspections</div>' + inspHtml +
     '</div></details>';
 
+  // --- Heures moteur (compteur + échéance du prochain entretien) ---
+  const hs = st.hrs;
+  const releves = (rec.heures||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  const relevesHtml = releves.length ? releves.slice(0,10).map(x =>
+      '<div class="entry"><div class="e-top"><span class="e-date">'+fmtDateFR(x.date)+'</span>' +
+      '<span class="tag grey">'+escapeHtml(String(x.h))+' h</span>' +
+      '<span class="e-by">'+escapeHtml(formatNom(x.par||''))+'</span></div>' +
+      '<div class="e-actions"><span class="mini-link danger" data-hr-del="'+x.id+'">Supprimer</span></div></div>'
+    ).join('') : '<div class="empty-sec">Aucun relevé d\'heures.</div>';
+  const heuresSection =
+    '<details class="sec"'+(hs.level==='red'||hs.level==='orange'?' open':'')+'><summary>⏱ Heures moteur ' +
+      '<span class="pill '+hs.level+'" style="margin-left:6px;"><span class="dot '+hs.level+'"></span>'+escapeHtml(hs.label)+'</span>' +
+      '<span class="chev">▶</span></summary><div class="sec-body">' +
+      '<div class="field-label">Nouveau relevé du compteur</div>' +
+      '<div class="row2"><input class="inp" type="date" id="hrDate" value="'+todayInput()+'">' +
+      '<input class="inp" id="hrVal" inputmode="numeric" placeholder="ex : 8353"></div>' +
+      '<button type="button" class="btn primary" id="hrAdd">➕ Enregistrer le relevé</button>' +
+      '<div class="field-label" style="margin-top:12px;">Prochain entretien dû à (heures au compteur)</div>' +
+      '<div class="row2"><input class="inp" id="hrNext" inputmode="numeric" placeholder="ex : 8500" value="'+escapeAttr(rec.heuresProchain||'')+'">' +
+      '<button type="button" class="btn primary" id="hrNextSave" style="max-width:120px;">Enregistrer</button></div>' +
+      '<div class="note">Le compteur ne recule pas : entre le relevé lu sur la machine. L\'alerte passe au jaune 100 h avant l\'échéance, puis au rouge une fois dépassée.</div>' +
+      '<div class="field-label" style="margin-top:12px;">Historique des relevés</div>' + relevesHtml +
+    '</div></details>';
+
   // --- Entretien moteur (machines à essence) ---
   let entretienSection = '';
   if(m.gas){
@@ -784,7 +859,8 @@ function openDetail(key){
   box.innerHTML =
     '<div class="m-head"><span class="c-ident">'+escapeHtml(m.ident||'—')+'</span><span class="m-title">'+escapeHtml(m.nom)+'</span><button type="button" class="m-close" id="mClose">✕</button></div>' +
     '<div class="m-catline">'+escapeHtml(m.cat)+(m.gas?' · moteur':'')+'</div>' +
-    locSection + extincteurSection + verifSection + inspSection + brisSection + repSection + entretienSection;
+    serieText(m) +
+    locSection + extincteurSection + verifSection + heuresSection + inspSection + brisSection + repSection + entretienSection;
 
   document.getElementById('overlay').classList.add('show');
   document.getElementById('mClose').onclick = closeModal;
@@ -855,6 +931,28 @@ function wireDetail(m, key){
     await saveMachine(m, rec); reopen();
   };
   document.querySelectorAll('[data-insp-del]').forEach(el => el.onclick = async () => { if(!confirm('Supprimer cette inspection ?')) return; const id=el.getAttribute('data-insp-del'); rec.inspections=(rec.inspections||[]).filter(x=>x.id!==id); (rec.del=rec.del||[]).push(id); await saveMachine(m, rec); reopen(); });
+  // Heures moteur
+  const hrAdd = document.getElementById('hrAdd');
+  if(hrAdd) hrAdd.onclick = async () => {
+    const v = parseInt(String(document.getElementById('hrVal').value).replace(/[^\d]/g,''), 10);
+    if(isNaN(v) || v<=0){ alert('Entre le nombre d\'heures lu sur le compteur.'); return; }
+    const dernier = dernierReleve(rec);
+    if(dernier && v < dernier.h && !confirm('Le dernier relevé était de '+dernier.h+' h. Enregistrer quand même '+v+' h ?')) return;
+    rec.heures = rec.heures||[];
+    rec.heures.push({ id:uid(), date:document.getElementById('hrDate').value, h:v, par:parLabel() });
+    await saveMachine(m, rec); reopen();
+  };
+  const hrNextSave = document.getElementById('hrNextSave');
+  if(hrNextSave) hrNextSave.onclick = async () => {
+    rec.heuresProchain = String(document.getElementById('hrNext').value).replace(/[^\d]/g,'');
+    await saveMachine(m, rec); reopen();
+  };
+  document.querySelectorAll('[data-hr-del]').forEach(el => el.onclick = async () => {
+    if(!confirm('Supprimer ce relevé ?')) return;
+    const id = el.getAttribute('data-hr-del');
+    rec.heures = (rec.heures||[]).filter(x => x.id !== id); (rec.del=rec.del||[]).push(id);
+    await saveMachine(m, rec); reopen();
+  });
   // Entretien moteur
   const entSave = document.getElementById('entSave');
   if(entSave) entSave.onclick = async () => { rec.huile=document.getElementById('entHuile').value.trim(); rec.tuneup=document.getElementById('entTune').value.trim(); await saveMachine(m, rec); reopen(); };
@@ -970,8 +1068,8 @@ async function exporterExcel(){
       XLSX.utils.book_append_sheet(wb, xlsSheet(aoa, meta, [10,28,22,26,26], [1,3,4]), 'Résumé modifs');
     }
     // --- Une feuille par type de machine ---
-    const H = ['Ident','Machine','Chantier','Équipe','Depuis','Vérif annuelle','Statut vérif','Bris ouverts','Répar. en cours','Dern. inspection','Huile','Tune-up','Extincteur'];
-    const W = [8,30,26,13,12,14,24,12,15,15,15,15,12];
+    const H = ['Ident','Machine','N° série','Plaque','Chantier','Équipe','Vérif annuelle','Statut vérif','Bris ouverts','Répar. en cours','Dern. inspection','Huile','Tune-up','Heures','Prochain entretien (h)','État heures','Extincteur'];
+    const W = [8,30,20,13,26,13,14,24,12,15,15,15,15,10,20,26,12];
     CATS.forEach(cat => {
       const machines = catalog.filter(m => m.cat===cat);
       if(!machines.length) return;
@@ -980,17 +1078,17 @@ async function exporterExcel(){
         const st = machineStatus(m); const rec = st.rec || {};
         const loc = autoLocForMachine(m) || {};
         aoa.push([
-          m.ident||'—', m.nom, loc.chantier||'', loc.equipe||'',
-          '',
+          m.ident||'—', m.nom, m.serie||'', m.plaque||'', loc.chantier||'', loc.equipe||'',
           rec.verif||'', st.verifActive ? st.verif.label : 'n/a',
           st.openBris||0, st.openRepar||0,
           st.lastInsp ? String(st.lastInsp.date).slice(0,10) : '',
           m.gas ? (rec.huile||'') : 'n/a', m.gas ? (rec.tuneup||'') : 'n/a',
+          st.hrs.h!==null ? st.hrs.h : '', rec.heuresProchain||'', st.hrs.label,
           (m.cat==='Lift'||m.cat==='Fraco') ? (extForMachine(m) ? ('#'+extForMachine(m).num) : '—') : 'n/a'
         ]);
         meta.push({couleur:edgeToCouleur(st.edge)});
       });
-      wb.SheetNames.length; XLSX.utils.book_append_sheet(wb, xlsSheet(aoa, meta, W, [1,2,10,11]), cat.substring(0,31));
+      wb.SheetNames.length; XLSX.utils.book_append_sheet(wb, xlsSheet(aoa, meta, W, [1,2,4,11,12,15]), cat.substring(0,31));
     });
     // --- Feuille Historique : tous les événements ---
     const HH = ['Ident','Machine','Type','Date','Description','Statut','Par'];
@@ -1002,6 +1100,7 @@ async function exporterExcel(){
       (rec.bris||[]).forEach(b => events.push({ d:b.date||'', row:[m.ident||'—', m.nom, 'Bris', String(b.date||'').slice(0,10), b.desc||'', b.statut==='resolu'?'Résolu':'Ouvert', formatNom(b.par)], couleur:b.statut==='resolu'?'green':'red' }));
       (rec.reparations||[]).forEach(x => events.push({ d:x.date||'', row:[m.ident||'—', m.nom, 'Réparation', String(x.date||'').slice(0,10), (x.desc||'')+(x.cout?(' ('+x.cout+' $)'):''), x.statut==='fait'?'Fait':(x.statut==='en_cours'?'En cours':'À faire'), formatNom(x.par)], couleur:x.statut==='fait'?'green':'yellow' }));
       (rec.inspections||[]).forEach(i => events.push({ d:i.date||'', row:[m.ident||'—', m.nom, 'Inspection', String(i.date||'').slice(0,10), i.note||'', i.conforme==='non'?'Non conforme':(i.conforme==='oui'?'Conforme':'N/A'), formatNom(i.par)], couleur:i.conforme==='non'?'red':(i.conforme==='oui'?'green':null) }));
+      (rec.heures||[]).forEach(h => events.push({ d:h.date||'', row:[m.ident||'—', m.nom, 'Relevé heures', String(h.date||'').slice(0,10), h.h+' h au compteur', '', formatNom(h.par)], couleur:null }));
     });
     if(events.length){
       events.sort((a,b) => String(b.d).localeCompare(String(a.d)));
@@ -1039,7 +1138,7 @@ window.__dmdFlatSheet = async function(){
   const edgeToCouleur = e => e===' edge-red' ? 'red' : (e===' edge-yellow' ? 'yellow' : (e===' edge-green' ? 'green' : null));
   await loadTeams();
   await Promise.all([ loadCatalog(), loadRecords(), loadTeamAssignments(), loadExtincteurs() ]);
-  const H = ['Section','Catégorie','Ident','Machine','Équipe','Chantier','Vérif annuelle','Statut vérif','Huile','Tune-up','Extincteur','Bris ouverts','Répar. en cours','Dern. inspection','Date','Description','Statut','Coût ($)','Par'];
+  const H = ['Section','Catégorie','Ident','Machine','N° série','Plaque','Équipe','Chantier','Vérif annuelle','Statut vérif','Huile','Tune-up','Heures','Prochain entretien (h)','État heures','Extincteur','Bris ouverts','Répar. en cours','Dern. inspection','Date','Description','Statut','Coût ($)','Par'];
   const aoa=[H], meta=[{header:true}];
   const vide = new Array(H.length).fill('');
   CATS.forEach(cat=>{
@@ -1050,12 +1149,14 @@ window.__dmdFlatSheet = async function(){
       const loc = autoLocForMachine(m) || {};
       const ext = (cat==='Lift'||cat==='Fraco') ? extForMachine(m) : null;
       const r = vide.slice();
-      r[0]='Machine'; r[1]=cat; r[2]=m.ident||'—'; r[3]=m.nom||''; r[4]=loc.equipe||''; r[5]=loc.chantier||'';
-      r[6]=rec.verif||''; r[7]= st.verifActive ? st.verif.label : 'n/a';
-      r[8]= m.gas ? (rec.huile||'') : 'n/a'; r[9]= m.gas ? (rec.tuneup||'') : 'n/a';
-      r[10]= (cat==='Lift'||cat==='Fraco') ? (ext ? '#'+ext.num : '—') : 'n/a';
-      r[11]= st.openBris||0; r[12]= st.openRepar||0;
-      r[13]= (st.lastInsp && st.lastInsp.date) ? String(st.lastInsp.date).slice(0,10) : '';
+      r[0]='Machine'; r[1]=cat; r[2]=m.ident||'—'; r[3]=m.nom||''; r[4]=m.serie||''; r[5]=m.plaque||'';
+      r[6]=loc.equipe||''; r[7]=loc.chantier||'';
+      r[8]=rec.verif||''; r[9]= st.verifActive ? st.verif.label : 'n/a';
+      r[10]= m.gas ? (rec.huile||'') : 'n/a'; r[11]= m.gas ? (rec.tuneup||'') : 'n/a';
+      r[12]= st.hrs.h!==null ? st.hrs.h : ''; r[13]= rec.heuresProchain||''; r[14]= st.hrs.label;
+      r[15]= (cat==='Lift'||cat==='Fraco') ? (ext ? '#'+ext.num : '—') : 'n/a';
+      r[16]= st.openBris||0; r[17]= st.openRepar||0;
+      r[18]= (st.lastInsp && st.lastInsp.date) ? String(st.lastInsp.date).slice(0,10) : '';
       aoa.push(r); meta.push({ couleur: edgeToCouleur(st.edge) });
       const evts=[];
       (rec.bris||[]).forEach(b=>evts.push({ d:String(b.date||'').slice(0,10), type:'Bris', desc:b.desc||'', statut:(b.statut==='resolu'?'Résolu':'Ouvert'), cout:'', par:b.par||'', couleur:(b.statut==='resolu'?'green':'red') }));
@@ -1069,17 +1170,18 @@ window.__dmdFlatSheet = async function(){
         evts.push({ d:String(i.date||'').slice(0,10), type:'Inspection', desc:i.note||'', statut:lbl, cout:'', par:i.par||'', couleur:(i.conforme==='non'?'red':(i.conforme==='oui'?'green':null)) });
       });
       (rec.histoLoc||[]).forEach(h=>evts.push({ d:String(h.date||'').slice(0,10), type:'Déplacement', desc:[h.chantier,h.equipe,h.note].filter(Boolean).join(' · '), statut:'', cout:'', par:h.par||'', couleur:null }));
+      (rec.heures||[]).forEach(h=>evts.push({ d:String(h.date||'').slice(0,10), type:'Relevé heures', desc:h.h+' h au compteur', statut:'', cout:'', par:h.par||'', couleur:null }));
       evts.sort((a,b)=> String(b.d).localeCompare(String(a.d)));
       evts.forEach(e=>{
         const x = vide.slice();
         x[0]=e.type; x[1]=cat; x[2]=m.ident||'—'; x[3]=m.nom||'';
-        x[14]=e.d; x[15]=e.desc; x[16]=e.statut; x[17]=e.cout; x[18]=formatNom(e.par);
+        x[19]=e.d; x[20]=e.desc; x[21]=e.statut; x[22]=e.cout; x[23]=formatNom(e.par);
         aoa.push(x); meta.push({ couleur:e.couleur });
       });
     });
   });
   if(aoa.length===1){ const r=vide.slice(); r[0]='—'; r[3]='Aucune machine'; aoa.push(r); meta.push({}); }
-  return { name:'Machinerie', aoa:aoa, meta:meta, widths:[13,10,8,30,16,30,13,24,15,15,10,11,13,14,12,52,14,10,22], leftCols:[3,5,8,9,15,18] };
+  return { name:'Machinerie', aoa:aoa, meta:meta, widths:[13,10,8,30,20,13,16,30,13,24,15,15,10,20,26,10,11,13,14,12,52,14,10,22], leftCols:[3,4,7,10,11,14,20,23] };
 };
 
 // ================== DÉMARRAGE ==================

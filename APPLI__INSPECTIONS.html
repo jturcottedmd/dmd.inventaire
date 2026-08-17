@@ -177,6 +177,12 @@ const FORMS = {
     {title:"État après utilisation et nettoyage", items:["Meule tourne lentement au ralenti — IMPORTANT","Performance normale (pas de vibrations anormales)","Orifices d'arrosage non obstrués"]},
     {title:"Chariot (si applicable)", items:["Commande des gaz du chariot en bon état","Verrouillage de la poignée repliable fonctionnel","Roues en bon état","Guide de profondeur de coupe en bon état","Adaptateur de la découpeuse au chariot aligné","Réservoir et raccords d'eau étanches"]}
   ]},
+  scie_elec:{ label:"Scie électrique / découpeuse", kind:'machine', header:['noSerie','marque','modele'], groups:[
+    {title:"Alimentation électrique", items:["Cordon d'alimentation et fiche en bon état (aucun fil dénudé)","Rallonge de calibre adéquat, sans dommage","Mise à la terre ou double isolation intacte","Disjoncteur de fuite à la terre (DDFT) présent et fonctionnel","Boîtier moteur propre, aérations non obstruées","Aucune trace de surchauffe ou d'odeur de brûlé"]},
+    {title:"Visuel et opérationnel", items:["Étiquettes lisibles","Poignées et éléments de retenue propres","Vis et boulons bien serrés","Capot protecteur, levier de réglage et butoir en bon état","Supports en caoutchouc en bonne condition","Meule appropriée à la tâche et au matériau","Meule en bon état (arêtes, bords, corps)","Date de la meule en résine non expirée (si indiquée)","Conçue pour l'eau si indiquée","Sens de rotation de la meule diamantée vérifié","Vitesse de la meule ≥ celle de la découpeuse","Diamètre d'alésage compatible avec l'arbre","Bague d'espacement conforme (si présente)","Interrupteur ON/OFF et blocage de gâchette fonctionnels","Prise d'eau étanche et orifices d'arrosage non obstrués"]},
+    {title:"Bâti / table (scie sur pied)", items:["Pieds et bâti stables, aucun jeu","Roues et freins en bon état","Guide de coupe et butée bien fixés","Bac à eau et pompe propres et étanches","Système de dépoussiérage / aspiration fonctionnel"]},
+    {title:"État après utilisation et nettoyage", items:["Performance normale (pas de vibrations anormales)","Orifices d'arrosage non obstrués","Cordon rangé sans torsion ni pincement"]}
+  ]},
   scie_chaine:{ label:"Scie à chaîne", kind:'machine', header:['noSerie','marque','modele'], groups:[
     {title:"Visuel et opérationnel", items:["Étiquettes lisibles","Arrêt de chaîne","Poignées et éléments de retenue propres","Poignée de lancement et corde","Protège-main avant et arrière (sans fissure)","Réservoir de carburant étanche, aucune fuite","Pompe d'amorçage manuelle (si présente)","Couvercles de protection bien fixés","Boulons bien serrés","Griffe d'abattage fonctionnelle","Silencieux (grille pare-étincelles) propre","Système anti-vibration","Interrupteur arrêt / marche","Soupape de décompression fonctionnelle (si présente)","Chaîne appropriée","Chaîne affûtée, limiteurs de profondeur ajustés","Tension de la chaîne adéquate"]},
     {title:"État au démarrage (après inspection et nettoyage)", items:["Chaîne ne tourne pas au ralenti — IMPORTANT","Frein de chaîne fonctionnel","Gâchette d'accélérateur fonctionne librement","Blocage de gâchette d'accélérateur fonctionnel","Performance normale (démarrage et coupe)","Lubrification de la chaîne fonctionnelle"]}
@@ -196,7 +202,7 @@ function itemsFlat(form){ const out=[]; (FORMS[form].groups||[]).forEach((g,gi)=
 
 // ================== ÉTAT ==================
 let teams=[], teamLabelMap={}, myTeamId=null, isAdmin=false;
-let catalog=[], catByName={}, identsByName={}, teamMachines={};
+let catalog=[], catByName={}, identsByName={}, gasByName={}, teamMachines={};
 let units=[];              // {unitKey, teamId, name, cat, form, ident}
 let currentTab='machines';
 let curTeamSel=null;
@@ -212,8 +218,8 @@ function teamLabel(id){ return teamLabelMap[id]||id; }
 
 async function loadCatalog(){
   try{ const r=await storage.get('inv:machineCatalog'); if(r&&r.value){ const p=JSON.parse(r.value); if(p&&Array.isArray(p.machines)) catalog=p.machines; } }catch(e){ catalog=[]; }
-  catByName={}; identsByName={};
-  catalog.forEach(m=>{ const k=normNom(m.nom); if(!(k in catByName)) catByName[k]=m.cat; (identsByName[k]=identsByName[k]||[]).push(m.ident||''); });
+  catByName={}; identsByName={}; gasByName={};
+  catalog.forEach(m=>{ const k=normNom(m.nom); if(!(k in catByName)) catByName[k]=m.cat; if(!(k in gasByName)) gasByName[k]=!!m.gas; (identsByName[k]=identsByName[k]||[]).push(m.ident||''); });
 }
 async function loadTeamMachines(){
   teamMachines={};
@@ -225,10 +231,19 @@ async function loadTeamMachines(){
 }
 function formForMachine(cat,nom){
   const n=normNom(nom);
-  if(cat==='Fraco') return 'fraco';
-  if(cat==='Lift') return 'chariot';
-  if(cat==='Scie'){ if(/chain|chaine|husqvarna/.test(n)) return 'scie_chaine'; return 'scie_gaz'; }
-  return null;   // Mixeur ou inconnu : aucune fiche d'inspection
+  if(cat==='Fraco'){ if(/grue/.test(n)) return null; return 'fraco'; }   // la grue n'est pas une plateforme sur mât
+  if(cat==='Lift'){ if(/jigger/.test(n)) return null; return 'chariot'; } // un jigger n'est pas un chariot élévateur
+  if(cat==='Scie'){
+    // « chain » couvre déjà « Chainsaw HUSQVARNA ». On ne se fie plus à la marque seule : la
+    // Scie Husqvarna 5HP sur rack est une découpeuse à béton, pas une scie à chaîne.
+    if(/chain|chaine|troncon/.test(n)) return 'scie_chaine';
+    // Gaz ou électrique : on suit le champ `gas` du catalogue (source unique = l'inventaire),
+    // pas le nom. Une scie électrique n'a ni réservoir ni corde de lancement à inspecter.
+    const g = gasByName[n];
+    if(g === false) return 'scie_elec';
+    return 'scie_gaz';
+  }
+  return null;   // Mixeur, Divers ou inconnu : aucune fiche d'inspection
 }
 function buildUnits(){
   units=[];
