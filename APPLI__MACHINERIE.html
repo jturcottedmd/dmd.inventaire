@@ -1031,8 +1031,63 @@ document.addEventListener('keydown', function(e){
   }
 });
 
+// ================== EXPORT GLOBAL (accueil) ==================
+// Fournit UNE page Excel pour cette tuile : une ligne « Machine » (état courant)
+// suivie de ses événements (bris, réparations, inspections), au lieu des 4 feuilles
+// par catégorie + Historique de l'export de la tuile.
+window.__dmdFlatSheet = async function(){
+  const edgeToCouleur = e => e===' edge-red' ? 'red' : (e===' edge-yellow' ? 'yellow' : (e===' edge-green' ? 'green' : null));
+  await loadTeams();
+  await Promise.all([ loadCatalog(), loadRecords(), loadTeamAssignments(), loadExtincteurs() ]);
+  const H = ['Section','Catégorie','Ident','Machine','Équipe','Chantier','Vérif annuelle','Statut vérif','Huile','Tune-up','Extincteur','Bris ouverts','Répar. en cours','Dern. inspection','Date','Description','Statut','Coût ($)','Par'];
+  const aoa=[H], meta=[{header:true}];
+  const vide = new Array(H.length).fill('');
+  CATS.forEach(cat=>{
+    const machines = catalog.filter(m=>m.cat===cat).sort((a,b)=> String(a.ident||'zz').localeCompare(String(b.ident||'zz'),'fr'));
+    machines.forEach(m=>{
+      const rec = recFor(m) || {};
+      const st = machineStatus(m);
+      const loc = autoLocForMachine(m) || {};
+      const ext = (cat==='Lift'||cat==='Fraco') ? extForMachine(m) : null;
+      const r = vide.slice();
+      r[0]='Machine'; r[1]=cat; r[2]=m.ident||'—'; r[3]=m.nom||''; r[4]=loc.equipe||''; r[5]=loc.chantier||'';
+      r[6]=rec.verif||''; r[7]= st.verifActive ? st.verif.label : 'n/a';
+      r[8]= m.gas ? (rec.huile||'') : 'n/a'; r[9]= m.gas ? (rec.tuneup||'') : 'n/a';
+      r[10]= (cat==='Lift'||cat==='Fraco') ? (ext ? '#'+ext.num : '—') : 'n/a';
+      r[11]= st.openBris||0; r[12]= st.openRepar||0;
+      r[13]= (st.lastInsp && st.lastInsp.date) ? String(st.lastInsp.date).slice(0,10) : '';
+      aoa.push(r); meta.push({ couleur: edgeToCouleur(st.edge) });
+      const evts=[];
+      (rec.bris||[]).forEach(b=>evts.push({ d:String(b.date||'').slice(0,10), type:'Bris', desc:b.desc||'', statut:(b.statut==='resolu'?'Résolu':'Ouvert'), cout:'', par:b.par||'', couleur:(b.statut==='resolu'?'green':'red') }));
+      (rec.reparations||[]).forEach(x=>{
+        const lbl = x.statut==='fait' ? 'Fait' : (x.statut==='en_cours' ? 'En cours' : 'À faire');
+        const c = parseFloat(x.cout);
+        evts.push({ d:String(x.date||'').slice(0,10), type:'Réparation', desc:x.desc||'', statut:lbl, cout:(isNaN(c)?'':c), par:x.par||'', couleur:(x.statut==='fait'?'green':'yellow') });
+      });
+      (rec.inspections||[]).forEach(i=>{
+        const lbl = i.conforme==='non' ? 'Non conforme' : (i.conforme==='oui' ? 'Conforme' : 'N/A');
+        evts.push({ d:String(i.date||'').slice(0,10), type:'Inspection', desc:i.note||'', statut:lbl, cout:'', par:i.par||'', couleur:(i.conforme==='non'?'red':(i.conforme==='oui'?'green':null)) });
+      });
+      (rec.histoLoc||[]).forEach(h=>evts.push({ d:String(h.date||'').slice(0,10), type:'Déplacement', desc:[h.chantier,h.equipe,h.note].filter(Boolean).join(' · '), statut:'', cout:'', par:h.par||'', couleur:null }));
+      evts.sort((a,b)=> String(b.d).localeCompare(String(a.d)));
+      evts.forEach(e=>{
+        const x = vide.slice();
+        x[0]=e.type; x[1]=cat; x[2]=m.ident||'—'; x[3]=m.nom||'';
+        x[14]=e.d; x[15]=e.desc; x[16]=e.statut; x[17]=e.cout; x[18]=formatNom(e.par);
+        aoa.push(x); meta.push({ couleur:e.couleur });
+      });
+    });
+  });
+  if(aoa.length===1){ const r=vide.slice(); r[0]='—'; r[3]='Aucune machine'; aoa.push(r); meta.push({}); }
+  return { name:'Machinerie', aoa:aoa, meta:meta, widths:[13,10,8,30,16,30,13,24,15,15,10,11,13,14,12,52,14,10,22], leftCols:[3,5,8,9,15,18] };
+};
+
 // ================== DÉMARRAGE ==================
+// Chargée en arrière-plan par l'export global de l'accueil (?dmdexport=1) : on ne
+// démarre pas l'interface, seule __dmdFlatSheet() sera appelée.
+const _DMD_EXPORT_MODE = /[?&]dmdexport=1/.test(location.search);
 (async function(){
+  if(_DMD_EXPORT_MODE) return;
   if(!_sb){ document.getElementById('list').innerHTML = '<div class="empty">Connexion au serveur impossible (librairie non chargée).</div>'; return; }
   try{
     const { data } = await withTimeout(_sb.auth.getSession(), 8000, 'getSession');

@@ -584,8 +584,46 @@ document.addEventListener('keydown', function(e){
   }
 });
 
+// ================== EXPORT GLOBAL (accueil) ==================
+// Fournit UNE page Excel pour cette tuile : une ligne par facture, TOUS les mois
+// (l'écran, lui, ne montre qu'un mois à la fois).
+window.__dmdFlatSheet = async function(){
+  const rows=[]; let from=0;
+  for(;;){
+    let d=[];
+    try{ const r=await withTimeout(_sb.from('inv_store').select('key,value').like('key','fact:%').order('key').range(from,from+999),20000,'page'); d=(r&&Array.isArray(r.data))?r.data:[]; }catch(e){ break; }
+    rows.push.apply(rows,d);
+    if(d.length<1000) break;
+    from+=1000; if(from>200000) break;
+  }
+  const H = ['Mois','Mois (libellé)','Date','Heure','Détenteur','Montant ($)','Fournisseur','Note','Statut','Confirmée le','Photo (URL)','Appareil'];
+  const aoa=[H], meta=[{header:true}], lignes=[];
+  rows.forEach(r=>{
+    let f; try{ f=JSON.parse(r.value); }catch(e){ return; }
+    if(!f) return;
+    const ym = f.ym || String(r.key).slice(5,12);
+    const ts = String(f.ts||'');
+    let heure=''; const dts=new Date(ts); if(!isNaN(dts)) heure=String(dts.getHours()).padStart(2,'0')+'h'+String(dts.getMinutes()).padStart(2,'0');
+    const mnt = parseFloat(f.montant);
+    const conf = f.statut==='confirmee';
+    lignes.push({ ym:ym, ts:ts, conf:conf, row:[
+      ym, (/^\d{4}-\d{2}$/.test(ym)?ymLabel(ym):''), ts.slice(0,10), heure,
+      formatNom(f.author)||'—', isNaN(mnt)?'':mnt, f.fournisseur||'', f.note||'',
+      conf?'Confirmée':'Publiée', f.confirmeeLe?String(f.confirmeeLe).slice(0,10):'',
+      (f.photo&&f.photo.url)||'', f.deviceId||'' ] });
+  });
+  lignes.sort((a,b)=> String(b.ym).localeCompare(String(a.ym)) || String(a.row[4]).localeCompare(String(b.row[4]),'fr') || String(a.ts).localeCompare(String(b.ts)));
+  lignes.forEach(l=>{ aoa.push(l.row); meta.push({ couleur: l.conf ? 'green' : 'yellow' }); });
+  if(!lignes.length){ aoa.push(['—','Aucune facture enregistrée','','','','','','','','','','']); meta.push({}); }
+  return { name:'Factures', aoa:aoa, meta:meta, widths:[10,16,12,8,26,13,22,40,12,13,52,24], leftCols:[1,4,6,7,10,11] };
+};
+
 // ================== DÉMARRAGE ==================
+// Chargée en arrière-plan par l'export global de l'accueil (?dmdexport=1) : on ne
+// démarre pas l'interface, seule __dmdFlatSheet() sera appelée.
+const _DMD_EXPORT_MODE = /[?&]dmdexport=1/.test(location.search);
 (async function(){
+  if(_DMD_EXPORT_MODE) return;
   if(!_sb){ document.getElementById('list').innerHTML='<div class="empty">Connexion au serveur impossible (librairie non chargée).</div>'; return; }
   try{
     const { data } = await withTimeout(_sb.auth.getSession(), 8000, 'getSession');

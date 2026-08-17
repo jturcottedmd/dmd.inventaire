@@ -466,7 +466,39 @@ document.getElementById('fEmpInput').addEventListener('input', e => showSuggest(
 document.getElementById('fEmpInput').addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); addEmp(e.target.value); } });
 document.getElementById('overlay').addEventListener('click', e => { if(e.target.id==='overlay') closeModal(); });
 
+// ================== EXPORT GLOBAL (accueil) ==================
+// Fournit UNE page Excel pour cette tuile : une ligne par employé inscrit à une
+// formation, tout l'historique (les formations terminées sont incluses, alors
+// qu'elles sont masquées à l'écran).
+window.__dmdFlatSheet = async function(){
+  const items = await loadPlan();
+  const H = ['Employé','Type de formation','Lieu','Date début','Date fin','Durée (j)','Heure début','Heure fin','Statut','Nb inscrits','Tous les inscrits','Notes'];
+  const aoa=[H], meta=[{header:true}], lignes=[];
+  const LBL = { termine:'Terminée', encours:'En cours', attente:'En attente' };
+  (items||[]).forEach(it=>{
+    if(!it) return;
+    const st = statutOf(it);
+    const deb = it.debut||'', fin = it.fin||deb;
+    let duree = '';
+    if(deb && fin){ const a=new Date(deb+'T00:00:00'), b=new Date(fin+'T00:00:00'); if(!isNaN(a)&&!isNaN(b)) duree = Math.round((b-a)/86400000)+1; }
+    const emps = Array.isArray(it.employes) ? it.employes : [];
+    const tous = emps.map(formatNom).join(', ');
+    const liste = emps.length ? emps : [''];
+    liste.forEach(nom=>{
+      lignes.push({ d:deb, st:st, row:[ formatNom(nom)||'(aucun inscrit)', it.type||'Formation', it.lieu||'', deb, fin, duree, it.heureDebut||'', it.heureFin||'', LBL[st]||st, emps.length, tous, it.notes||'' ] });
+    });
+  });
+  lignes.sort((a,b)=> String(b.d).localeCompare(String(a.d)) || String(a.row[0]).localeCompare(String(b.row[0]),'fr'));
+  lignes.forEach(l=>{ aoa.push(l.row); meta.push({ couleur: l.st==='encours' ? 'green' : (l.st==='attente' ? 'yellow' : null) }); });
+  if(!lignes.length){ aoa.push(['—','Aucune formation planifiée','','','','','','','','','','']); meta.push({}); }
+  return { name:'Formations', aoa:aoa, meta:meta, widths:[26,26,34,12,12,10,11,11,13,11,44,44], leftCols:[0,1,2,10,11] };
+};
+
+// Chargée en arrière-plan par l'export global de l'accueil (?dmdexport=1) : on ne
+// démarre pas l'interface, seule __dmdFlatSheet() sera appelée.
+const _DMD_EXPORT_MODE = /[?&]dmdexport=1/.test(location.search);
 (async function init(){
+  if(_DMD_EXPORT_MODE) return;
   if(!_sb){ document.getElementById('content').innerHTML = '<div class="loading">Connexion indisponible. Réessaie plus tard.</div>'; return; }
   _items = await loadPlan();
   if(isDeviceAdmin()) await loadRepNames();

@@ -11,7 +11,7 @@ Application web interne (pages HTML statiques) hébergée sur **GitHub → Verce
 
 ## Fichiers de l'application (racine)
 
-- **index.html** — Accueil : identification, avis de collecte (Loi 25), contrôle d'accès, grille des tuiles.
+- **index.html** — Accueil : identification, avis de collecte (Loi 25), contrôle d'accès, grille des tuiles. **Export Excel complet** (mode admin) : bouton dans le pied de page, ou Ctrl+X. Produit **un seul classeur avec une page par tuile** — Inventaire, Machinerie, Inspection quotidienne, Punch, Factures, Formations — sur tout l'historique. Chaque tuile est chargée en arrière-plan avec `?dmdexport=1` (son interface ne démarre pas) et fournit sa page via `window.__dmdFlatSheet()` : aucune logique de données n'est dupliquée dans l'accueil, et les exports propres à chaque tuile continuent de fonctionner comme avant. Fichier : `DMD_Complet_AAAA-MM-JJ.xlsx`.
 - **APPLI__EQUIPES.html** — Infos équipe : infos de chantier (n° projet, contremaître, adresse) + composition des équipes par rôle. Le rôle alimente le statut CCQ du Punch.
 - **APPLI__INVENTAIRE.html** — Inventaire par équipe (onglet Machinerie, registre des extincteurs). Infos de chantier en lecture seule (éditées dans Infos équipe).
 - **APPLI__MACHINERIE.html** — Suivi machinerie : vérifs, bris, réparations, inspections, extincteur assigné.

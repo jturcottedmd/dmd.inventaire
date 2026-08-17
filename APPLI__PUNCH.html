@@ -884,8 +884,60 @@ document.getElementById('wNext').onclick = () => { weekOffset++; renderWeek(); i
 document.getElementById('tabBtnBanque').onclick = () => switchTab('banque');
 document.getElementById('tabBtnSemaine').onclick = () => switchTab('semaine');
 
+// ================== EXPORT GLOBAL (accueil) ==================
+// Fournit UNE page Excel pour cette tuile : une ligne par segment de pointage,
+// TOUT l'historique et TOUS les employés (l'export de la tuile, lui, ne couvre
+// que la semaine affichée). Les heures sont recalculées depuis start/end.
+window.__dmdFlatSheet = async function(){
+  async function allRows(prefix){
+    const out=[]; let from=0;
+    for(;;){
+      let d=[];
+      try{ const r=await withTimeout(_sb.from('inv_store').select('key,value').like('key',prefix+'%').order('key').range(from,from+999),20000,'page'); d=(r&&Array.isArray(r.data))?r.data:[]; }catch(e){ break; }
+      out.push.apply(out,d);
+      if(d.length<1000) break;
+      from+=1000; if(from>200000) break;
+    }
+    return out;
+  }
+  await loadTeams();
+  await Promise.all([ loadTeamInfos(), loadTeamSecteurs() ]);
+  const tLabel={}; (teams||[]).forEach(t=>{ tLabel[t.id]=t.label; });
+  const statutRows = await allRows('punch_statut:');
+  const statutNow={};
+  statutRows.forEach(r=>{ try{ const v=JSON.parse(r.value); if(v) statutNow[String(r.key).slice('punch_statut:'.length)]=v.statut||''; }catch(e){} });
+  const rows = await allRows('punch:');
+  const H = ['Employé','Appareil','Statut au punch','Statut actuel','Semaine (dim.)','Date','Jour','Type','Équipe','Projet','Adresse','Secteur (banque)','Début','Fin','Heures','Heures (h min)','Ouvert','Hors rayon','Formation'];
+  const aoa=[H], meta=[{header:true}], lignes=[];
+  rows.forEach(r=>{
+    let s; try{ s=JSON.parse(r.value); }catch(e){ return; }
+    if(!s || !s.start) return;
+    const d=new Date(s.start); if(isNaN(d)) return;
+    const h = s.end ? segHours(s) : 0;
+    const info = teamInfo[s.teamId] || {};
+    const formation = [s.formationType, s.formationLieu, s.formationNotes].filter(Boolean).join(' — ');
+    lignes.push({ nom:normNom(s.nom||''), ts:String(s.start), ouvert:!s.end, row:[
+      formatNom(s.nom)||'—', s.deviceId||'', s.statut||'', statutNow[s.deviceId]||'',
+      dateStr(startOfWeek(d,0)), d.toLocaleDateString('fr-CA'), JOURS[d.getDay()],
+      (PUNCH_TYPES[s.type]||{}).label || s.type || '',
+      s.teamLabel || tLabel[s.teamId] || '', s.projet || info.projet || '',
+      s.adresse ? formatAdresse(s.adresse) : (info.adresse?formatAdresse(info.adresse):''),
+      bucketOf(s).label, timeHM(s.start), s.end?timeHM(s.end):'en cours',
+      s.end ? Number(h.toFixed(2)) : '', s.end ? fmtH(h) : '',
+      s.end ? '' : 'Oui', s.outsideConfirmed ? 'Oui' : '', formation ] });
+  });
+  lignes.sort((a,b)=> a.nom.localeCompare(b.nom,'fr') || String(b.ts).localeCompare(String(a.ts)));
+  lignes.forEach(l=>{ aoa.push(l.row); meta.push({ couleur: l.ouvert ? 'yellow' : null }); });
+  if(!lignes.length){ aoa.push(['—','Aucun pointage enregistré','','','','','','','','','','','','','','','','','']); meta.push({}); }
+  return { name:'Punch', aoa:aoa, meta:meta, widths:[24,22,13,13,14,12,11,16,14,12,32,17,9,10,9,13,8,11,34], leftCols:[0,1,8,9,10,18] };
+};
+
 // ================== DÉMARRAGE ==================
+// Chargée en arrière-plan par l'export global de l'accueil (?dmdexport=1) : on ne
+// démarre pas l'interface, seule __dmdFlatSheet() sera appelée.
+const _DMD_EXPORT_MODE = /[?&]dmdexport=1/.test(location.search);
 (async function(){
+  if(_DMD_EXPORT_MODE) return;
   if(!_sb){ document.getElementById('punchCard').innerHTML='<div class="pc-state">Serveur injoignable</div>'; return; }
   try{
     const { data } = await withTimeout(_sb.auth.getSession(), 8000, 'getSession');

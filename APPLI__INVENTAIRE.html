@@ -4200,6 +4200,90 @@ async function init(){
     }catch(e){ console.error('Chargement arrière-plan', e); }
   })();
 }
+// ================== EXPORT GLOBAL (accueil) ==================
+// Fournit UNE page Excel pour cette tuile : une ligne par article renseigné
+// (toutes équipes, toutes catégories) + le matériel de maçonnerie, au lieu des
+// feuilles par équipe de l'export de la tuile. Les lignes sans aucune saisie
+// sont omises.
+window.__dmdFlatSheet = async function(){
+  await loadTeams();
+  await Promise.all([ loadCustomCats(), loadHiddenItems(), loadMachineRecords(), loadExtincteurs() ]);
+  const cats = allCatKeys();
+  await Promise.all(cats.map(c => loadExtraItems(c)));
+  await Promise.all(teams.map(async t => {
+    await loadTeamInfo(t.id);
+    for(const cat of cats){ await ensureTeamCatLoaded(t.id, cat); }
+  }));
+  try{ await loadMasonry(); }catch(e){}
+
+  const num = v => { const n = parseFloat(v); return isNaN(n) ? '' : n; };
+  const val = v => (v === undefined || v === null) ? '' : String(v);
+  const H = ['Équipe','Catégorie','Sous-section','Article','Qté prévue','Qté réelle','Écart','Bon','Moyen','Mauvais','Identification','Type','Localisation','Vérif','Huile','Tune-up','État lame','Pression','Commentaire','Modifié par','Alerte','N° projet','Contremaître','Adresse chantier'];
+  const aoa=[H], meta=[{header:true}];
+  const RANK = { red:2, orange:1, yellow:1 };
+
+  teams.forEach(t=>{
+    const info = teamInfo[t.id] || {};
+    cats.forEach(cat=>{
+      const items = itemsFor(cat);
+      const st = (perTeamState[t.id] && perTeamState[t.id][cat]) || [];
+      let section = '';
+      items.forEach((it, i)=>{
+        if(it.header){ section = (it.name||'').replace(/\n/g,' ').trim(); return; }
+        if(isItemHidden(cat, it.name)) return;
+        const s = st[i] || {};
+        const verif = effVerif(s, it), huile = effHuile(s, it), tuneup = effTuneup(s, it);
+        const loc = it.ext ? (extAssignLabel(it) || '') : val(s.localisation);
+        const opts = Array.isArray(s.opts) ? s.opts.join(' + ') : '';
+        // Une ligne n'apparaît que si l'équipe a réellement saisi quelque chose :
+        // les valeurs venant du catalogue (commentaire type, code L01…) ne comptent pas,
+        // et la vérif/huile/tune-up des machines vient de la tuile Machinerie (déjà sa page).
+        const rempli = [s.qte,s.qteReel,s.etatBon,s.etatMoyen,s.etatMauvais,s.pression,s.lame,s.localisation,s.verif,s.huile,s.tuneup]
+          .some(v => val(v) !== '')
+          || (Array.isArray(s.opts) && s.opts.length > 0)
+          || (val(s.comment) !== '' && val(s.comment) !== val(it.comment))
+          || (val(s.ident) !== '' && val(s.ident) !== val(it.ident));
+        if(!rempli) return;
+        let niveau = 0;
+        const qs = it.noQty ? null : qtyStatus(s.qte, s.qteReel); if(qs && RANK[qs.level]) niveau = Math.max(niveau, RANK[qs.level]);
+        const es = etatSummary(s); if(es && RANK[es.level]) niveau = Math.max(niveau, RANK[es.level]);
+        if(it.vf || it.ext){ const vs = verifStatus(verif); if(vs && RANK[vs.level]) niveau = Math.max(niveau, RANK[vs.level]); }
+        if(it.gas){ [huile,tuneup].forEach(v=>{ const ms = entretienStatus(v); if(ms && RANK[ms.level]) niveau = Math.max(niveau, RANK[ms.level]); }); }
+        const qp = it.noQty ? '' : num(s.qte), qr = it.noQty ? '' : num(s.qteReel);
+        aoa.push([
+          teamLabel(t.id), catLabel(cat), section, (it.name||'').replace(/\n/g,' '),
+          qp, qr, (qp!=='' && qr!=='') ? (qr-qp) : '',
+          num(s.etatBon), num(s.etatMoyen), num(s.etatMauvais),
+          val(s.ident), opts, loc, verif||'', huile||'', tuneup||'',
+          val(s.lame), val(s.pression), val(s.comment), val(s._by),
+          niveau===2 ? 'ROUGE' : (niveau===1 ? 'JAUNE' : ''),
+          val(info.projet), val(info.contremaitre), info.adresse ? formatAdresse(info.adresse) : ''
+        ]);
+        meta.push({ couleur: niveau===2 ? 'red' : (niveau===1 ? 'yellow' : 'green') });
+      });
+    });
+  });
+
+  // Matériel de maçonnerie (clé inv:masonry) — même feuille, colonne Équipe vide
+  if(masonryData && Array.isArray(masonryData.cats)){
+    const champs = Array.isArray(masonryData.champs) ? masonryData.champs : [];
+    masonryData.cats.forEach(c=>{
+      (c.items||[]).forEach(it=>{
+        const desc = champs.map(ch => (ch.label||ch.key)+' : '+val(it[ch.key])).filter(x=>!/ : $/.test(x)).join(' · ');
+        const q = num(it.qte);
+        if(q === '' && !desc) return;
+        aoa.push(['', 'Maçonnerie — '+(c.nom||''), '', it.nom||'(sans nom)', '', q, '', '', '', '', '', desc, val(it.unite), '', '', '', '', '', '', '', '', '', '', '']);
+        meta.push({});
+      });
+    });
+  }
+
+  if(aoa.length===1){ aoa.push(['—','','','Aucune saisie d\'inventaire','','','','','','','','','','','','','','','','','','','','']); meta.push({}); }
+  return { name:'Inventaire', aoa:aoa, meta:meta,
+    widths:[14,20,18,32,10,10,8,6,7,8,14,16,20,10,12,12,14,9,34,22,9,12,20,32],
+    leftCols:[0,1,2,3,10,11,12,18,19,21,22,23] };
+};
+
 const LOGIN_EMAIL = "equipe@dmd-inventaire.app";
 async function _doLogin(){
   const errEl = document.getElementById('loginError');
@@ -4210,7 +4294,11 @@ async function _doLogin(){
   document.getElementById('loginScreen').style.display = 'none';
   init();
 }
+// Chargée en arrière-plan par l'export global de l'accueil (?dmdexport=1) : on ne
+// démarre pas l'interface, seule __dmdFlatSheet() sera appelée.
+const _DMD_EXPORT_MODE = /[?&]dmdexport=1/.test(location.search);
 (async function(){
+  if(_DMD_EXPORT_MODE) return;
   const ls = document.getElementById('loginScreen');
   const { data } = await _sb.auth.getSession();
   if(data && data.session){
