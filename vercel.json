@@ -4,9 +4,6 @@
   "redirects": [
     { "source": "/", "destination": "/DMD.html", "permanent": false }
   ],
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/DMD.html" }
-  ],
   "headers": [
     {
       "source": "/DMD.html",
@@ -32,6 +29,12 @@
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, must-revalidate" },
         { "key": "Content-Type", "value": "application/manifest+json; charset=utf-8" }
+      ]
+    },
+    {
+      "source": "/prevention/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400" }
       ]
     }
   ]

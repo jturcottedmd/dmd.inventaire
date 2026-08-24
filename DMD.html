@@ -1785,6 +1785,59 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 .verif-dot.orange{ background:var(--safety-yellow); }
 .verif-dot.green{ background:var(--ok-green); }
 
+/* Comptage au pouce : − et + de chaque côté du champ, pour compter un article
+   à la fois sans ouvrir le clavier. Le champ reste saisissable pour entrer 47
+   d'un coup. 44px de haut = la cible tactile minimale, utilisable avec des gants. */
+.qty-step{ display:flex; align-items:stretch; gap:6px; }
+.qty-step input[type=number]{ flex:1; min-width:0; text-align:center; }
+/* Masque les flèches natives : elles sont minuscules et inutilisables sur un chantier. */
+.qty-step input[type=number]{ -moz-appearance:textfield; appearance:textfield; }
+.qty-step input[type=number]::-webkit-outer-spin-button,
+.qty-step input[type=number]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+.qty-btn{
+  flex:0 0 44px;
+  min-height:44px;
+  background:var(--asphalt-2);
+  border:1.5px solid var(--line);
+  border-radius:6px;
+  color:var(--paper);
+  font-size:22px;
+  font-weight:700;
+  font-family:'Barlow',sans-serif;
+  line-height:1;
+  cursor:pointer;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;   /* pas de zoom accidentel sur double-tape rapide */
+}
+.qty-btn:active{ background:var(--safety-orange); border-color:var(--safety-orange); color:#232221; }
+.qty-btn:disabled{ opacity:0.35; cursor:default; }
+/* Compteurs Bon / Moyen / Mauvais : mêmes boutons, empilés sous le champ,
+   parce que trois colonnes côte à côte ne laissent pas la place à − champ +. */
+.etat-counter .qty-step{ margin-top:5px; gap:5px; }
+.etat-counter .qty-btn{ flex:1 1 0; min-height:38px; font-size:19px; }
+
+/* Écran « changer l'ordre des articles » */
+.reorder-note{
+  font-size:12.5px; color:var(--paper-dim); line-height:1.4;
+  padding:8px 12px; margin-bottom:8px;
+  border-left:3px solid var(--safety-yellow); background:var(--asphalt-2); border-radius:0 6px 6px 0;
+}
+.reorder-row{
+  display:flex; align-items:center; gap:8px;
+  padding:8px 10px; margin-bottom:6px;
+  background:var(--asphalt-2); border:1.5px solid var(--line); border-radius:6px;
+}
+.reorder-nom{ flex:1; min-width:0; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.reorder-btn{
+  flex:0 0 44px; min-height:44px;
+  background:var(--asphalt); border:1.5px solid var(--line); border-radius:6px;
+  color:var(--paper); font-size:17px; line-height:1; cursor:pointer;
+  -webkit-tap-highlight-color:transparent; touch-action:manipulation;
+}
+.reorder-btn:active{ background:var(--safety-orange); border-color:var(--safety-orange); color:#232221; }
+.reorder-btn:disabled{ opacity:0.28; cursor:default; }
+
 .etat-chips{display:flex; gap:6px; flex-wrap:wrap;}
 .etat-chip{
   padding:6px 12px;
@@ -2243,6 +2296,9 @@ let isAdmin = false;    // débloqué par code admin, mémorisé localement sur 
 const ADMIN_CODE = 'DMD-ADMIN';   // code admin (modifiable sur demande)
 let formationsData = null; // { colonnes:[...], lignes:[{...}], maj:ISO, parNom:{nomMinuscule:[lignes]} }
 let openIndex = null;
+// Écran « changer l'ordre » actif ? Jamais mémorisé : on en sort en changeant
+// d'onglet, et c'est un mode de réglage, pas un état de travail.
+let reorderMode = false;
 // Sous-classes (en-têtes) repliées : clés « cat|nomEntête », mémorisées sur l'appareil pour la session
 let collapsedSections = new Set();
 // Onglets déjà initialisés (pour n'appliquer l'état par défaut qu'une seule fois par onglet)
@@ -2442,33 +2498,160 @@ function itemPriority(it, s){
   return best;
 }
 
-/* Réordonne les articles en gardant les sections (en-têtes) :
-   dans chaque bloc délimité par un en-tête, tri stable par priorité (rouge, orange, reste).
-   Renvoie une liste de {it, i} où i est l'index d'origine (pour l'état). */
-function orderedItemsWithPriority(items, st){
-  const out = [];
-  let block = [];
-  const flush = () => {
-    // tri stable : priorité (rouge, orange, reste) PUIS alphabétique
-    block.map((e, idx) => ({ e, idx }))
-      .sort((a, b) =>
-        (a.e.prio - b.e.prio) ||
-        a.e.name.localeCompare(b.e.name, 'fr', { sensitivity:'base', numeric:true }) ||
-        (a.idx - b.idx))
-      .forEach(x => out.push(x.e));
-    block = [];
-  };
+/* ============================================================================
+   ORDRE D'AFFICHAGE
+   ----------------------------------------------------------------------------
+   Point capital : l'ordre d'AFFICHAGE et l'ordre d'ENREGISTREMENT sont deux
+   choses différentes, et il ne faut jamais les confondre.
+
+   Les quantités d'une équipe sont un tableau repéré PAR POSITION : la 5e
+   quantité appartient au 5e article de itemsFor(cat). Déplacer réellement un
+   article décalerait donc les quantités de toutes les équipes d'un coup.
+
+   Tout ce qui suit ne touche donc qu'à l'affichage : chaque article garde son
+   index d'origine `i`, on ne fait que choisir dans quel ordre les dessiner.
+   ============================================================================ */
+
+// Clé stable d'un article : son nom. On ne peut pas utiliser sa position,
+// justement parce que l'ordre manuel sert à la changer.
+function cleArticle(it){ return String((it && it.name) || '').replace(/\n/g,' ').trim().toLowerCase(); }
+
+// Ordre manuel choisi par les employés : cat -> [clé, clé, …]. Partagé.
+let ordreManuel = {};
+async function loadOrdreManuel(cat){
+  try{
+    const res = await window.storage.get('inv:ordre:' + cat, true);
+    ordreManuel[cat] = res && res.value ? JSON.parse(res.value) : [];
+  }catch(e){ ordreManuel[cat] = []; }
+  if(!Array.isArray(ordreManuel[cat])) ordreManuel[cat] = [];
+}
+async function saveOrdreManuel(cat){
+  try{ await window.storage.set('inv:ordre:' + cat, JSON.stringify(ordreManuel[cat] || []), true); }catch(e){}
+}
+function rangManuel(cat, it){
+  const l = ordreManuel[cat] || [];
+  const p = l.indexOf(cleArticle(it));
+  return p === -1 ? Infinity : p;   // jamais rangé à la main -> après ceux qui le sont
+}
+
+// « Inventaire à 0 » : compté, et compté à zéro. Un article jamais compté
+// (champ vide) n'en fait pas partie — il reste dans le flot normal, sinon on
+// enterrerait justement ce qu'il reste à compter.
+function inventaireAZero(it, s){
+  if(!s || (it && it.noQty)) return false;
+  if(s.qteReel === '' || s.qteReel == null) return false;
+  return parseFloat(s.qteReel) === 0;
+}
+
+/* Regroupe les articles par sous-section.
+   Un article ajouté porte `section` = le nom de l'en-tête choisi à l'ajout ; il
+   est donc dessiné là, et non à la fin de l'onglet comme avant.
+   Renvoie [{ head:{it,i}|null, items:[{it,i}] }] dans l'ordre des en-têtes. */
+function groupesParSection(items){
+  const groupes = [];
+  const parNom = new Map();
+  let courant = { head:null, items:[] };
+  groupes.push(courant);
+  const orphelins = [];
+
   items.forEach((it, i) => {
     if(it.header){
-      flush();
-      out.push({ it, i, header:true });
-    } else {
-      const s = (st && st[i]) || defaultItemState(it);
-      block.push({ it, i, header:false, prio: itemPriority(it, s), name: (it.name||'').replace(/\n/g,' ') });
+      courant = { head:{ it, i }, items:[] };
+      groupes.push(courant);
+      parNom.set(String(it.name || '').replace(/\n/g,' ').trim(), courant);
+      return;
     }
+    // Un article ajouté avec une sous-section explicite est mis de côté : on ne
+    // sait pas encore si son en-tête a déjà été rencontré.
+    if(it.section) orphelins.push({ it, i });
+    else courant.items.push({ it, i });
   });
-  flush();
+
+  orphelins.forEach(e => {
+    const g = parNom.get(String(e.it.section).replace(/\n/g,' ').trim());
+    (g || groupes[groupes.length - 1]).items.push(e);   // section disparue -> dernier groupe, comme avant
+  });
+
+  return groupes.filter(g => g.head || g.items.length);
+}
+
+/* Ordre d'affichage normal : rouge en haut, puis jaune, puis le reste dans
+   l'ordre manuel, et enfin ce qui est compté à zéro.
+   Renvoie une liste de {it, i} où i est l'index d'origine (pour l'état). */
+function orderedItemsWithPriority(items, st, cat){
+  cat = cat || currentCat;
+  const out = [];
+  groupesParSection(items).forEach(g => {
+    if(g.head) out.push({ it:g.head.it, i:g.head.i, header:true });
+    g.items
+      .map((e, idx) => {
+        const s = (st && st[e.i]) || defaultItemState(e.it);
+        return {
+          e: { it:e.it, i:e.i, header:false },
+          idx,
+          prio: itemPriority(e.it, s),
+          zero: inventaireAZero(e.it, s) ? 1 : 0,
+          rang: rangManuel(cat, e.it),
+          nom: (e.it.name || '').replace(/\n/g,' ')
+        };
+      })
+      .sort((a, b) =>
+        (a.prio - b.prio) ||                 // rouge, puis jaune, puis le reste
+        (a.zero - b.zero) ||                 // ce qui est à 0 finit en bas
+        (a.rang - b.rang) ||                 // l'ordre choisi par les employés
+        a.nom.localeCompare(b.nom, 'fr', { sensitivity:'base', numeric:true }) ||
+        (a.idx - b.idx))                     // tri stable
+      .forEach(x => out.push(x.e));
+  });
   return out;
+}
+
+/* Ordre d'affichage en mode réorganisation : uniquement l'ordre manuel, sans
+   priorité. Sinon un article qu'on vient de monter redescendrait aussitôt
+   parce qu'il est vert, et le geste paraîtrait sans effet. */
+function orderedItemsForReorder(items, cat){
+  cat = cat || currentCat;
+  const out = [];
+  groupesParSection(items).forEach(g => {
+    if(g.head) out.push({ it:g.head.it, i:g.head.i, header:true });
+    g.items
+      .map((e, idx) => ({ e:{ it:e.it, i:e.i, header:false }, idx, rang:rangManuel(cat, e.it), nom:(e.it.name||'').replace(/\n/g,' ') }))
+      .sort((a, b) =>
+        (a.rang - b.rang) ||
+        a.nom.localeCompare(b.nom, 'fr', { sensitivity:'base', numeric:true }) ||
+        (a.idx - b.idx))
+      .forEach(x => out.push(x.e));
+  });
+  return out;
+}
+
+/* Déplace un article d'un cran dans sa sous-section et enregistre le nouvel ordre.
+   L'ordre manuel n'est écrit que pour les articles de CETTE sous-section, pour
+   qu'un déplacement ne réécrive pas silencieusement l'ordre de tout l'onglet. */
+async function deplacerArticle(cat, index, sens){
+  const items = itemsFor(cat);
+  const groupe = groupesParSection(items).find(g => g.items.some(e => e.i === index));
+  if(!groupe) return false;
+
+  const rangs = groupe.items
+    .map((e, idx) => ({ it:e.it, idx, rang:rangManuel(cat, e.it), nom:(e.it.name||'').replace(/\n/g,' ') }))
+    .sort((a, b) =>
+      (a.rang - b.rang) ||
+      a.nom.localeCompare(b.nom, 'fr', { sensitivity:'base', numeric:true }) ||
+      (a.idx - b.idx));
+
+  const pos = rangs.findIndex(r => groupe.items[r.idx].i === index);
+  const cible = pos + sens;
+  if(pos === -1 || cible < 0 || cible >= rangs.length) return false;   // déjà en bout de section
+  rangs.splice(cible, 0, rangs.splice(pos, 1)[0]);
+
+  // On repart de la liste existante, on en retire les clés de cette sous-section,
+  // puis on réinsère la sous-section dans son nouvel ordre, à sa place.
+  const clesSection = new Set(rangs.map(r => cleArticle(r.it)));
+  const reste = (ordreManuel[cat] || []).filter(k => !clesSection.has(k));
+  ordreManuel[cat] = reste.concat(rangs.map(r => cleArticle(r.it)));
+  await saveOrdreManuel(cat);
+  return true;
 }
 
 /* ---- Storage (all SHARED across every team member) ---- */
@@ -2595,6 +2778,48 @@ async function ensureTeamCatLoaded(teamId, cat){
   perTeamState[teamId][cat] = arr;
   if(isSelectCat(cat)) await loadMachineSel(teamId, cat);
   return arr;
+}
+
+// Relit ce qui est PARTAGÉ entre les équipes : les articles ajoutés et l'ordre
+// manuel. Avant, ces deux listes n'étaient lues qu'au démarrage de l'app : un
+// article ajouté sur la tablette de l'Équipe 3 restait invisible sur celle de
+// l'Équipe 5 jusqu'au redémarrage — et le gars de l'Équipe 5, ne le voyant pas,
+// le rajoutait sous un autre nom. C'est la source des doublons.
+// Deux petites lectures, faites au changement d'équipe ou d'onglet.
+async function rafraichirCatalogue(cat){
+  const avant = (extraItems[cat] || []).length;
+  await Promise.all([ loadExtraItems(cat), loadOrdreManuel(cat) ]);
+  // Des articles sont apparus ailleurs : les tableaux d'état déjà en mémoire
+  // sont trop courts d'autant, on les rallonge pour que les positions restent
+  // alignées sur itemsFor(cat).
+  const manquants = (extraItems[cat] || []).length - avant;
+  if(manquants > 0){
+    Object.keys(perTeamState).forEach(teamId => {
+      const arr = perTeamState[teamId] && perTeamState[teamId][cat];
+      if(!arr) return;
+      const cible = itemsFor(cat).length;
+      while(arr.length < cible) arr.push(defaultItemState({}));
+    });
+  }
+}
+
+// Un article ajouté vaut pour TOUTES les équipes (son nom est partagé) : chaque
+// équipe déjà chargée en mémoire doit donc recevoir une case d'état, sinon son
+// tableau devient plus court que la liste d'articles et les quantités de la vue
+// TOTAL se décalent d'un cran.
+// On n'ENREGISTRE que l'équipe courante : les autres se complètent toutes seules
+// au chargement (ensureTeamCatLoaded aligne sur itemsFor), et écrire à leur place
+// depuis cet appareil écraserait ce qu'elles sont peut-être en train de saisir.
+async function ajouterEtatToutesEquipes(cat, modele){
+  Object.keys(perTeamState).forEach(teamId => {
+    const arr = perTeamState[teamId] && perTeamState[teamId][cat];
+    if(arr) arr.push(defaultItemState(modele || {}));
+  });
+  if(perTeamState[currentTeam] && perTeamState[currentTeam][cat]){
+    try{
+      await window.storage.set('inv:' + currentTeam + ':' + cat, JSON.stringify(perTeamState[currentTeam][cat]), true);
+    }catch(e){}
+  }
 }
 
 // Un timer PAR équipe|catégorie : avant, un seul timer global faisait qu'une modification
@@ -3048,7 +3273,19 @@ async function importFormationsFromFile(file){
 // Étiquette courte de l'identité, pour marquer les modifications
 function deviceUserLabel(){
   if(!deviceUser) return '';
-  if(deviceUser.chantier) return 'Tablette de chantier';
+  if(deviceUser.chantier){
+    // Une tablette de chantier n'a pas de nom d'utilisateur : on la nomme par son
+    // équipe, et par le contremaître de cette équipe quand il est renseigné.
+    // Sans ça, toutes les tablettes signaient « Tablette de chantier », donc
+    // impossible de savoir laquelle avait modifié quoi.
+    const eq = deviceUser.equipe;
+    if(!eq) return 'Tablette de chantier';
+    const t = teams.find(t => t.id === eq);
+    const nomEquipe = t ? t.label : eq;
+    const info = teamInfo[eq];                       // chargé en tâche de fond
+    const chef = info && info.contremaitre ? formatNom(info.contremaitre) : '';
+    return 'Tablette ' + nomEquipe + (chef ? ' (' + chef + ')' : '');
+  }
   const bits = [];
   if(deviceUser.nom) bits.push(formatNom(deviceUser.nom));
   if(deviceUser.tel) bits.push(formatTel(deviceUser.tel));
@@ -3254,6 +3491,7 @@ function renderTeamBar(){
       if(!ok){ renderTeamBar(); return; } // annulé : on ne change pas
       currentTeam = t.id;
       openIndex = null;
+      await rafraichirCatalogue(currentCat);
       await ensureTeamCatLoaded(currentTeam, currentCat);
       renderTeamBar(); renderTabs(); renderList();
     };
@@ -3281,6 +3519,7 @@ function renderTeamBar(){
   totalChip.onclick = async () => {
     currentTeam = 'TOTAL';
     openIndex = null;
+    await rafraichirCatalogue(currentCat);
     for(const t of teams){ await ensureTeamCatLoaded(t.id, currentCat); }
     renderTeamBar(); renderTabs(); renderList();
   };
@@ -3310,7 +3549,8 @@ function renderTabs(){
     const redDot = hasRed ? '<span class="alert-dot" title="Article(s) en rouge"></span>' : '';
     tab.innerHTML = `${isSST ? '🦺 ' : ''}${escapeHtml(catLabel(cat))} ${countHtml}${redDot}`;
     tab.onclick = async () => {
-      currentCat = cat; openIndex = null;
+      currentCat = cat; openIndex = null; reorderMode = false;
+      await rafraichirCatalogue(currentCat);
       if(currentTeam === 'TOTAL'){
         for(const t of teams){ await ensureTeamCatLoaded(t.id, currentCat); }
       } else {
@@ -3404,6 +3644,58 @@ function renderMachineSelection(){
   };
 }
 
+/* Écran « changer l'ordre ».
+   Il est séparé de la liste normale à dessein : dans la liste normale, le rouge
+   et le jaune remontent en haut, donc un article qu'on vient de monter
+   redescendrait aussitôt et le geste paraîtrait sans effet. Ici on montre
+   l'ordre nu, celui qu'on est en train de définir. */
+function renderReorderList(){
+  const listEl = document.getElementById('list');
+  listEl.innerHTML = '';
+  const cat = currentCat;
+  const items = itemsFor(cat);
+
+  const bar = document.createElement('div');
+  bar.className = 'manage-machines-bar';
+  bar.innerHTML = '<span>↕ Ordre des articles — ' + escapeHtml(catLabel(cat)) + '</span>' +
+                  '<button type="button" id="reorderDone">Terminer</button>';
+  listEl.appendChild(bar);
+  bar.querySelector('#reorderDone').onclick = () => { reorderMode = false; renderList(); };
+
+  const note = document.createElement('div');
+  note.className = 'reorder-note';
+  note.textContent = 'L\'ordre est le même pour toutes les équipes. Dans la liste normale, '
+    + 'les articles en rouge restent en haut, puis les jaunes ; ceux comptés à 0 vont au bas.';
+  listEl.appendChild(note);
+
+  const visibles = orderedItemsForReorder(items, cat).filter(({ it }) => it.header || !isItemHidden(cat, it.name));
+
+  visibles.forEach(({ it, i }, rang) => {
+    if(it.header){
+      const label = document.createElement('div');
+      label.className = 'section-label';
+      label.innerHTML = '<span class="sec-name">' + escapeHtml(it.name) + '</span>';
+      listEl.appendChild(label);
+      return;
+    }
+    // Premier / dernier de SA sous-section : les flèches de bout sont désactivées.
+    const prem = !visibles[rang - 1] || visibles[rang - 1].it.header;
+    const dern = !visibles[rang + 1] || visibles[rang + 1].it.header;
+    const ligne = document.createElement('div');
+    ligne.className = 'reorder-row';
+    ligne.innerHTML = '<span class="reorder-nom">' + escapeHtml((it.name || '').replace(/\n/g,' ')) + '</span>' +
+      '<button type="button" class="reorder-btn" data-sens="-1"' + (prem ? ' disabled' : '') + ' aria-label="Monter">▲</button>' +
+      '<button type="button" class="reorder-btn" data-sens="1"' + (dern ? ' disabled' : '') + ' aria-label="Descendre">▼</button>';
+    ligne.querySelectorAll('.reorder-btn').forEach(b => {
+      b.onclick = async () => {
+        if(b.disabled) return;
+        if(await deplacerArticle(cat, i, parseInt(b.getAttribute('data-sens'), 10))) renderList();
+      };
+    });
+    listEl.appendChild(ligne);
+  });
+}
+
 function renderTeamList(){
   const listEl = document.getElementById('list');
   const query = document.getElementById('search').value.trim();
@@ -3415,6 +3707,8 @@ function renderTeamList(){
     const v = (machineSel[currentTeam] && machineSel[currentTeam][currentCat]) || { set:false, actifs:[] };
     if(!v.set){ renderMachineSelection(); return; }
   }
+
+  if(reorderMode){ renderReorderList(); return; }
 
   if(!query){ const b = sstBannerHTML(); if(b){ const d = document.createElement('div'); d.innerHTML = b; listEl.appendChild(d); } }
   // Bouton "Gérer ma liste" en haut des catégories à sélection
@@ -3440,16 +3734,18 @@ function renderTeamList(){
       if(query){ curHeaderName = null; curCollapsed = false; return; }
       curHeaderName = (it.name||'').replace(/\n/g,' ');
       curCollapsed = isSectionCollapsed(currentCat, curHeaderName);
-      // Compter les articles visibles de cette section (pour le badge)
+      // Compter les articles visibles de cette section (pour le badge).
+      // On passe par groupesParSection et non par un parcours linéaire : les
+      // articles ajoutés vivent à la fin du tableau, un parcours de i+1 jusqu'au
+      // prochain en-tête ne les verrait pas et le badge serait trop bas.
+      const grp = groupesParSection(items).find(g => g.head && g.head.i === i);
       let count = 0;
-      for(let j = i + 1; j < items.length; j++){
-        const nx = items[j];
-        if(nx.header) break;
-        if(isItemHidden(currentCat, nx.name)) continue;
+      (grp ? grp.items : []).forEach(({ it:nx }) => {
+        if(isItemHidden(currentCat, nx.name)) return;
         if(isSelectCat(currentCat) && isSelectableItem(nx) &&
-           !isMachineActive(currentTeam, currentCat, (nx.name||'').replace(/\n/g,' '))) continue;
+           !isMachineActive(currentTeam, currentCat, (nx.name||'').replace(/\n/g,' '))) return;
         count++;
-      }
+      });
       const label = document.createElement('div');
       label.className = 'section-label' + (curCollapsed ? ' collapsed' : '');
       label.innerHTML = '<span class="sec-arrow">▾</span>' +
@@ -3518,11 +3814,19 @@ function renderTeamList(){
       <div class="field-row">
         <div class="field">
           <label>Qté prévue</label>
-          <input type="number" inputmode="numeric" data-field="qte" value="${escapeAttr(s.qte)}" placeholder="0">
+          <div class="qty-step">
+            <button type="button" class="qty-btn" data-step="-1" data-for="qte" aria-label="Enlever 1 à la quantité prévue">−</button>
+            <input type="number" inputmode="numeric" data-field="qte" value="${escapeAttr(s.qte)}" placeholder="0">
+            <button type="button" class="qty-btn" data-step="1" data-for="qte" aria-label="Ajouter 1 à la quantité prévue">+</button>
+          </div>
         </div>
         <div class="field">
           <label>Qté réelle</label>
-          <input type="number" inputmode="numeric" data-field="qteReel" class="${qst ? 'verif-'+qst.level : ''}" value="${escapeAttr(s.qteReel)}" placeholder="0">
+          <div class="qty-step">
+            <button type="button" class="qty-btn" data-step="-1" data-for="qteReel" aria-label="Enlever 1 à la quantité réelle">−</button>
+            <input type="number" inputmode="numeric" data-field="qteReel" class="${qst ? 'verif-'+qst.level : ''}" value="${escapeAttr(s.qteReel)}" placeholder="0">
+            <button type="button" class="qty-btn" data-step="1" data-for="qteReel" aria-label="Ajouter 1 à la quantité réelle">+</button>
+          </div>
         </div>
       </div>
       <div class="qty-hint-wrap" style="${qst ? '' : 'display:none;'} margin-top:-6px; margin-bottom:12px;">
@@ -3534,14 +3838,26 @@ function renderTeamList(){
           <div class="etat-counter bon">
             <label>Bon</label>
             <input type="number" inputmode="numeric" min="0" data-field="etatBon" value="${escapeAttr(s.etatBon)}" placeholder="0">
+            <div class="qty-step">
+              <button type="button" class="qty-btn" data-step="-1" data-for="etatBon" aria-label="Enlever 1 à Bon">−</button>
+              <button type="button" class="qty-btn" data-step="1" data-for="etatBon" aria-label="Ajouter 1 à Bon">+</button>
+            </div>
           </div>
           <div class="etat-counter moyen">
             <label>Moyen</label>
             <input type="number" inputmode="numeric" min="0" data-field="etatMoyen" value="${escapeAttr(s.etatMoyen)}" placeholder="0">
+            <div class="qty-step">
+              <button type="button" class="qty-btn" data-step="-1" data-for="etatMoyen" aria-label="Enlever 1 à Moyen">−</button>
+              <button type="button" class="qty-btn" data-step="1" data-for="etatMoyen" aria-label="Ajouter 1 à Moyen">+</button>
+            </div>
           </div>
           <div class="etat-counter mauvais">
             <label>Mauvais</label>
             <input type="number" inputmode="numeric" min="0" data-field="etatMauvais" value="${escapeAttr(s.etatMauvais)}" placeholder="0">
+            <div class="qty-step">
+              <button type="button" class="qty-btn" data-step="-1" data-for="etatMauvais" aria-label="Enlever 1 à Mauvais">−</button>
+              <button type="button" class="qty-btn" data-step="1" data-for="etatMauvais" aria-label="Ajouter 1 à Mauvais">+</button>
+            </div>
           </div>
         </div>
         <div class="etat-total-hint" data-etat-hint>${est ? etatHintText(est, s) : ''}</div>
@@ -3648,6 +3964,23 @@ function renderTeamList(){
     listEl.appendChild(card);
 
     if(openIndex === i){
+      // Boutons − / + : ils écrivent dans le champ puis déclenchent le MÊME
+      // événement 'input' que la frappe au clavier. Tout ce qui suit (couleurs,
+      // pastilles, enregistrement, « modifié par », confirmation quand on touche
+      // à une autre équipe) repasse donc par le chemin existant — rien n'est
+      // dupliqué, donc rien ne peut diverger.
+      body.querySelectorAll('.qty-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const inp = body.querySelector('input[data-field="' + btn.getAttribute('data-for') + '"]');
+          if(!inp) return;
+          const pas = parseInt(btn.getAttribute('data-step'), 10) || 0;
+          const actuel = parseFloat(inp.value);
+          let val = (isNaN(actuel) ? 0 : actuel) + pas;
+          if(val < 0) val = 0;               // on ne compte pas en négatif
+          inp.value = String(val);
+          inp.dispatchEvent(new Event('input', { bubbles:true }));
+        });
+      });
       body.querySelectorAll('input[data-field]').forEach(inp => {
         inp.addEventListener('input', () => {
           if(!st[i]) st[i] = defaultItemState(it);   // garde : état pas encore chargé (connexion lente) -> pas de crash
@@ -3848,6 +4181,11 @@ function renderTeamList(){
     addBtn.textContent = '+ Ajouter un article';
     addBtn.onclick = openAddItemModal;
     listEl.appendChild(addBtn);
+    const ordreBtn = document.createElement('button');
+    ordreBtn.className = 'add-item-btn';
+    ordreBtn.textContent = '↕ Changer l\'ordre des articles';
+    ordreBtn.onclick = () => { reorderMode = true; openIndex = null; renderList(); };
+    listEl.appendChild(ordreBtn);
     // Bouton dédié aux extincteurs, dans l'onglet S.S.T. (là où vit le registre).
     if(currentCat === 'S.S.T.'){
       const addExt = document.createElement('button');
@@ -3904,21 +4242,26 @@ function renderTotalList(){
     }
     return best;
   });
-  // Réordonne en gardant les sections
+  // Réordonne en gardant les sections. Même règle que la vue par équipe : les
+  // articles ajoutés vont sous leur sous-section, et l'ordre manuel remplace
+  // l'alphabétique. La priorité, elle, est la pire de toutes les équipes.
   const orderedTotal = [];
-  {
-    let block = [];
-    const flush = () => {
-      block.map((e,idx)=>({e,idx})).sort((a,b)=>
-        (totalPrio[a.e.i]-totalPrio[b.e.i]) ||
-        (a.e.it.name||'').replace(/\n/g,' ').localeCompare((b.e.it.name||'').replace(/\n/g,' '), 'fr', { sensitivity:'base', numeric:true }) ||
-        (a.idx-b.idx)
-      ).forEach(x=>orderedTotal.push(x.e));
-      block = [];
-    };
-    items.forEach((it,i)=>{ if(it.header){ flush(); orderedTotal.push({it,i,header:true}); } else { block.push({it,i,header:false}); } });
-    flush();
-  }
+  groupesParSection(items).forEach(g => {
+    if(g.head) orderedTotal.push({ it:g.head.it, i:g.head.i, header:true });
+    g.items
+      .map((e, idx) => ({
+        e:{ it:e.it, i:e.i, header:false },
+        idx,
+        rang: rangManuel(currentCat, e.it),
+        nom: (e.it.name||'').replace(/\n/g,' ')
+      }))
+      .sort((a, b) =>
+        (totalPrio[a.e.i] - totalPrio[b.e.i]) ||
+        (a.rang - b.rang) ||
+        a.nom.localeCompare(b.nom, 'fr', { sensitivity:'base', numeric:true }) ||
+        (a.idx - b.idx))
+      .forEach(x => orderedTotal.push(x.e));
+  });
 
   let curHeaderNameT = null, curCollapsedT = false;
   orderedTotal.forEach(({ it, i }) => {
@@ -4045,7 +4388,7 @@ function renderFooter(){
   const isCustomCat = customCats.some(c => c.key === currentCat);
   footer.innerHTML = 'Modifications enregistrées automatiquement, visibles par toute l\'équipe. ' +
     '<span class="reset-link" id="resetBtn">Réinitialiser (' + escapeHtml(teamLabel(currentTeam)) + ')</span>' +
-    ' &nbsp;·&nbsp; <span class="reset-link" id="identityBtn">👤 ' + escapeHtml(deviceUser ? (deviceUser.chantier ? 'Tablette de chantier' : (deviceUser.nom || 'Mon identité')) : 'M\'identifier') + '</span>' +
+    ' &nbsp;·&nbsp; <span class="reset-link" id="identityBtn">👤 ' + escapeHtml(deviceUser ? (deviceUser.chantier ? (deviceUserLabel() || 'Tablette de chantier') : (deviceUser.nom || 'Mon identité')) : 'M\'identifier') + '</span>' +
     (isCustomCat ? ' &nbsp;·&nbsp; <span class="reset-link" id="deleteCatBtn">Supprimer cette catégorie</span>' : '');
   document.getElementById('resetBtn').addEventListener('click', onResetCategory);
   const idBtn = document.getElementById('identityBtn');
@@ -4598,6 +4941,16 @@ function openIdentityModal(force, returnToDir){
       <label>Courriel</label>
       <input type="email" id="idCourriel" value="${escapeAttr(u.courriel || '')}" placeholder="ex: nom@courriel.com" autocomplete="email">
     </div>
+    <div class="field">
+      <label>Ou : tablette de chantier — de quelle équipe ?</label>
+      <select id="idChantierTeam" style="width:100%;padding:10px 12px;font-size:15px;border-radius:6px;border:1.5px solid var(--line);background:var(--asphalt);color:var(--paper);font-family:'Barlow',sans-serif;">
+        <option value="">— Choisir l'équipe —</option>
+        ${teams.map(t => `<option value="${escapeAttr(t.id)}" ${(u.chantier && u.equipe === t.id) ? 'selected' : ''}>${escapeHtml(t.label)}</option>`).join('')}
+      </select>
+      <div style="font-size:12px;color:var(--paper-dim);margin-top:4px;line-height:1.35;">
+        Sans équipe, toutes les tablettes signent « Tablette de chantier » et on ne peut pas savoir laquelle a modifié quoi.
+      </div>
+    </div>
     <div id="idError" style="color:var(--danger-red);font-size:13px;min-height:16px;font-weight:600;"></div>
     <div class="modal-actions" style="flex-direction:column;gap:8px;">
       <button class="btn btn-confirm" id="idSave" style="width:100%;">Enregistrer mon identité</button>
@@ -4620,7 +4973,19 @@ function openIdentityModal(force, returnToDir){
     if(returnToDir) openPeopleDirectory();
   };
   document.getElementById('idChantier').onclick = async () => {
-    await saveDeviceUser({ chantier:true });
+    // Une tablette de chantier DOIT dire de quelle équipe elle est : sans ça,
+    // toutes les tablettes signent pareil et la trace « modifié par » ne vaut rien.
+    const equipe = document.getElementById('idChantierTeam').value;
+    if(!equipe){
+      document.getElementById('idError').textContent = 'Choisis l\'équipe de cette tablette juste au-dessus.';
+      document.getElementById('idChantierTeam').focus();
+      return;
+    }
+    await saveDeviceUser({ chantier:true, equipe });
+    // La tablette appartient à cette équipe : on aligne aussi « mon équipe »,
+    // pour que l'alerte « tu modifies une autre équipe » soit juste sur cet appareil.
+    try{ await saveMyTeam(equipe); }catch(e){}
+    await loadTeamInfo(equipe);   // le nom du contremaître, pour la signature
     document.getElementById('overlay').dataset.locked = '';
     closeModal();
     renderFooter();
@@ -4691,11 +5056,7 @@ async function addExtincteur(){
   if(!extraItems[cat]) extraItems[cat] = [];
   extraItems[cat].push({ name:nom, header:false, ident:'', comment:'', ext:true, loc:true, custom:true });
   await saveExtraItems(cat);
-  // État pour l'équipe courante ; les autres équipes se complètent au chargement.
-  if(perTeamState[currentTeam] && perTeamState[currentTeam][cat]){
-    perTeamState[currentTeam][cat].push(defaultItemState({ ext:true, loc:true }));
-    try{ await window.storage.set('inv:' + currentTeam + ':' + cat, JSON.stringify(perTeamState[currentTeam][cat]), true); }catch(e){}
-  }
+  await ajouterEtatToutesEquipes(cat, { ext:true, loc:true });
   if(currentCat !== cat){ currentCat = cat; await ensureTeamCatLoaded(currentTeam, cat); }
   const arr = itemsFor(cat);
   openIndex = arr.length - 1;   // ouvre le nouvel extincteur
@@ -4705,14 +5066,31 @@ async function addExtincteur(){
   setTimeout(() => { const c = document.querySelector('.card.open'); if(c) c.scrollIntoView({behavior:'smooth', block:'center'}); }, 80);
 }
 
+// Les sous-sections d'un onglet sont les lignes marquées « en-tête » (PAREMENT,
+// BLOC, HIVER…). Un article appartient à l'en-tête qui le précède dans la liste.
+function sectionsFor(cat){
+  return itemsFor(cat).filter(it => it && it.header).map(it => (it.name || '').replace(/\n/g,' ').trim()).filter(Boolean);
+}
+
 function openAddItemModal(){
   const box = document.getElementById('modalBox');
+  const sections = sectionsFor(currentCat);
+  // Sous-section proposée par défaut : celle qu'on est en train de regarder,
+  // c'est-à-dire la première qui n'est pas repliée.
+  const ouverte = sections.find(s => !isSectionCollapsed(currentCat, s)) || sections[0] || '';
   box.innerHTML = `
     <h3>Nouvel article — ${escapeHtml(catLabel(currentCat))}</h3>
     <div class="field">
       <label>Nom de l'article</label>
       <input type="text" id="newItemName" placeholder="ex: Perceuse à colonne">
     </div>
+    ${sections.length ? `
+    <div class="field">
+      <label>Sous-section</label>
+      <select id="newItemSection" style="width:100%;padding:10px 12px;font-size:15px;border-radius:6px;border:1.5px solid var(--line);background:var(--asphalt);color:var(--paper);font-family:'Barlow',sans-serif;">
+        ${sections.map(s => `<option value="${escapeAttr(s)}" ${s === ouverte ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+      </select>
+    </div>` : ''}
     <div class="field">
       <label>Identification (optionnel)</label>
       <input type="text" id="newItemIdent" placeholder="ex: rouge, JAUNE...">
@@ -4734,13 +5112,15 @@ function openAddItemModal(){
     if(!name) { nameInput.focus(); return; }
     const ident = document.getElementById('newItemIdent').value.trim();
     const comment = document.getElementById('newItemComment').value.trim();
+    const secEl = document.getElementById('newItemSection');
+    const section = secEl ? secEl.value : '';
     if(!extraItems[currentCat]) extraItems[currentCat] = [];
-    extraItems[currentCat].push({name, header:false, ident, comment, custom:true});
+    // L'article reste ajouté À LA FIN de la liste — c'est sa position
+    // d'enregistrement, et les quantités de toutes les équipes sont repérées par
+    // cette position. Seul `section` change l'endroit où il est DESSINÉ.
+    extraItems[currentCat].push({name, header:false, ident, comment, custom:true, section});
     await saveExtraItems(currentCat);
-    if(perTeamState[currentTeam] && perTeamState[currentTeam][currentCat]){
-      perTeamState[currentTeam][currentCat].push(defaultItemState({ident, comment}));
-      await window.storage.set('inv:' + currentTeam + ':' + currentCat, JSON.stringify(perTeamState[currentTeam][currentCat]), true);
-    }
+    await ajouterEtatToutesEquipes(currentCat, {ident, comment});
     closeModal();
     openIndex = itemsFor(currentCat).length - 1;
     renderTabs();
@@ -5389,6 +5769,7 @@ async function init(){
   //    les articles ajoutés de l'onglet courant + l'inventaire de l'équipe courante.
   await Promise.all([
     loadExtraItems(currentCat),
+    loadOrdreManuel(currentCat),
     loadTeamInfo(currentTeam)
   ]);
   await ensureTeamCatLoaded(currentTeam, currentCat);
@@ -5397,7 +5778,9 @@ async function init(){
   renderTeamBar();
   renderTabs();
   renderList();
-  if(!deviceUser){ openIdentityModal(true); }
+  // Les tablettes déjà identifiées avant cette version n'ont pas d'équipe :
+  // on redemande une fois, sinon elles continueraient de signer toutes pareil.
+  if(!deviceUser || (deviceUser.chantier && !deviceUser.equipe)){ openIdentityModal(true); }
 
   // 4) Chargement du RESTE en arrière-plan, en parallèle (ne bloque pas l'écran).
   (async () => {
@@ -5406,6 +5789,7 @@ async function init(){
       const resteTeams = teams.filter(t => t.id !== currentTeam);
       await Promise.all([
         ...resteCats.map(c => loadExtraItems(c)),
+        ...resteCats.map(c => loadOrdreManuel(c)),
         ...resteTeams.map(t => loadTeamInfo(t.id)),
         loadFormations()
       ]);
