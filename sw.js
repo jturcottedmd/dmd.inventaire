@@ -9,7 +9,13 @@
    Rien d'autre n'est intercepté : les appels à Supabase passent toujours
    directement au réseau, pour ne jamais servir de données périmées.
 */
-const CACHE = 'dmd-v1';
+const CACHE = 'dmd-v2';
+
+// Réseau lent = pas réseau. Sur un chantier, une requête peut « pendre » une
+// minute avant d'échouer : pendant ce temps l'app restait sur son écran de
+// chargement alors qu'une copie parfaitement bonne dormait dans le cache.
+// Passé ce délai, on sert le cache et on laisse le réseau finir en arrière-plan.
+const DELAI_RESEAU = 4000;
 
 // Le strict minimum pour que l'app démarre hors ligne.
 const ESSENTIEL = [
@@ -60,10 +66,12 @@ self.addEventListener('fetch', e => {
   // Jamais de cache pour la base de données ni l'authentification.
   if (/supabase\.(co|in)$/.test(url.hostname)) return;
 
-  // --- La page de l'app : réseau d'abord ---
+  // --- La page de l'app : réseau d'abord, mais pas indéfiniment ---
   if (estPageApp(req)) {
-    e.respondWith(
-      fetch(req)
+    e.respondWith((async () => {
+      // Le réseau est lancé tout de suite et met toujours le cache à jour,
+      // même s'il répond après qu'on ait déjà servi la copie locale.
+      const reseau = fetch(req)
         .then(rep => {
           if (rep && rep.ok) {
             const copie = rep.clone();
@@ -71,8 +79,19 @@ self.addEventListener('fetch', e => {
           }
           return rep;
         })
-        .catch(() => caches.match('/DMD.html').then(r => r || Response.error()))
-    );
+        .catch(() => null);
+
+      const attente = new Promise(r => setTimeout(() => r('__lent'), DELAI_RESEAU));
+      const premier = await Promise.race([reseau, attente]);
+      if (premier && premier !== '__lent') return premier;
+
+      // Réseau trop lent ou en panne : on sert la copie en cache s'il y en a une.
+      const cache = await caches.match('/DMD.html');
+      if (cache) return cache;
+
+      // Pas de copie locale : il ne reste qu'à attendre le réseau.
+      return (await reseau) || Response.error();
+    })());
     return;
   }
 
