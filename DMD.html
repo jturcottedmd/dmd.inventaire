@@ -470,7 +470,11 @@ const APPS = [
 // APPLI__XXX.html de la tuile. L'id d'une tuile dans APPS doit donc porter ce nom-là :
 // une tuile ouverte sous un id qui ne correspond à aucune route deviendrait cliquable
 // sans jamais s'ouvrir, et sans le moindre message pour l'ouvrier.
-const TUILES_OUVERTES = ['inventaire', 'machinerie', 'equipes', 'infos'];
+// 25 août 2026 — TOUTES les tuiles construites sont rouvertes (revue de sécurité).
+// Pour refermer une tuile : la retirer d'ici ET de OUVERTES dans le shell.
+const TUILES_OUVERTES = ['inventaire', 'machinerie', 'equipes', 'infos',
+                         'formations', 'inspections', 'chat', 'factures',
+                         'punch', 'prevention', 'politiques'];
 // « Bientôt » = soit la tuile n'est pas construite, soit elle n'est pas encore ouverte.
 function estBientot(app){
   return app.soon || TUILES_OUVERTES.indexOf(app.id) === -1;
@@ -597,7 +601,7 @@ function moveTile(id, dir){
 // l'appareil affiche bien la dernière version ou une copie gardée par le cache
 // hors ligne. (Avant, on affichait la date du jour : une copie vieille de deux ans
 // affichait donc elle aussi la date du jour, et l'indicateur ne servait à rien.)
-const APP_VERSION = '2026-08-24';
+const APP_VERSION = '2026-08-25';
 
 // ================== RENDU ==================
 function render(){
@@ -16045,7 +16049,9 @@ document.addEventListener('keydown', function(e){
   // Tuiles ouvertes — même liste que TUILES_OUVERTES dans la grille de l'accueil.
   // Sans ça, DMD.html#punch tapé à la main ouvrirait quand même la tuile fermée.
   // Rouvrir une tuile = l'ajouter aux DEUX listes.
-  var OUVERTES = { accueil:1, inventaire:1, machinerie:1, equipes:1, infos:1 };
+  var OUVERTES = { accueil:1, inventaire:1, machinerie:1, equipes:1, infos:1,
+                   formations:1, inspections:1, chat:1, factures:1, punch:1,
+                   prevention:1, politiques:1 };
 
   // ---- Filet de sécurité : plus jamais d'écran figé sans explication ----
   // Si la tuile n'a pas fini de s'ouvrir après 12 s, on le dit et on offre de
