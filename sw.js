@@ -49,10 +49,17 @@ self.addEventListener('message', e => {
   if (e.data === 'dmd-maj') self.skipWaiting();
 });
 
+// Attention : « toute navigation » serait faux. Les anciennes pages autonomes
+// (index.html, APPLI__*.html) sont toujours en ligne à la racine, et un vieux favori,
+// un QR code imprimé ou un lien de courriel y mène encore. Comme la réponse était
+// ensuite rangée sous /DMD.html, une seule visite suffisait à remplacer la copie
+// hors ligne de l'application par une page sans grille de tuiles — et l'ouvrier
+// arrivé sur un chantier sans réception n'avait plus aucun moyen d'en sortir.
+// On ne retient donc que la page de l'app elle-même et la racine, qui y redirige.
 function estPageApp(req) {
-  if (req.mode === 'navigate') return true;
   const u = new URL(req.url);
-  return u.origin === self.location.origin && u.pathname === '/DMD.html';
+  if (u.origin !== self.location.origin) return false;
+  return u.pathname === '/DMD.html' || (req.mode === 'navigate' && u.pathname === '/');
 }
 
 self.addEventListener('fetch', e => {
@@ -73,7 +80,11 @@ self.addEventListener('fetch', e => {
       // même s'il répond après qu'on ait déjà servi la copie locale.
       const reseau = fetch(req)
         .then(rep => {
-          if (rep && rep.ok) {
+          // Second garde-fou : on ne range sous /DMD.html que ce qui EST /DMD.html
+          // une fois les redirections suivies (la racine y mène). La clé de cache
+          // est écrite en dur ; sans cette vérification, n'importe quelle autre
+          // réponse viendrait prendre la place de l'application dans le cache.
+          if (rep && rep.ok && rep.url && new URL(rep.url).pathname === '/DMD.html') {
             const copie = rep.clone();
             caches.open(CACHE).then(c => c.put('/DMD.html', copie)).catch(() => {});
           }
@@ -108,7 +119,10 @@ self.addEventListener('fetch', e => {
           }
           return rep;
         })
-        .catch(() => cache);            // hors ligne : on garde ce qu'on a
+        // Hors ligne : on garde ce qu'on a. S'il n'y a rien en cache, il faut quand
+        // même rendre une vraie réponse : respondWith() reçoit sinon « undefined »
+        // et lève une erreur dans le service worker au lieu d'un simple échec réseau.
+        .catch(() => cache || Response.error());
       return cache || reseau;
     })
   );
