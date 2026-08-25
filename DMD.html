@@ -15271,7 +15271,13 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 //   media/…                 -> images compressées (lazy loading)
 // Servi par le CDN Vercel : rapide, cache navigateur, AUCUNE consommation Supabase.
 // ============================================================================
-const BASE = './prevention/';
+// 25 aout 2026 — le contenu du programme a ete televerse A PLAT a la racine :
+// le televersement web de GitHub aplatit les dossiers glisses, et il n'existe
+// aucun moyen de deplacer 425 fichiers par l'interface web. Le code suit donc
+// la realite du depot plutot que l'inverse. Si un jour le dossier prevention/
+// existe pour de vrai, remettre BASE='./prevention/' et MEDIA=BASE+'media/'.
+const BASE  = './';
+const MEDIA = './';
 function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
 
@@ -15378,7 +15384,7 @@ async function openSection(i, highlight){
     // Les images vivent dans ./prevention/media/. On accepte les guillemets simples ou
     // doubles, le préfixe ./ et data-src (utilisé par le chargement différé des images) :
     // la forme src="media/ toute seule laissait passer des chemins jamais réécrits.
-    let html=secCache[s.id].replace(/\b(src|data-src)=(["'])(?:\.\/)?media\//g, '$1=$2'+BASE+'media/');
+    let html=secCache[s.id].replace(/\b(src|data-src)=(["'])(?:\.\/)?media\//g, '$1=$2'+MEDIA);
     if(highlight){
       try{
         const re=new RegExp('('+highlight.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');
