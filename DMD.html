@@ -2554,7 +2554,18 @@ function ensureSectionsInit(cat, items){
 }
 let saveTimer = null;
 
-function allCatKeys(){ return BASE_CAT_KEYS.concat(customCats.map(c => c.key)); }
+/* Onglets personnalisés à placer EN TÊTE de la barre, avant Base.
+   Sans cette liste, tout onglet créé par le « + » atterrit à la fin —
+   or « Chantier » est la liste qu'on ouvre en partant sur un chantier,
+   elle doit être la première sous la main. Un onglet nommé ici et qui
+   n'existe pas est simplement ignoré : rien à nettoyer si on le supprime. */
+const CAT_ORDER_TETE = ['custom_chantier'];
+function allCatKeys(){
+  const perso = customCats.map(c => c.key);
+  const tete  = CAT_ORDER_TETE.filter(k => perso.includes(k));
+  const reste = perso.filter(k => !tete.includes(k));
+  return tete.concat(BASE_CAT_KEYS, reste);
+}
 function catLabel(cat){
   if(RAW_DATA[cat]) return RAW_DATA[cat].label;
   const c = customCats.find(c => c.key === cat);
