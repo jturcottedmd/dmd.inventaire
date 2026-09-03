@@ -1785,6 +1785,22 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
   background:var(--asphalt-2); border:1px solid var(--line);
   border-radius:10px; padding:1px 8px; font-weight:600;
 }
+/* Grande section (niveau 1) : un bandeau plein, impossible à confondre avec
+   une sous-section. La sous-section (niveau 2) est décalée sous sa section. */
+.section-label.niveau1{
+  font-size:16px; letter-spacing:2.5px;
+  color:var(--asphalt);
+  background:var(--safety-yellow);
+  margin:22px 0 6px; padding:6px 10px;
+  border:none; border-radius:6px;
+}
+.section-label.niveau1:first-child{ margin-top:4px; }
+.section-label.niveau1 .sec-arrow{ color:var(--asphalt); }
+.section-label.niveau1 .sec-count{
+  color:var(--asphalt);
+  background:rgba(0,0,0,0.12); border-color:rgba(0,0,0,0.25);
+}
+.section-label.niveau2{ margin-left:14px; font-size:13px; }
 
 .total-banner{
   background:rgba(242,183,5,0.12);
@@ -2549,8 +2565,34 @@ function ensureSectionsInit(cat, items){
   sectionsInitCats.add(cat);
   items.forEach(it => {
     if(!it.header) return;
-    collapsedSections.add(sectionKey(cat, it.name)); // toutes fermées
+    if(estGrandeSection(it)) return;   // les GRANDES sections restent ouvertes
+    collapsedSections.add(sectionKey(cat, it.name)); // sous-sections fermées
   });
+}
+/* Deux niveaux d'en-tête.
+   Un en-tête marqué `sec` est une GRANDE SECTION : elle contient des
+   sous-sections (les en-têtes ordinaires) et, en la repliant, on replie tout
+   ce qu'il y a dessous jusqu'à la grande section suivante. Un onglet qui n'en
+   utilise pas se comporte exactement comme avant — un seul niveau. */
+function estGrandeSection(it){ return !!(it && it.header && it.sec); }
+/* Nombre d'articles visibles sous chaque en-tête, par index d'en-tête.
+   Une sous-section compte ses propres articles ; une grande section compte
+   ceux de toutes ses sous-sections. `estVisible(it, i)` dit ce qui compte —
+   la vue par équipe masque en plus les machines non cochées. */
+function comptesEntetes(items, estVisible){
+  const n = {};
+  let grande = null;
+  groupesParSection(items).forEach(g => {
+    if(!g.head) return;                       // articles avant tout en-tête : pas de badge
+    let c = 0;
+    g.items.forEach(({ it, i }) => { if(estVisible(it, i)) c++; });
+    if(estGrandeSection(g.head.it)){ grande = g.head.i; n[grande] = c; }
+    else {
+      n[g.head.i] = c;
+      if(grande !== null) n[grande] = (n[grande] || 0) + c;
+    }
+  });
+  return n;
 }
 let saveTimer = null;
 
@@ -4630,7 +4672,7 @@ function renderReorderList(){
   visibles.forEach(({ it, i }, rang) => {
     if(it.header){
       const label = document.createElement('div');
-      label.className = 'section-label';
+      label.className = 'section-label ' + (estGrandeSection(it) ? 'niveau1' : 'niveau2');
       label.innerHTML = '<span class="sec-name">' + escapeHtml(it.name) + '</span>';
       listEl.appendChild(label);
       return;
@@ -4718,33 +4760,41 @@ function renderTeamList(){
   const baseLen = baseItemsFor(currentCat).length;
   let anyVisible = false;
 
-  let curHeaderName = null, curCollapsed = false;
+  // Les badges sont calculés une fois pour tout l'onglet. groupesParSection
+  // reparcourt toute la liste : l'appeler à chaque en-tête coûtait N fois le prix.
+  const compteVisible = (nx, ni) => {
+    if(isItemHiddenAt(currentCat, ni)) return false;
+    if(isSelectCat(currentCat) && isSelectableItem(nx) &&
+       !isMachineActive(currentTeam, currentCat, cleArticleAt(currentCat, ni))) return false;
+    return true;
+  };
+  const compteurs = comptesEntetes(items, compteVisible);
+  let curHeaderName = null, curCollapsed = false, grandeRepliee = false;
   orderedItemsWithPriority(items, st).forEach(({ it, i }) => {
     if(it.header){
-      if(query){ curHeaderName = null; curCollapsed = false; return; }
-      curHeaderName = (it.name||'').replace(/\n/g,' ');
-      curCollapsed = isSectionCollapsed(currentCat, curHeaderName);
-      // Compter les articles visibles de cette section (pour le badge).
-      // On passe par groupesParSection et non par un parcours linéaire : les
-      // articles ajoutés vivent à la fin du tableau, un parcours de i+1 jusqu'au
-      // prochain en-tête ne les verrait pas et le badge serait trop bas.
-      const grp = groupesParSection(items).find(g => g.head && g.head.i === i);
-      let count = 0;
-      (grp ? grp.items : []).forEach(({ it:nx, i:ni }) => {
-        if(isItemHiddenAt(currentCat, ni)) return;
-        if(isSelectCat(currentCat) && isSelectableItem(nx) &&
-           !isMachineActive(currentTeam, currentCat, cleArticleAt(currentCat, ni))) return;
-        count++;
-      });
+      if(query){ curHeaderName = null; curCollapsed = false; grandeRepliee = false; return; }
+      const nomEntete = (it.name||'').replace(/\n/g,' ');
+      const grande = estGrandeSection(it);
+      if(grande){
+        grandeRepliee = isSectionCollapsed(currentCat, nomEntete);
+        curHeaderName = null; curCollapsed = false;   // on repart à zéro pour les sous-sections
+      } else {
+        if(grandeRepliee) return;                     // sous-section cachée avec sa section
+        curHeaderName = nomEntete;
+        curCollapsed = isSectionCollapsed(currentCat, curHeaderName);
+      }
       const label = document.createElement('div');
-      label.className = 'section-label' + (curCollapsed ? ' collapsed' : '');
+      label.className = 'section-label ' + (grande ? 'niveau1' : 'niveau2') +
+                        ((grande ? grandeRepliee : curCollapsed) ? ' collapsed' : '');
       label.innerHTML = '<span class="sec-arrow">▾</span>' +
         '<span class="sec-name">' + escapeHtml(it.name) + '</span>' +
-        '<span class="sec-count">' + count + '</span>';
+        '<span class="sec-count">' + (compteurs[i] || 0) + '</span>';
       label.onclick = () => { toggleSection(currentCat, it.name); renderList(); };
       listEl.appendChild(label);
       return;
     }
+    // Grande section repliée : tout ce qu'elle contient disparaît avec elle
+    if(grandeRepliee) return;
     // Si la sous-classe est repliée, on saute ses articles
     if(curCollapsed) return;
     // On cherche sur le nom AFFICHÉ : un article renommé « Scie IQ rouge » doit
@@ -5414,21 +5464,25 @@ function renderTotalList(){
       .forEach(x => orderedTotal.push(x.e));
   });
 
-  let curHeaderNameT = null, curCollapsedT = false;
+  const compteursT = comptesEntetes(items, (nx, ni) => !isItemHiddenAt(currentCat, ni));
+  let curHeaderNameT = null, curCollapsedT = false, grandeReplieeT = false;
   orderedTotal.forEach(({ it, i }) => {
     if(it.header){
-      if(query){ curHeaderNameT = null; curCollapsedT = false; return; }
-      curHeaderNameT = (it.name||'').replace(/\n/g,' ');
-      curCollapsedT = isSectionCollapsed(currentCat, curHeaderNameT);
-      let count = 0;
-      for(let j = i + 1; j < items.length; j++){
-        const nx = items[j];
-        if(nx.header) break;
-        if(isItemHiddenAt(currentCat, j)) continue;
-        count++;
+      if(query){ curHeaderNameT = null; curCollapsedT = false; grandeReplieeT = false; return; }
+      const nomEnteteT = (it.name||'').replace(/\n/g,' ');
+      const grandeT = estGrandeSection(it);
+      if(grandeT){
+        grandeReplieeT = isSectionCollapsed(currentCat, nomEnteteT);
+        curHeaderNameT = null; curCollapsedT = false;
+      } else {
+        if(grandeReplieeT) return;
+        curHeaderNameT = nomEnteteT;
+        curCollapsedT = isSectionCollapsed(currentCat, curHeaderNameT);
       }
+      const count = compteursT[i] || 0;
       const label = document.createElement('div');
-      label.className = 'section-label' + (curCollapsedT ? ' collapsed' : '');
+      label.className = 'section-label ' + (grandeT ? 'niveau1' : 'niveau2') +
+                        ((grandeT ? grandeReplieeT : curCollapsedT) ? ' collapsed' : '');
       label.innerHTML = '<span class="sec-arrow">▾</span>' +
         '<span class="sec-name">' + escapeHtml(it.name) + '</span>' +
         '<span class="sec-count">' + count + '</span>';
@@ -5436,6 +5490,7 @@ function renderTotalList(){
       listEl.appendChild(label);
       return;
     }
+    if(grandeReplieeT) return;
     if(curCollapsedT) return;
     // On cherche sur le nom AFFICHÉ, comme dans la vue par équipe : un article
     // renommé « Scie IQ rouge » doit se trouver en tapant « rouge ».
