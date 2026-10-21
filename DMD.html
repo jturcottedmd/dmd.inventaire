@@ -601,7 +601,7 @@ function moveTile(id, dir){
 // l'appareil affiche bien la dernière version ou une copie gardée par le cache
 // hors ligne. (Avant, on affichait la date du jour : une copie vieille de deux ans
 // affichait donc elle aussi la date du jour, et l'indicateur ne servait à rien.)
-const APP_VERSION = '2026-10-21';
+const APP_VERSION = '2026-10-21b';
 
 // ================== RENDU ==================
 function render(){
@@ -2536,7 +2536,12 @@ const SELECT_CATS = ['MACHINERIE'];
    On les compte, on ne juge pas leur état : les trois compteurs ne servaient
    à rien et allongeaient chaque fiche pour rien. */
 const CATS_SANS_ETAT = ['NÉCÉSSAIRE'];
-function catAvecEtat(cat){ return CATS_SANS_ETAT.indexOf(cat) === -1; }
+/* Choix d'état RETIRÉ de tous les articles (demande de Jay, 21 oct. 2026) :
+   plus de compteurs Bon / Moyen / Mauvais, plus de choix « Bon / À retirer ».
+   Les valeurs déjà saisies restent en base, elles sont simplement ignorées
+   (ni affichées, ni colorées, ni exportées). Remettre `true` pour tout rétablir. */
+const ETAT_ACTIF = false;
+function catAvecEtat(cat){ return ETAT_ACTIF && CATS_SANS_ETAT.indexOf(cat) === -1; }
 // machineSel[teamId][cat] = { set:true/false, actifs:[noms...] }
 let machineSel = {};
 // Identité de l'appareil (qui modifie) — mémorisée localement, demandée à la 1re connexion
@@ -2830,6 +2835,7 @@ function defaultItemState(catItem){
    premier jour — exactement le défaut qu'on a corrigé sur les pastilles
    d'équipe, où « pas encore rempli » finissait par vouloir dire « danger ». */
 function etatUnStatus(val){
+  if(!ETAT_ACTIF) return null;
   const v = normNom(val);   // sans accents ni casse : « A retirer » vaut « À retirer »
   if(!v) return null;
   return v === 'a retirer' ? { level:'red', label:'À retirer du service' }
@@ -2987,6 +2993,7 @@ function etatSummary(s, cat){
   // Dans un onglet sans etat (Necessaire), on ignore d'anciennes valeurs
   // restees en base : sinon la fiche continuerait de s'afficher en couleur
   // alors que les compteurs ne sont plus a l'ecran.
+  if(!ETAT_ACTIF) return null;
   if(cat && !catAvecEtat(cat)) return null;
   const b = nombre(s.etatBon);
   const m = nombre(s.etatMoyen);
@@ -5016,7 +5023,7 @@ function renderTeamList(){
           <div class="verif-hint ${tst2.level}">${escapeHtml(tst2.label)}</div>
         </div>
       </div>` : ''}
-      ${(it.etatOptions && it.etatOptions.length)
+      ${(ETAT_ACTIF && it.etatOptions && it.etatOptions.length)
           ? choixUniqueHTML('etatUn', it.etatOptions, s.etatUn, 'État') : ''}
       ${it.harnais ? choixUniqueHTML('sangleRelax',
           [{ val:'oui', texte:'Présente' }, { val:'non', texte:'Absente' }],
@@ -7014,7 +7021,7 @@ async function exporterExcel(){
           const s = st[i] || {};
           const est = etatSummary(s, cat);
           const qp = it.noQty ? null : toNum(s.qte), qr = it.noQty ? null : toNum(s.qteReel);
-          const mauvais = toNum(s.etatMauvais) || 0, moyen = toNum(s.etatMoyen) || 0;
+          const mauvais = ETAT_ACTIF ? (toNum(s.etatMauvais) || 0) : 0, moyen = ETAT_ACTIF ? (toNum(s.etatMoyen) || 0) : 0;
           const eun = it.etatOptions ? etatUnStatus(s.etatUn) : null;   // état à choix unique
           let couleur = 'none';  // vide => blanc, pas de vert
           if(aUneSaisie(s)){
