@@ -601,7 +601,7 @@ function moveTile(id, dir){
 // l'appareil affiche bien la dernière version ou une copie gardée par le cache
 // hors ligne. (Avant, on affichait la date du jour : une copie vieille de deux ans
 // affichait donc elle aussi la date du jour, et l'indicateur ne servait à rien.)
-const APP_VERSION = '2026-10-21b';
+const APP_VERSION = '2026-10-21d';
 
 // ================== RENDU ==================
 function render(){
@@ -2975,10 +2975,144 @@ function fmtQte(n){
   return String(arrondi);
 }
 
+/* ============================================================================
+   LISTE DE DÉPART -> QTÉ PRÉVUE (21 oct. 2026)
+   ============================================================================
+   Les contremaîtres inscrivent dans l'appli Liste Chantier combien il leur faut
+   de chaque article. La fonction serveur `synchro-prevu` relie chaque
+   contremaître à son équipe (Infos équipe) et dépose le résultat dans UNE clé,
+   `inv:prevu` : { equipes: { team_4: { "nom|ident": { q, par } } }, ... }.
+
+   Ici, on ne recopie RIEN dans l'inventaire des équipes : la quantité prévue
+   est posée PAR-DESSUS à l'affichage (etatVu). Un article qui est dans la liste
+   de départ — donc dans l'onglet Chantier — a une Qté prévue en lecture seule,
+   dans l'onglet Chantier comme dans son onglet d'origine. Tant qu'aucun
+   contremaître de l'équipe n'en a demandé, elle vaut 0.
+   Les autres articles gardent leur Qté prévue ordinaire, modifiable.
+
+   L'Entrepôt et l'Administration ne sont pas des chantiers : rien ne change pour eux. */
+const EQUIPES_HORS_LISTE = ['entrepot', 'administration'];
+const CAT_LISTE = 'custom_chantier';
+let prevuListe = null;           // contenu de inv:prevu (null = jamais lu)
+
+/* La MÊME normalisation que la fonction synchro-prevu. Si on change l'une, on
+   change l'autre : c'est elle qui relie un article de la liste à un article d'ici. */
+function normListe(s){
+  return String(s == null ? '' : s)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u2018\u2019\u02bc]/g, "'")
+    .replace(/[<>]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ')
+    .replace(/\( /g, '(').replace(/ \)/g, ')')      // « Radio ( fm ) » = « Radio (fm) »
+    .trim();
+}
+function cleListe(nom, ident){ return normListe(nom) + '|' + normListe(ident); }
+
+async function loadPrevu(){
+  try{
+    const r = await window.storage.get('inv:prevu', true);
+    if(r && r.value){
+      prevuListe = JSON.parse(r.value);
+      try{ localStorage.setItem('inv:prevu:cache', r.value); }catch(e){}
+    }else if(r === null){
+      prevuListe = { equipes:{} };          // clé absente : aucune demande encore
+    }
+  }catch(e){
+    // Pas de réseau : la dernière synchro connue de CE téléphone, plutôt que rien.
+    try{ const c = localStorage.getItem('inv:prevu:cache'); if(c) prevuListe = JSON.parse(c); }catch(e2){}
+  }
+  return prevuListe;
+}
+
+/* Demande au serveur de relire la liste de départ maintenant (la synchro tourne
+   aussi toute seule toutes les 5 minutes). Sans réponse, on garde ce qu'on a. */
+async function relancerSynchroPrevu(){
+  try{
+    const req = _sb.functions.invoke('synchro-prevu', { body:{} });
+    const res = await Promise.race([req, new Promise(r => setTimeout(() => r({ __timeout:true }), 12000))]);
+    if(res && !res.__timeout && !res.error) return true;
+  }catch(e){}
+  return false;
+}
+
+/* Les articles de la liste de départ = ceux de l'onglet Chantier (moins la corbeille).
+   Recalculé seulement quand l'onglet Chantier ou la corbeille changent. */
+let _listeMemo = { sig:'', set:new Set() };
+function articlesDeLaListe(){
+  const items = itemsFor(CAT_LISTE);
+  const sig = items.length + ':' + ((hiddenItems[CAT_LISTE] || []).join('\u0001'));
+  if(sig === _listeMemo.sig) return _listeMemo.set;
+  const set = new Set();
+  items.forEach((it, i) => {
+    if(!it || it.header) return;
+    if(isItemHiddenAt(CAT_LISTE, i)) return;
+    set.add(cleListe(it.name, it.ident));
+  });
+  _listeMemo = { sig, set };
+  return set;
+}
+
+/* Clé « liste » d'un article : son nom D'ORIGINE + son identification de catalogue.
+   Quand un même nom revient plusieurs fois dans un onglet (« Gates », « Gates #2 »),
+   seul le PREMIER exemplaire visible est relié : la quantité prévue ne doit
+   apparaître qu'une fois, sinon l'équipe en verrait le double. « Visible » compte :
+   dans Base, le premier « Table a mortier » est à la corbeille et c'est la copie
+   « #2 » qui sert — c'est donc elle qui reçoit la quantité. */
+const _listeParCat = {};
+function cleListeAt(cat, i){
+  const items = itemsFor(cat);
+  const it = items[i];
+  if(!it || it.header) return null;
+  const sig = items.length + ':' + ((hiddenItems[cat] || []).join('\u0001'));
+  let m = _listeParCat[cat];
+  if(!m || m.sig !== sig){
+    const premier = {};
+    items.forEach((x, j) => {
+      if(!x || x.header || isItemHiddenAt(cat, j)) return;
+      const k = cleListe(x.name, x.ident);
+      if(!(k in premier)) premier[k] = j;
+    });
+    m = _listeParCat[cat] = { sig, premier };
+  }
+  const k = cleListe(it.name, it.ident);
+  return m.premier[k] === i ? k : null;
+}
+
+/* Qté prévue venant de la liste de départ pour (équipe, onglet, article).
+   null = l'article n'est pas concerné (hors liste, équipe hors chantier...). */
+function prevuDeListe(teamId, cat, i){
+  if(!teamId || teamId === 'TOTAL' || EQUIPES_HORS_LISTE.indexOf(teamId) !== -1) return null;
+  const it = itemsFor(cat)[i];
+  if(!it || it.header || it.noQty) return null;
+  const k = cleListeAt(cat, i);
+  if(!k || !articlesDeLaListe().has(k)) return null;
+  const parEquipe = (prevuListe && prevuListe.equipes && prevuListe.equipes[teamId]) || {};
+  const d = parEquipe[k];
+  const q = d ? nombre(d.q) : 0;
+  return { q, par: (d && d.par) || '', connu: !!prevuListe };
+}
+
+/* L'état d'un article TEL QU'IL DOIT SE LIRE : la Qté prévue de la liste de départ
+   posée par-dessus celle de l'équipe. C'est une COPIE — on n'écrit jamais ça. */
+function etatVu(teamId, cat, i, s){
+  if(!s) return s;
+  const p = prevuDeListe(teamId, cat, i);
+  if(!p) return s;
+  return Object.assign({}, s, { qte: p.q > 0 ? fmtQte(p.q) : '', _liste: p });
+}
+
+/* Pastille de quantité (règles de Jay, 21 oct. 2026) :
+     réel jamais rempli -> aucune pastille (pas encore compté, ce n'est pas un manque)
+     prévu 0 et réel 0  -> aucune pastille
+     réel sous le prévu -> rouge
+     réel égal ou plus  -> vert
+   Une Qté prévue vide vaut 0 : un article compté sans prévu est donc vert. */
 function qtyStatus(qte, qteReel){
-  if(qte === "" || qteReel === "" || qte == null || qteReel == null) return null;
-  const p = parseFloat(qte), r = parseFloat(qteReel);
+  const vide = v => v === "" || v == null;
+  if(vide(qteReel)) return null;
+  const p = vide(qte) ? 0 : parseFloat(qte), r = parseFloat(qteReel);
   if(isNaN(p) || isNaN(r)) return null;
+  if(p === 0 && r === 0) return null;
   if(r < p) return { level:'red', label:'Manque ' + fmtQte(p - r) + ' (prévu ' + fmtQte(p) + ', réel ' + fmtQte(r) + ')' };
   if(r > p) return { level:'green', label:'Surplus ' + fmtQte(r - p) + ' (prévu ' + fmtQte(p) + ', réel ' + fmtQte(r) + ')' };
   return { level:'green', label:'Compte exact (' + fmtQte(p) + ')' };
@@ -3051,7 +3185,9 @@ function edgeClassFor(s, it, cat){
   if(levels.indexOf('red') !== -1) return ' edge-red';
   if(levels.indexOf('orange') !== -1) return ' edge-yellow';
   // vert si au moins une donnée saisie (quantité, état, ou une date à jour)
-  const hasData = (!noQty && (s.qte !== "" || s.qteReel !== "")) || !!est || levels.indexOf('green') !== -1;
+  // Règle de Jay : une Qté prévue seule ne colore rien — tant que le réel n'est pas
+  // compté, la barre reste neutre. Un réel à 0 ne colore rien non plus.
+  const hasData = (!noQty && nombre(s.qteReel) > 0) || !!est || levels.indexOf('green') !== -1;
   return hasData ? ' edge-green' : '';
 }
 
@@ -3172,7 +3308,7 @@ function orderedItemsWithPriority(items, st, cat){
     if(g.head) out.push({ it:g.head.it, i:g.head.i, header:true });
     g.items
       .map((e, idx) => {
-        const s = (st && st[e.i]) || defaultItemState(e.it);
+        const s = etatVu(currentTeam, cat, e.i, (st && st[e.i]) || defaultItemState(e.it));
         return {
           e: { it:e.it, i:e.i, header:false },
           idx,
@@ -3737,7 +3873,7 @@ function catHasRedForTeam(teamId, cat){
     const it = items[i];
     if(it.header) continue;
     if(isItemHiddenAt(cat, i)) continue;
-    const s = st[i];
+    const s = etatVu(teamId, cat, i, st[i]);
     if(!s) continue;                    // case absente : idem, on ne devine pas
     if(itemPriority(it, s, cat) === 0) return true;
   }
@@ -4239,6 +4375,53 @@ async function publishMachineCatalog(){
   }catch(e){ console.error('publishMachineCatalog', e); }
 }
 
+/* Les noms de TOUS les articles de tous les onglets, pour la passerelle
+   `monter-article` de la liste de départ : quand Jason approuve un article, elle
+   vérifie ici qu'il n'existe pas déjà quelque part dans l'app avant de l'ajouter
+   à son onglet. Sans ça, elle ne connaissait que l'onglet visé et une vieille
+   copie figée du catalogue — de quoi refaire un doublon d'un article ajouté depuis.
+   On ne publie que si TOUT a été lu (sinon une liste amputée ferait croire que des
+   articles n'existent pas) et seulement si la liste a changé. */
+async function publierNomsCatalogue(){
+  try{
+    const cats = allCatKeys();
+    if(cats.some(c => lectureRatee('inv:extra:' + c))) return;
+    const vus = {}, noms = [];
+    cats.forEach(cat => {
+      itemsFor(cat).forEach((it, i) => {
+        if(!it || it.header) return;
+        if(isItemHiddenAt(cat, i)) return;
+        const k = cleListe(it.name, it.ident);
+        if(vus[k]) return;
+        vus[k] = 1;
+        noms.push({ k, nom: it.name, ident: it.ident || '', o: cat });
+      });
+    });
+    noms.sort((a, b) => a.k < b.k ? -1 : (a.k > b.k ? 1 : 0));
+    const neuf = JSON.stringify(noms);
+    const r = await window.storage.get('inv:catalogue:noms', true);
+    if(r && r.value){
+      try{ if(JSON.stringify(JSON.parse(r.value).noms) === neuf) return; }catch(e){}
+    }
+    await window.storage.set('inv:catalogue:noms', JSON.stringify({ noms, maj:new Date().toISOString() }), true);
+  }catch(e){ console.warn('publierNomsCatalogue', e); }
+}
+
+/* Toutes les 5 minutes, on relit les quantités prévues. On ne redessine pas la
+   liste pendant qu'on tape dans un champ : ça ferait perdre le curseur. */
+let _minuteriePrevu = null;
+function surveillerPrevu(){
+  if(_minuteriePrevu) return;
+  _minuteriePrevu = setInterval(async () => {
+    const avant = JSON.stringify(prevuListe);
+    await loadPrevu();
+    if(JSON.stringify(prevuListe) === avant) return;
+    const el = document.activeElement;
+    if(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) return;
+    try{ renderTabs(); renderList(); }catch(e){}
+  }, 5 * 60 * 1000);
+}
+
 // ================== VÉRIF / ENTRETIEN — SOURCE UNIQUE : TUILE MACHINERIE ==================
 // La vérif. annuelle, le changement d'huile et le tune-up des machines ne se saisissent plus
 // dans l'inventaire : ils proviennent de la tuile « Machinerie » (clés inv:machine:<clé>),
@@ -4586,8 +4769,35 @@ function renderList(){
   renderTeamInfo();
   if(currentTeam === 'TOTAL') renderTotalList();
   else renderTeamList();
+  avisListeDepart();
   renderFooter();
   montrerArticleNeuf();
+}
+
+/* En haut de l'onglet Chantier, pour l'admin seulement : les noms inscrits dans
+   la liste de départ qui ne correspondent à aucun contremaître d'Infos équipe.
+   Leurs quantités ne vont nulle part tant que le nom n'est pas corrigé — et
+   sans ce bandeau, personne ne le saurait. */
+function avisListeDepart(){
+  if(currentCat !== CAT_LISTE || !isAdmin || !prevuListe) return;
+  const listEl = document.getElementById('list');
+  if(!listEl) return;
+  const nr = Array.isArray(prevuListe.nonRelies) ? prevuListe.nonRelies : [];
+  const am = Array.isArray(prevuListe.ambigus) ? prevuListe.ambigus : [];
+  const maj = prevuListe.maj ? new Date(prevuListe.maj) : null;
+  const quand = maj && !isNaN(maj) ? maj.toLocaleString('fr-CA', { dateStyle:'short', timeStyle:'short' }) : '—';
+  const div = document.createElement('div');
+  div.className = 'avis-liste';
+  div.style.cssText = 'margin:0 0 12px; padding:10px 12px; border-radius:8px; font-size:13px; line-height:1.4; ' +
+    ((nr.length || am.length) ? 'background:#4a3a12; border:1px solid #9c6500; color:#ffe7a8;'
+                              : 'background:var(--asphalt-2); border:1px solid var(--line); color:var(--paper-dim);');
+  let html = '🔒 Qté prévue synchronisée depuis la liste de départ · dernier changement reçu : ' + escapeHtml(quand);
+  if(nr.length) html += '<br>⚠ Pas reliés à une équipe (nom différent de celui d\'Infos équipe) : <b>' +
+    nr.map(x => escapeHtml(x.auteur)).join(', ') + '</b>';
+  if(am.length) html += '<br>⚠ Reliés à plusieurs équipes à la fois : <b>' +
+    am.map(x => escapeHtml(x.auteur)).join(', ') + '</b>';
+  div.innerHTML = html;
+  listEl.insertBefore(div, listEl.firstChild);
 }
 
 // Écran de sélection des machines pour l'équipe courante dans une select-cat
@@ -4815,7 +5025,7 @@ function renderTeamList(){
     if(isSelectCat(currentCat) && isSelectableItem(it) &&
        !isMachineActive(currentTeam, currentCat, cleArticleAt(currentCat, i))) return;
     anyVisible = true;
-    const s = st[i] || defaultItemState(it);
+    const s = etatVu(currentTeam, currentCat, i, st[i] || defaultItemState(it));
     // Les compteurs Bon / Moyen / Mauvais comptent des QUANTITÉS. Un article à état
     // unique (un harnais = une ligne) n'a rien à compter : il a sa propre rangée de
     // choix plus bas, et afficher les deux inviterait à saisir deux fois la même chose.
@@ -4874,6 +5084,12 @@ function renderTeamList(){
     body.innerHTML = `
       ${it.noQty ? '' : `
       <div class="field-row">
+        ${s._liste ? `
+        <div class="field">
+          <label>Qté prévue 🔒</label>
+          <div class="loc-auto qte-liste" style="padding:10px 12px; background:var(--asphalt); border:1px solid var(--line); border-radius:8px; color:var(--paper); font-size:16px; font-weight:700; text-align:center;">${s._liste.q > 0 ? escapeHtml(fmtQte(s._liste.q)) : '0'}</div>
+          <div class="verif-hint">${s._liste.q > 0 && s._liste.par ? 'Liste de départ — ' + escapeHtml(s._liste.par) : 'Liste de départ — aucune demande'}</div>
+        </div>` : `
         <div class="field">
           <label>Qté prévue</label>
           <div class="qty-step">
@@ -4881,7 +5097,7 @@ function renderTeamList(){
             <input type="text" inputmode="decimal" data-field="qte" value="${escapeAttr(s.qte)}" placeholder="0">
             <button type="button" class="qty-btn" data-step="1" data-for="qte" aria-label="Ajouter 1 à la quantité prévue">+</button>
           </div>
-        </div>
+        </div>`}
         <div class="field">
           <label>Qté réelle</label>
           <div class="qty-step">
@@ -5126,7 +5342,7 @@ function renderTeamList(){
           scheduleBadgeRefresh();  // points rouges/onglets recalculés en différé (fini le lag à chaque frappe)
           // Recalcule la couleur de la barre gauche (rouge/jaune/vert) en direct
           card.classList.remove('filled','missing','edge-red','edge-yellow','edge-green');
-          const _edge = edgeClassFor(st[i], it, currentCat).trim();
+          const _edge = edgeClassFor(etatVu(currentTeam, currentCat, i, st[i]), it, currentCat).trim();
           if(_edge) card.classList.add(_edge);
           // Recolore le champ vérif. en direct sans perdre le focus
           if(inp.dataset.field === 'verif'){
@@ -5176,7 +5392,8 @@ function renderTeamList(){
           }
           // Recolore l'indicateur de quantité en direct
           if(inp.dataset.field === 'qte' || inp.dataset.field === 'qteReel'){
-            const qs = qtyStatus(st[i].qte, st[i].qteReel);
+            const vuQ = etatVu(currentTeam, currentCat, i, st[i]);
+            const qs = qtyStatus(vuQ.qte, vuQ.qteReel);
             const reelInp = body.querySelector('input[data-field="qteReel"]');
             if(reelInp){
               reelInp.classList.remove('verif-red','verif-orange','verif-green');
@@ -5328,7 +5545,7 @@ function renderTeamList(){
               aide.textContent = a.texte;
             }
             card.classList.remove('filled','missing','edge-red','edge-yellow','edge-green');
-            const bord = edgeClassFor(st[i], it, currentCat).trim();
+            const bord = edgeClassFor(etatVu(currentTeam, currentCat, i, st[i]), it, currentCat).trim();
             if(bord) card.classList.add(bord);
             markDirtyIdx(currentTeam, currentCat, i);
             scheduleSaveTeamCat(currentTeam, currentCat);
@@ -5445,7 +5662,7 @@ function renderTotalList(){
     let best = 2;
     for(const t of teams){
       const st = (perTeamState[t.id] && perTeamState[t.id][currentCat]) || [];
-      const s = st[i] || defaultItemState(it);
+      const s = etatVu(t.id, currentCat, i, st[i] || defaultItemState(it));
       best = Math.min(best, itemPriority(it, s, currentCat));
     }
     return best;
@@ -5509,7 +5726,7 @@ function renderTotalList(){
     let aggBon = 0, aggMoyen = 0, aggMauvais = 0, anyEtat = false;
     const perTeamRows = teams.map(t => {
       const st = (perTeamState[t.id] && perTeamState[t.id][currentCat]) || [];
-      const s = st[i] || defaultItemState(it);
+      const s = etatVu(t.id, currentCat, i, st[i] || defaultItemState(it));
       const n = parseFloat(s.qteReel);
       if(!isNaN(n)){ totalReel += n; anyNumeric = true; }
       const es = etatSummary(s, currentCat);
@@ -6640,7 +6857,7 @@ async function exporterExcel(){
         items.forEach((it, i) => {
           if(it.header) return;
           if(isItemHiddenAt(cat, i)) return;
-          const s = st[i] || {};
+          const s = etatVu(t.id, cat, i, st[i] || {});
           const rec = itemFieldsRec(s);
           rec._by = s._by || '';   // qui a modifié en dernier (non compté dans TRACK)
           // La clé de l'instantané est la CLÉ d'article, pas le nom : les quatre
@@ -6778,7 +6995,9 @@ async function exporterExcel(){
 
     function toNum(v){ const n = parseFloat(v); return isNaN(n) ? null : n; }
     function aUneSaisie(s){
-      return ['qte','qteReel','etatBon','etatMoyen','etatMauvais','verif','pression','huile','tuneup','test','sangleRelax','etatUn']
+      // La Qté prévue seule ne colore pas la ligne : tant que le réel n'est pas
+      // compté, la ligne reste blanche (règle de Jay, comme à l'écran).
+      return ['qteReel','etatBon','etatMoyen','etatMauvais','verif','pression','huile','tuneup','test','sangleRelax','etatUn']
         .some(k => (s[k] ?? '') !== '') || (Array.isArray(s.opts) && s.opts.length > 0);
     }
 
@@ -7018,7 +7237,7 @@ async function exporterExcel(){
         items.forEach((it, i) => {
           if(it.header) return;
           if(isItemHiddenAt(cat, i)) return;
-          const s = st[i] || {};
+          const s = etatVu(t.id, cat, i, st[i] || {});
           const est = etatSummary(s, cat);
           const qp = it.noQty ? null : toNum(s.qte), qr = it.noQty ? null : toNum(s.qteReel);
           const mauvais = ETAT_ACTIF ? (toNum(s.etatMauvais) || 0) : 0, moyen = ETAT_ACTIF ? (toNum(s.etatMoyen) || 0) : 0;
@@ -7026,7 +7245,8 @@ async function exporterExcel(){
           let couleur = 'none';  // vide => blanc, pas de vert
           if(aUneSaisie(s)){
             couleur = 'green';
-            if((qp!==null && qr!==null && qr<qp) || mauvais>0 || (eun && eun.level === 'red')) couleur = 'red';
+            const qsX = it.noQty ? null : qtyStatus(s.qte, s.qteReel);   // case vide = 0
+            if((qsX && qsX.level === 'red') || mauvais>0 || (eun && eun.level === 'red')) couleur = 'red';
             else if(moyen>0) couleur = 'yellow';
           }
           lignesCat.push({
@@ -7139,7 +7359,8 @@ async function init(){
     loadDeviceUser(),
     loadAdmin(),
     loadMachineRecords(),  // vérif/huile/tune-up des machines = source unique tuile Machinerie
-    loadExtincteurs()      // registre des extincteurs (localisation = machine assignée)
+    loadExtincteurs(),     // registre des extincteurs (localisation = machine assignée)
+    loadPrevu()            // quantités prévues venant de la liste de départ
   ]);
 
   // Si l'admin a supprimé la fiche de cet appareil, on efface l'identité locale
@@ -7163,8 +7384,12 @@ async function init(){
 
   // 2) Le strict minimum pour afficher le PREMIER écran :
   //    les articles ajoutés de l'onglet courant + l'inventaire de l'équipe courante.
+  // L'onglet Chantier est chargé tout de suite, quel que soit l'onglet ouvert :
+  // c'est lui qui dit quels articles ont une Qté prévue venant de la liste de
+  // départ. Sans lui, ces articles paraîtraient modifiables le temps du chargement.
   await Promise.all([
     loadExtraItems(currentCat),
+    (currentCat !== CAT_LISTE && customCats.some(c => c.key === CAT_LISTE)) ? loadExtraItems(CAT_LISTE) : null,
     loadOrdreManuel(currentCat),
     loadTeamInfo(currentTeam)
   ]);
@@ -7194,12 +7419,17 @@ async function init(){
       if(currentTeam !== 'TOTAL'){
         await Promise.all(resteCats.map(c => ensureTeamCatLoaded(currentTeam, c)));
       }
+      // Liste de départ : on demande au serveur de relire tout de suite ce que les
+      // contremaîtres ont inscrit, puis on relit le résultat.
+      if(await relancerSynchroPrevu()) await loadPrevu();
       // Rafraîchit une fois tout chargé (badges, listes, etc.)
       renderTeamBar();
       renderTabs();
       renderList();
       // Publie le catalogue des machines lourdes pour l'app Machinerie (source unique).
       publishMachineCatalog();
+      publierNomsCatalogue();
+      surveillerPrevu();
       // L'équipe courante est complètement chargée et affichée : on peut maintenant
       // aller chercher les autres, doucement, pour que leurs pastilles rouges
       // veuillent dire quelque chose. Sans await : ça ne bloque rien.
@@ -7214,7 +7444,7 @@ async function init(){
 // sont omises.
 window.__dmdFlatSheet = async function(){
   await loadTeams();
-  await Promise.all([ loadCustomCats(), loadHiddenItems(), loadMachineRecords(), loadExtincteurs() ]);
+  await Promise.all([ loadCustomCats(), loadHiddenItems(), loadMachineRecords(), loadExtincteurs(), loadPrevu() ]);
   const cats = allCatKeys();
   await Promise.all(cats.map(c => loadExtraItems(c)));
   await Promise.all(teams.map(async t => {
@@ -7242,7 +7472,7 @@ window.__dmdFlatSheet = async function(){
       items.forEach((it, i)=>{
         if(it.header){ section = (it.name||'').replace(/\n/g,' ').trim(); return; }
         if(isItemHiddenAt(cat, i)) return;
-        const s = st[i] || {};
+        const s = etatVu(t.id, cat, i, st[i] || {});
         const verif = effVerif(s, it), huile = effHuile(s, it), tuneup = effTuneup(s, it);
         const loc = it.ext ? (extAssignLabel(it) || '') : val(s.localisation);
         const opts = Array.isArray(s.opts) ? s.opts.join(' + ') : '';
