@@ -601,7 +601,7 @@ function moveTile(id, dir){
 // l'appareil affiche bien la dernière version ou une copie gardée par le cache
 // hors ligne. (Avant, on affichait la date du jour : une copie vieille de deux ans
 // affichait donc elle aussi la date du jour, et l'indicateur ne servait à rien.)
-const APP_VERSION = '2026-10-26c';
+const APP_VERSION = '2026-10-26d';
 
 // ================== RENDU ==================
 function render(){
@@ -3096,6 +3096,10 @@ function prevuDeListe(teamId, cat, i){
    posée par-dessus celle de l'équipe. C'est une COPIE — on n'écrit jamais ça. */
 function etatVu(teamId, cat, i, s){
   if(!s) return s;
+  // Onglet DÉPART (clé custom_chantier) : liste de quantités PRÉVUES seulement.
+  // Une ancienne Qté réelle restée en base est ignorée partout (pastilles, barres,
+  // tri, vue Total, exports) sans être effacée du serveur.
+  if(cat === CAT_LISTE && s.qteReel !== '' && s.qteReel != null) s = Object.assign({}, s, { qteReel:'' });
   const p = prevuDeListe(teamId, cat, i);
   if(!p) return s;
   return Object.assign({}, s, { qte: p.q > 0 ? fmtQte(p.q) : '', _liste: p });
@@ -3837,7 +3841,7 @@ function countFilledForTeam(teamId, cat){
     if(it.header) return;
     if(isItemHiddenAt(cat, i)) return;
     total++;
-    const s = st[i];
+    const s = cat === CAT_LISTE ? etatVu(teamId, cat, i, st[i]) : st[i];
     // etatUn compte comme une saisie : sinon un harnais dont on a rempli l'état et
     // rien d'autre (il n'a pas de quantité) restait « à faire » dans le compteur x/y.
     if(s && (s.qte !== "" || s.qteReel !== "" || s.etatBon !== "" || s.etatMoyen !== "" || s.etatMauvais !== "" || s.etatUn !== "")) filled++;
@@ -5098,6 +5102,7 @@ function renderTeamList(){
             <button type="button" class="qty-btn" data-step="1" data-for="qte" aria-label="Ajouter 1 à la quantité prévue">+</button>
           </div>
         </div>`}
+        ${currentCat === CAT_LISTE ? '' : `
         <div class="field">
           <label>Qté réelle</label>
           <div class="qty-step">
@@ -5105,7 +5110,7 @@ function renderTeamList(){
             <input type="text" inputmode="decimal" data-field="qteReel" class="${qst ? 'verif-'+qst.level : ''}" value="${escapeAttr(s.qteReel)}" placeholder="0">
             <button type="button" class="qty-btn" data-step="1" data-for="qteReel" aria-label="Ajouter 1 à la quantité réelle">+</button>
           </div>
-        </div>
+        </div>`}
       </div>
       <div class="qty-hint-wrap" style="${qst ? '' : 'display:none;'} margin-top:-6px; margin-bottom:12px;">
         <div class="verif-hint ${qst ? qst.level : ''}">${qst ? escapeHtml(qst.label) : ''}</div>
@@ -5727,7 +5732,8 @@ function renderTotalList(){
     const perTeamRows = teams.map(t => {
       const st = (perTeamState[t.id] && perTeamState[t.id][currentCat]) || [];
       const s = etatVu(t.id, currentCat, i, st[i] || defaultItemState(it));
-      const n = parseFloat(s.qteReel);
+      // Onglet DÉPART : pas de réel, le total est celui des Qtés prévues.
+      const n = parseFloat(currentCat === CAT_LISTE ? s.qte : s.qteReel);
       if(!isNaN(n)){ totalReel += n; anyNumeric = true; }
       const es = etatSummary(s, currentCat);
       if(es){ aggBon += es.b; aggMoyen += es.m; aggMauvais += es.x; anyEtat = true; }
@@ -5777,7 +5783,7 @@ function renderTotalList(){
           </div>
           <div class="team-detail-vals">
             ${it.noQty ? '' : `<span class="qty-badge">P:${s.qte !== "" ? escapeHtml(s.qte) : '-'}</span>
-            <span class="qty-badge">R:${s.qteReel !== "" ? escapeHtml(s.qteReel) : '-'}</span>`}
+            ${currentCat === CAT_LISTE ? '' : `<span class="qty-badge">R:${s.qteReel !== "" ? escapeHtml(s.qteReel) : '-'}</span>`}`}
             ${etatChip}
           </div>
         </div>
@@ -5791,7 +5797,7 @@ function renderTotalList(){
     if(aggMauvais) aggParts.push(fmtQte(aggMauvais) + ' mauvais');
     body.innerHTML = rowsHtml + `
       ${it.noQty ? '' : `<div class="team-detail-row" style="margin-top:6px; border-top:2px solid var(--safety-yellow); padding-top:10px;">
-        <div class="team-detail-name" style="color:var(--safety-yellow);">TOTAL (Qté réelle)</div>
+        <div class="team-detail-name" style="color:var(--safety-yellow);">TOTAL (Qté ${currentCat === CAT_LISTE ? 'prévue' : 'réelle'})</div>
         <div class="team-detail-vals"><span class="qty-badge total-badge">${anyNumeric ? fmtQte(totalReel) : '-'}</span></div>
       </div>`}
       ${anyEtat ? `<div class="team-detail-row">
