@@ -601,7 +601,7 @@ function moveTile(id, dir){
 // l'appareil affiche bien la dernière version ou une copie gardée par le cache
 // hors ligne. (Avant, on affichait la date du jour : une copie vieille de deux ans
 // affichait donc elle aussi la date du jour, et l'indicateur ne servait à rien.)
-const APP_VERSION = '2026-10-21d';
+const APP_VERSION = '2026-10-26c';
 
 // ================== RENDU ==================
 function render(){
@@ -6811,6 +6811,50 @@ function ensureXLSX(){
   });
   return _xlsxLoading;
 }
+/* LIGNE D'EN-TÊTE FIGÉE (26 oct. 2026). Le code posait ws['!freeze'] sur chaque
+   feuille, mais la librairie Excel (xlsx-js-style) ignore cette propriété : en
+   descendant, on perdait le nom des colonnes. On écrit donc le classeur nous-mêmes,
+   puis on ajoute dans le XML de chaque feuille le volet figé qu'Excel comprend
+   (<pane state="frozen">), d'après le '!freeze' déjà prévu pour cette feuille.
+   Si quoi que ce soit échoue, on télécharge le classeur tel quel : mieux vaut un
+   fichier sans volet figé que pas de fichier. */
+function figerEnTetes(wb){
+  const brut = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+  try{
+    const CFB = XLSX.CFB;
+    const zip = CFB.read(new Uint8Array(brut), { type:'array' });
+    let touche = 0;
+    wb.SheetNames.forEach((nom, i) => {
+      const f = wb.Sheets[nom] && wb.Sheets[nom]['!freeze'];
+      const y = f ? (f.ySplit | 0) : 0;
+      if(y <= 0) return;
+      const e = CFB.find(zip, '/xl/worksheets/sheet' + (i + 1) + '.xml');
+      if(!e || !e.content) return;
+      const xml = new TextDecoder().decode(e.content);
+      const cell = 'A' + (y + 1);
+      const neuf = xml.replace(/<sheetView([^>]*)\/>/,
+        '<sheetView$1><pane ySplit="' + y + '" topLeftCell="' + cell + '" activePane="bottomLeft" state="frozen"/>' +
+        '<selection pane="bottomLeft" activeCell="' + cell + '" sqref="' + cell + '"/></sheetView>');
+      if(neuf !== xml){ e.content = new TextEncoder().encode(neuf); touche++; }
+    });
+    if(!touche) return brut;
+    return CFB.write(zip, { fileType:'zip', type:'array', compression:true });
+  }catch(err){
+    console.warn('figerEnTetes', err);
+    return brut;
+  }
+}
+function telechargerClasseurFige(wb, nomFichier){
+  const donnees = figerEnTetes(wb);
+  const blob = new Blob([donnees], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nomFichier; a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000);
+}
+
 async function exporterExcel(){
   const btn = document.getElementById('exportBtn');
   const old = btn ? btn.textContent : '';
@@ -6980,15 +7024,22 @@ async function exporterExcel(){
     // colonnes alignées à gauche plus bas.
     const COLS = ['Catégorie','Article','Qté prévue','Qté réelle','Bon','Moyen','Mauvais','Total évalué',
                   'État (Bon/Retirer)',
-                  'Identification','Type','Localisation','Vérif','Huile','Tune-up','État lame','Pression','Commentaire'];
-    const WIDTHS = [14,32,10,10,6,7,8,11,18,14,16,16,10,10,10,14,9,34];
+                  'Identification','Type','Localisation','Vérif','Huile','Tune-up','État lame','Pression','Commentaire',
+                  'Départ', 'Modifié par'];
+    const WIDTHS = [14,32,10,10,6,7,8,11,18,14,16,16,10,10,10,14,9,34,9,24];
     // Feuilles par équipe : on ne garde que ces colonnes (demande de Jay, 21 oct. 2026).
     // Retirées : C Qté prévue, E Bon, F Moyen, G Mauvais, I État (Bon/Retirer),
     // K Type, L Localisation, M Vérif, N Huile, P État lame, Q Pression.
     // Les lignes sont toujours construites sur COLS complet (la couleur de ligne
     // en dépend), puis filtrées à la fin : retirer une colonne ici ne touche à rien d'autre.
-    const GARDER_EQ = [0,1,3,7,9,14,17];
-    const GAUCHE_EQ = [0,1,8,9,10,11,15,17];
+    // « Départ » (26 oct. 2026) : ce que les contremaîtres ont demandé dans la liste
+    // de départ pour CE chantier. Seulement sur les lignes de l'onglet DÉPART : le
+    // même article revient aussi dans son onglet d'origine (Base, Outils…), et un
+    // chiffre répété deux fois dans la feuille finirait additionné deux fois.
+    // C'est une demande, pas un compte : la colonne n'entre dans aucun total.
+    // « Modifié par » (26 oct. 2026) : qui a touché l'article en dernier, tout à droite.
+    const GARDER_EQ = [0,1,18,3,7,9,14,17,19];
+    const GAUCHE_EQ = [0,1,8,9,10,11,15,17,19];
     const COLS_EQ   = GARDER_EQ.map(i => COLS[i]);
     const WIDTHS_EQ = GARDER_EQ.map(i => WIDTHS[i]);
     const garderEq  = row => GARDER_EQ.map(i => row[i]);
@@ -7238,6 +7289,12 @@ async function exporterExcel(){
           if(it.header) return;
           if(isItemHiddenAt(cat, i)) return;
           const s = etatVu(t.id, cat, i, st[i] || {});
+          // Seulement les lignes utiles (règle de Jay, 26 oct. 2026) : un article
+          // demandé dans la liste de départ (colonne Départ) ou un article compté
+          // dans l'inventaire (Qté réelle plus grande que 0). Le reste encombrait
+          // chaque feuille de 400 lignes vides.
+          const qDepart = (cat === CAT_LISTE && s._liste && s._liste.q > 0) ? s._liste.q : 0;
+          if(!(qDepart > 0 || (!it.noQty && nombre(s.qteReel) > 0))) return;
           const est = etatSummary(s, cat);
           const qp = it.noQty ? null : toNum(s.qte), qr = it.noQty ? null : toNum(s.qteReel);
           const mauvais = ETAT_ACTIF ? (toNum(s.etatMauvais) || 0) : 0, moyen = ETAT_ACTIF ? (toNum(s.etatMoyen) || 0) : 0;
@@ -7258,7 +7315,9 @@ async function exporterExcel(){
               est ? est.total : '',
               s.etatUn || '',
               s.ident || '', (Array.isArray(s.opts) ? s.opts.join(' + ') : ''), (it.ext ? (extAssignLabel(it) || 'en stock') : (s.localisation || '')),
-              effVerif(s, it) || '', effHuile(s, it) || '', effTuneup(s, it) || '', s.lame || '', s.pression || '', s.comment || ''
+              effVerif(s, it) || '', effHuile(s, it) || '', effTuneup(s, it) || '', s.lame || '', s.pression || '', s.comment || '',
+              qDepart > 0 ? qDepart : '',
+              s._by || ''
             ], couleur
           });
         });
@@ -7327,7 +7386,7 @@ async function exporterExcel(){
     const nomFichier = 'Inventaire_DMD_' + d.getFullYear() + '-' +
       String(d.getMonth()+1).padStart(2,'0') + '-' +
       String(d.getDate()).padStart(2,'0') + '.xlsx';
-    XLSX.writeFile(wb, nomFichier);
+    telechargerClasseurFige(wb, nomFichier);
 
     // Enregistrer le nouvel instantané pour la prochaine comparaison
     try{
