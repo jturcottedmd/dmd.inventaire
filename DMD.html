@@ -601,7 +601,7 @@ function moveTile(id, dir){
 // l'appareil affiche bien la dernière version ou une copie gardée par le cache
 // hors ligne. (Avant, on affichait la date du jour : une copie vieille de deux ans
 // affichait donc elle aussi la date du jour, et l'indicateur ne servait à rien.)
-const APP_VERSION = '2026-10-26d';
+const APP_VERSION = '2026-11-16a';
 
 // ================== RENDU ==================
 function render(){
@@ -2169,6 +2169,33 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 }
 .btn-cancel{background:var(--asphalt); color:var(--paper-dim); border:1.5px solid var(--line);}
 .btn-confirm{background:var(--safety-orange); color:var(--paper);}
+/* ---- Onglet TRANSPORT ---- */
+.tab-transport{ border-color:var(--safety-yellow); color:var(--safety-yellow); }
+.tab-transport.active{ background:var(--safety-yellow); border-color:var(--safety-yellow); color:var(--asphalt); font-size:17.5px; font-weight:800; }
+.tr-search{ margin:2px 0 10px; display:flex; }
+.tr-tools{ display:flex; justify-content:space-between; align-items:center; color:var(--paper-dim); font-size:13px; margin:4px 2px 6px; }
+.tr-row{ display:flex; align-items:center; gap:10px; background:var(--asphalt-2); border:2px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:6px; cursor:pointer; }
+.tr-row.on{ border-color:var(--safety-yellow); background:rgba(242,183,5,0.10); }
+.tr-check{ flex:0 0 26px; height:26px; border-radius:6px; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-weight:800; color:var(--asphalt); }
+.tr-row.on .tr-check{ background:var(--safety-yellow); border-color:var(--safety-yellow); }
+.tr-name{ flex:1; min-width:0; font-weight:600; font-size:15px; }
+.tr-sub{ font-size:12.5px; color:var(--paper-dim); font-weight:400; margin-top:2px; }
+.tr-qty{ display:flex; align-items:center; gap:4px; }
+.tr-qty button{ width:34px; height:34px; border-radius:6px; border:2px solid var(--line); background:var(--asphalt); color:var(--paper); font-size:18px; font-weight:800; }
+.tr-qty input{ width:52px; height:34px; text-align:center; border-radius:6px; border:2px solid var(--safety-yellow); background:var(--asphalt); color:var(--paper); font-size:16px; font-weight:700; }
+.tr-bar{ position:fixed; left:50%; transform:translateX(-50%); bottom:14px; width:calc(100% - 24px); max-width:536px; z-index:50; }
+.tr-bar .btn{ width:100%; padding:14px; font-size:17px; }
+.tr-bar .btn[disabled]{ background:var(--asphalt-2); color:var(--paper-dim); border:1.5px solid var(--line); }
+.tr-badge{ display:inline-block; background:var(--asphalt); color:var(--safety-yellow); border-radius:12px; padding:1px 9px; margin-left:6px; }
+.tr-dests{ max-height:55vh; overflow-y:auto; }
+.tr-dest{ background:var(--asphalt-2); border:2px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:6px; cursor:pointer; }
+.tr-dest:active{ border-color:var(--safety-yellow); }
+.tr-dest-t{ font-weight:700; font-size:15px; }
+.tr-route{ text-align:center; font-weight:700; background:var(--asphalt-2); border-radius:8px; padding:10px; margin-bottom:10px; }
+.tr-fleche{ color:var(--safety-yellow); }
+.tr-liste{ max-height:40vh; overflow-y:auto; padding-left:20px; margin:0 0 10px; font-size:14px; }
+.tr-hist{ border-left:3px solid var(--line); padding:6px 10px; margin-bottom:8px; }
+.tr-hist-t{ font-weight:600; font-size:14px; }
 </style>
 <style>
 #loginScreen{
@@ -3611,6 +3638,7 @@ async function recupererDeplaces(teamId, cat, items, arr){
 }
 
 async function ensureTeamCatLoaded(teamId, cat){
+  if(cat === TRANSPORT_KEY) return [];
   if(perTeamState[teamId] && perTeamState[teamId][cat]) return perTeamState[teamId][cat];
   const items = itemsFor(cat);
   const cles = catalogueCat(cat).cles;
@@ -3676,6 +3704,7 @@ async function ensureTeamCatLoaded(teamId, cat){
 // le rajoutait sous un autre nom. C'est la source des doublons.
 // Deux petites lectures, faites au changement d'équipe ou d'onglet.
 async function rafraichirCatalogue(cat){
+  if(cat === TRANSPORT_KEY) return;
   const avant = (extraItems[cat] || []).length;
   await Promise.all([ loadExtraItems(cat), loadOrdreManuel(cat) ]);
   // Des articles sont apparus ailleurs : les tableaux d'état déjà en mémoire
@@ -4656,11 +4685,403 @@ function renderTeamBar(){
 }
 
 /* ---- Rendering: Category tabs ---- */
+/* ============================================================================
+   ONGLET TRANSPORT (16 nov. 2026)
+   ============================================================================
+   Onglet « virtuel » placé entre DÉPART et BASE. Il n'a pas d'inventaire à lui :
+   il montre TOUT ce que l'équipe (le chantier) affichée a en main — chaque
+   article dont la Qté réelle est plus grande que 0, tous onglets confondus —
+   avec sa propre barre de recherche. On coche ce qui part, on ajuste la
+   quantité, puis « Envoyer vers : » propose les chantiers des fiches d'équipe.
+
+   Le transfert enlève la quantité à l'équipe de départ et l'ajoute à celle
+   d'arrivée, onglet par onglet, par CLÉ d'article (jamais par position).
+   Juste avant, les deux inventaires sont relus du serveur : on ne déplace
+   jamais une quantité vieille de 20 minutes. Chaque transfert est gardé dans
+   `inv:transferts` (historique + feuille « Transferts » de l'Excel).
+
+   Exclus pour l'instant : DÉPART (pas de Qté réelle), la Machinerie (sélection
+   par ident) et les machines suivies dans d'autres onglets.                 */
+const TRANSPORT_KEY = '__TRANSPORT__';
+const TRANSFERTS_KEY = 'inv:transferts';
+const TRANSFERTS_MAX = 1000;
+let transportSel = new Map();      // `${cat}|${cle}` -> { cat, cle, q }
+let transportTeam = null;          // équipe pour laquelle la sélection a été faite
+let transportQuery = '';
+let transportCharge = {};          // teamId -> true quand tous les onglets sont lus
+let transfertsCache = null;
+
+function estTransport(cat){ return cat === TRANSPORT_KEY; }
+function catsTransport(){
+  return allCatKeys().filter(c => c !== CAT_LISTE && !isSelectCat(c));
+}
+function keyTransport(cat, cle){ return cat + '|' + cle; }
+
+async function chargerTransport(teamId){
+  const cats = catsTransport();
+  await Promise.all(cats.map(c => loadExtraItems(c)));
+  await Promise.all(cats.map(c => ensureTeamCatLoaded(teamId, c)));
+  transportCharge[teamId] = true;
+}
+
+// Articles en main pour une équipe : [{cat, i, cle, nom, dispo}]
+function articlesEnMain(teamId){
+  const out = [];
+  catsTransport().forEach(cat => {
+    const st = perTeamState[teamId] && perTeamState[teamId][cat];
+    if(!st) return;
+    const items = itemsFor(cat);
+    items.forEach((it, i) => {
+      if(!it || it.header || isMachineryMachine(it)) return;
+      if(isItemHiddenAt(cat, i)) return;
+      const s = st[i]; if(!s) return;
+      const dispo = nombre(s.qteReel);
+      if(dispo <= 0) return;
+      out.push({ cat, i, cle: cleArticleAt(cat, i), nom: nomAffiche(cat, i), dispo, ident: s.ident || '' });
+    });
+  });
+  return out;
+}
+
+function nonLusTransport(teamId){
+  return catsTransport().filter(c => lectureRatee('inv:' + teamId + ':' + c));
+}
+
+function chantierLabel(teamId){
+  const info = teamInfo[teamId] || {};
+  const p = (info.projet || '').trim();
+  return (p ? '#' + p + ' · ' : '') + teamLabel(teamId);
+}
+
+function renderTransport(){
+  const listEl = document.getElementById('list');
+  listEl.innerHTML = '';
+  if(currentTeam === 'TOTAL'){
+    listEl.innerHTML = '<div class="total-banner">🚚 Choisis d\'abord le chantier <b>de départ</b> dans la barre d\'équipes ci-dessus.</div>';
+    return;
+  }
+  if(transportTeam !== currentTeam){ transportSel = new Map(); transportTeam = currentTeam; transportQuery = ''; }
+  if(!transportCharge[currentTeam]){
+    listEl.innerHTML = '<div class="empty-msg">Chargement de tout l\'inventaire de ' + escapeHtml(teamLabel(currentTeam)) + '…</div>';
+    const equipe = currentTeam;
+    chargerTransport(equipe).then(() => {
+      if(currentCat === TRANSPORT_KEY && currentTeam === equipe){ renderTabs(); renderList(); }
+    }).catch(e => console.error('chargerTransport', e));
+    return;
+  }
+
+  // Barre de recherche propre à l'onglet
+  const sb = document.createElement('div');
+  sb.className = 'tr-search';
+  sb.innerHTML = '<input id="trSearch" class="search-input" type="text" autocomplete="off" placeholder="Rechercher dans ce qui est sur le chantier…">';
+  listEl.appendChild(sb);
+  const inp = sb.querySelector('input');
+  inp.value = transportQuery;
+  let deb = null;
+  inp.addEventListener('input', () => {
+    clearTimeout(deb);
+    deb = setTimeout(() => { transportQuery = inp.value.trim(); dessinerLignesTransport(); }, 150);
+  });
+
+  const nl = nonLusTransport(currentTeam);
+  if(nl.length){
+    const av = document.createElement('div');
+    av.className = 'total-banner';
+    av.style.borderColor = 'var(--danger-red)'; av.style.color = '#ff9d8c';
+    av.innerHTML = '⚠ Onglet(s) non chargé(s) : ' + nl.map(c => escapeHtml(catLabel(c))).join(', ') +
+      ' — leurs articles n\'apparaissent pas ici. <span class="reset-link" id="trRetry">↻ Réessayer</span>';
+    listEl.appendChild(av);
+    av.querySelector('#trRetry').onclick = async () => {
+      nl.forEach(c => { oublierLecture('inv:' + currentTeam + ':' + c); if(perTeamState[currentTeam]) delete perTeamState[currentTeam][c]; });
+      transportCharge[currentTeam] = false; renderList();
+    };
+  }
+
+  const zone = document.createElement('div');
+  zone.id = 'trLignes';
+  listEl.appendChild(zone);
+
+  const hist = document.createElement('div');
+  hist.id = 'trHist';
+  listEl.appendChild(hist);
+
+  dessinerLignesTransport();
+  dessinerHistoriqueTransport();
+}
+
+function dessinerLignesTransport(){
+  const zone = document.getElementById('trLignes');
+  if(!zone) return;
+  const tous = articlesEnMain(currentTeam);
+  // La sélection ne garde que ce qui est encore en main
+  const valides = new Set(tous.map(a => keyTransport(a.cat, a.cle)));
+  [...transportSel.keys()].forEach(k => { if(!valides.has(k)) transportSel.delete(k); });
+
+  const q = transportQuery;
+  const vus = tous.filter(a => matchesSearch(a.nom, q) || matchesSearch(catLabel(a.cat), q) || (a.ident && matchesSearch(a.ident, q)));
+  let html = '';
+  if(!tous.length){
+    html = '<div class="empty-msg">Aucun article en main pour ' + escapeHtml(chantierLabel(currentTeam)) +
+      '.<br><span style="font-size:13px;color:var(--paper-dim);">Seuls les articles avec une Qté réelle plus grande que 0 apparaissent ici.</span></div>';
+  } else if(!vus.length){
+    html = '<div class="empty-msg">Aucun article ne correspond à « ' + escapeHtml(q) + ' ».</div>';
+  } else {
+    const nbSel = vus.filter(a => transportSel.has(keyTransport(a.cat, a.cle))).length;
+    html += '<div class="tr-tools"><span>' + vus.length + ' article(s) en main' + (q ? ' (filtrés)' : '') + '</span>' +
+      '<span class="reset-link" id="trToutCocher">' + (nbSel === vus.length ? 'Tout décocher' : 'Tout cocher') + '</span></div>';
+    let catCourante = null;
+    vus.forEach(a => {
+      if(a.cat !== catCourante){
+        catCourante = a.cat;
+        html += '<div class="section-label">' + escapeHtml(catLabel(a.cat)) + '</div>';
+      }
+      const k = keyTransport(a.cat, a.cle);
+      const sel = transportSel.get(k);
+      html += '<div class="tr-row' + (sel ? ' on' : '') + '" data-k="' + escapeAttr(k) + '">' +
+        '<div class="tr-check">' + (sel ? '✓' : '') + '</div>' +
+        '<div class="tr-name">' + (q ? highlightMatch(a.nom, q) : escapeHtml(a.nom)) +
+          '<div class="tr-sub">En main : <b>' + escapeHtml(fmtQte(a.dispo)) + '</b>' + (a.ident ? ' · ' + escapeHtml(a.ident) : '') + '</div></div>' +
+        (sel ? '<div class="tr-qty">' +
+          '<button data-moins="' + escapeAttr(k) + '">−</button>' +
+          '<input inputmode="decimal" data-q="' + escapeAttr(k) + '" value="' + escapeAttr(fmtQte(sel.q)) + '">' +
+          '<button data-plus="' + escapeAttr(k) + '">+</button></div>' : '') +
+        '</div>';
+    });
+  }
+  zone.innerHTML = html;
+
+  const parK = {}; tous.forEach(a => { parK[keyTransport(a.cat, a.cle)] = a; });
+  zone.querySelectorAll('.tr-row').forEach(row => {
+    row.addEventListener('click', (ev) => {
+      if(ev.target.closest('.tr-qty')) return;
+      const k = row.getAttribute('data-k'); const a = parK[k]; if(!a) return;
+      if(transportSel.has(k)) transportSel.delete(k);
+      else transportSel.set(k, { cat:a.cat, cle:a.cle, q:a.dispo });
+      dessinerLignesTransport();
+    });
+  });
+  const borne = (k, v) => { const a = parK[k]; if(!a) return 0; return Math.max(0, Math.min(a.dispo, Math.round(nombre(v)*100)/100)); };
+  zone.querySelectorAll('[data-moins]').forEach(b => b.onclick = () => {
+    const k = b.getAttribute('data-moins'); const s = transportSel.get(k); if(!s) return;
+    s.q = borne(k, s.q - 1); if(s.q <= 0) transportSel.delete(k); dessinerLignesTransport();
+  });
+  zone.querySelectorAll('[data-plus]').forEach(b => b.onclick = () => {
+    const k = b.getAttribute('data-plus'); const s = transportSel.get(k); if(!s) return;
+    s.q = borne(k, s.q + 1); dessinerLignesTransport();
+  });
+  zone.querySelectorAll('[data-q]').forEach(inp => {
+    inp.addEventListener('input', () => { inp.value = normNombreSaisi(inp.value); });
+    inp.addEventListener('change', () => {
+      const k = inp.getAttribute('data-q'); const s = transportSel.get(k); if(!s) return;
+      s.q = borne(k, inp.value); if(s.q <= 0) transportSel.delete(k); dessinerLignesTransport();
+    });
+  });
+  const tc = document.getElementById('trToutCocher');
+  if(tc) tc.onclick = () => {
+    const tousCoches = vus.every(a => transportSel.has(keyTransport(a.cat, a.cle)));
+    vus.forEach(a => {
+      const k = keyTransport(a.cat, a.cle);
+      if(tousCoches) transportSel.delete(k);
+      else if(!transportSel.has(k)) transportSel.set(k, { cat:a.cat, cle:a.cle, q:a.dispo });
+    });
+    dessinerLignesTransport();
+  };
+  dessinerBarreEnvoi();
+}
+
+function dessinerBarreEnvoi(){
+  let bar = document.getElementById('trBar');
+  if(currentCat !== TRANSPORT_KEY || currentTeam === 'TOTAL'){ if(bar) bar.remove(); return; }
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'trBar'; bar.className = 'tr-bar';
+    document.getElementById('app').appendChild(bar);
+  }
+  const n = transportSel.size;
+  bar.innerHTML = '<button class="btn btn-confirm" id="trEnvoyer"' + (n ? '' : ' disabled') + '>🚚 Envoyer vers :' +
+    (n ? ' <span class="tr-badge">' + n + '</span>' : '') + '</button>';
+  bar.querySelector('#trEnvoyer').onclick = () => { if(transportSel.size) openEnvoyerVersModal(); };
+}
+
+async function openEnvoyerVersModal(){
+  if(!isAdmin){ alert('Les transferts entre chantiers sont réservés à l\'administrateur.'); return; }
+  await Promise.all(teams.map(t => loadTeamInfo(t.id)));
+  const src = currentTeam;
+  const box = document.getElementById('modalBox');
+  const choix = teams.filter(t => t.id !== src).map(t => {
+    const info = teamInfo[t.id] || {};
+    const det = [info.contremaitre, formatAdresse(info.adresse)].filter(v => v && String(v).trim() && String(v).trim() !== '---').map(v => escapeHtml(String(v).trim())).join(' · ');
+    return '<div class="tr-dest" data-dest="' + escapeAttr(t.id) + '" style="border-left:5px solid ' + teamColor(t.id) + '">' +
+      '<div class="tr-dest-t">' + escapeHtml(chantierLabel(t.id)) + '</div>' +
+      (det ? '<div class="tr-sub">' + det + '</div>' : '') + '</div>';
+  }).join('');
+  box.innerHTML = '<h3>Envoyer vers :</h3>' +
+    '<div class="verif-hint" style="margin-bottom:10px;">' + transportSel.size + ' article(s) quittent <b>' + escapeHtml(chantierLabel(src)) + '</b>.</div>' +
+    '<div class="tr-dests">' + choix + '</div>' +
+    '<div class="modal-actions"><button class="btn btn-cancel" id="trAnnuler">Annuler</button></div>';
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('trAnnuler').onclick = closeModal;
+  box.querySelectorAll('[data-dest]').forEach(el => el.onclick = () => confirmerTransfert(src, el.getAttribute('data-dest')));
+}
+
+function confirmerTransfert(src, dst){
+  const lignes = [...transportSel.values()];
+  const box = document.getElementById('modalBox');
+  const liste = lignes.map(l => {
+    const i = catalogueCat(l.cat).cles.indexOf(l.cle);
+    return '<li><b>' + escapeHtml(fmtQte(l.q)) + '</b> × ' + escapeHtml(i >= 0 ? nomAffiche(l.cat, i) : l.cle) +
+      ' <span style="color:var(--paper-dim);">(' + escapeHtml(catLabel(l.cat)) + ')</span></li>';
+  }).join('');
+  box.innerHTML = '<h3>Confirmer le transfert</h3>' +
+    '<div class="tr-route"><div>' + escapeHtml(chantierLabel(src)) + '</div><div class="tr-fleche">⬇</div><div>' + escapeHtml(chantierLabel(dst)) + '</div></div>' +
+    '<ul class="tr-liste">' + liste + '</ul>' +
+    '<div class="verif-hint">La Qté réelle est enlevée au départ et ajoutée à l\'arrivée.</div>' +
+    '<div class="modal-actions"><button class="btn btn-cancel" id="trRetour">Retour</button>' +
+    '<button class="btn btn-confirm" id="trGo">Envoyer</button></div>';
+  document.getElementById('trRetour').onclick = openEnvoyerVersModal;
+  document.getElementById('trGo').onclick = async (ev) => {
+    const b = ev.currentTarget; b.disabled = true; b.textContent = 'Envoi…';
+    const res = await executerTransfert(src, dst, lignes);
+    if(!res.ok){ b.disabled = false; b.textContent = 'Envoyer'; alert(res.msg); return; }
+    closeModal();
+    transportSel = new Map();
+    renderTabs(); renderList();
+    const st = document.getElementById('saveStatus');
+    if(st){ st.style.color = ''; st.textContent = '🚚 ' + res.n + ' article(s) envoyé(s)'; }
+  };
+}
+
+// Relit un onglet d'une équipe depuis le serveur (null si la lecture échoue).
+async function relireFrais(teamId, cat){
+  const ancien = perTeamState[teamId] && perTeamState[teamId][cat];
+  if(perTeamState[teamId]) delete perTeamState[teamId][cat];
+  oublierLecture('inv:' + teamId + ':' + cat);
+  const arr = await ensureTeamCatLoaded(teamId, cat);
+  if(!arr){ if(ancien){ perTeamState[teamId] = perTeamState[teamId] || {}; perTeamState[teamId][cat] = ancien; } return null; }
+  return arr;
+}
+
+async function executerTransfert(src, dst, lignes){
+  if(!isAdmin) return { ok:false, msg:'Réservé à l\'administrateur.' };
+  const cats = [...new Set(lignes.map(l => l.cat))];
+  const frais = {};
+  for(const cat of cats){
+    const a = await relireFrais(src, cat);
+    const b = await relireFrais(dst, cat);
+    if(!a || !b) return { ok:false, msg:'La réception n\'a pas permis de relire « ' + catLabel(cat) + ' ». Rien n\'a été déplacé — réessaie dans un instant.' };
+    frais[cat] = { a, b };
+  }
+  const par = deviceUserLabel();
+  const maintenant = Date.now();
+  const fait = [];
+  lignes.forEach(l => {
+    const i = catalogueCat(l.cat).cles.indexOf(l.cle);
+    if(i < 0) return;
+    const sa = frais[l.cat].a[i], sb = frais[l.cat].b[i];
+    if(!sa || !sb) return;
+    const dispo = nombre(sa.qteReel);
+    const q = Math.min(nombre(l.q), dispo);
+    if(q <= 0) return;
+    sa.qteReel = fmtQte(dispo - q);
+    sb.qteReel = fmtQte(nombre(sb.qteReel) + q);
+    sa._by = par; sa._at = maintenant; sb._by = par; sb._at = maintenant;
+    markDirtyIdx(src, l.cat, i); markDirtyIdx(dst, l.cat, i);
+    fait.push({ cat:l.cat, cle:l.cle, nom:nomAffiche(l.cat, i), q });
+  });
+  if(!fait.length) return { ok:false, msg:'Rien à envoyer : les quantités en main ont changé entre-temps. Vérifie la liste.' };
+  cats.forEach(cat => { scheduleSaveTeamCat(src, cat); scheduleSaveTeamCat(dst, cat); });
+  oublierRedCache(src); oublierRedCache(dst);
+
+  const infoS = teamInfo[src] || {}, infoD = teamInfo[dst] || {};
+  await ajouterTransfert({
+    at: maintenant, par,
+    de:   { equipe:src, label:teamLabel(src), projet:infoS.projet || '', contremaitre:infoS.contremaitre || '' },
+    vers: { equipe:dst, label:teamLabel(dst), projet:infoD.projet || '', contremaitre:infoD.contremaitre || '' },
+    articles: fait
+  });
+  return { ok:true, n:fait.length };
+}
+
+async function chargerTransferts(){
+  try{
+    const r = await window.storage.get(TRANSFERTS_KEY, true);
+    const v = r && r.value ? JSON.parse(r.value) : [];
+    transfertsCache = Array.isArray(v) ? v : [];
+  }catch(e){ if(!transfertsCache) transfertsCache = null; }
+  return transfertsCache;
+}
+async function ajouterTransfert(rec){
+  // Relire juste avant d'écrire : deux appareils ne s'effacent pas l'historique.
+  for(let essai = 0; essai < 3; essai++){
+    try{
+      const r = await window.storage.get(TRANSFERTS_KEY, true);
+      let v = r && r.value ? JSON.parse(r.value) : [];
+      if(!Array.isArray(v)) v = [];
+      v.push(rec);
+      if(v.length > TRANSFERTS_MAX) v = v.slice(-TRANSFERTS_MAX);
+      await window.storage.set(TRANSFERTS_KEY, JSON.stringify(v), true);
+      transfertsCache = v;
+      return true;
+    }catch(e){ console.warn('ajouterTransfert', e); await new Promise(res => setTimeout(res, 1500)); }
+  }
+  alert('Le transfert est fait, mais il n\'a pas pu être inscrit dans l\'historique (réception).');
+  return false;
+}
+
+async function dessinerHistoriqueTransport(){
+  const el = document.getElementById('trHist');
+  if(!el) return;
+  const v = await chargerTransferts();
+  if(!document.getElementById('trHist')) return;
+  if(!v || !v.length){ el.innerHTML = ''; return; }
+  const lies = v.filter(t => t && t.de && t.vers && (t.de.equipe === currentTeam || t.vers.equipe === currentTeam)).slice(-15).reverse();
+  if(!lies.length){ el.innerHTML = ''; return; }
+  const fmtD = ms => { const d = new Date(ms); return isNaN(d) ? '' : d.toLocaleString('fr-CA', { dateStyle:'short', timeStyle:'short' }); };
+  const chantierTxt = x => (x.projet ? '#' + x.projet + ' · ' : '') + (x.label || x.equipe);
+  el.innerHTML = '<div class="section-label" style="margin-top:22px;">Derniers transferts — ' + escapeHtml(teamLabel(currentTeam)) + '</div>' +
+    lies.map(t => {
+      const sortant = t.de.equipe === currentTeam;
+      return '<div class="tr-hist">' +
+        '<div class="tr-hist-t">' + (sortant ? '⬆ Vers ' + escapeHtml(chantierTxt(t.vers)) : '⬇ De ' + escapeHtml(chantierTxt(t.de))) +
+        ' <span class="tr-sub">· ' + escapeHtml(fmtD(t.at)) + (t.par ? ' · ' + escapeHtml(String(t.par).split(' · ')[0]) : '') + '</span></div>' +
+        '<div class="tr-sub">' + (t.articles || []).map(a => escapeHtml(fmtQte(a.q)) + ' × ' + escapeHtml(a.nom)).join(', ') + '</div></div>';
+    }).join('');
+}
+
+// Feuille « Transferts » pour l'export Excel
+async function feuilleTransferts(){
+  const v = await chargerTransferts();
+  if(!v || !v.length) return null;
+  const rows = [['Date', 'De (chantier)', 'De (équipe)', 'Vers (chantier)', 'Vers (équipe)', 'Onglet', 'Article', 'Quantité', 'Par']];
+  v.slice().reverse().forEach(t => {
+    if(!t || !t.de || !t.vers) return;
+    const d = new Date(t.at);
+    const dt = isNaN(d) ? '' : d.toLocaleString('fr-CA', { dateStyle:'short', timeStyle:'short' });
+    (t.articles || []).forEach(a => rows.push([
+      dt, t.de.projet || '', t.de.label || t.de.equipe, t.vers.projet || '', t.vers.label || t.vers.equipe,
+      catLabel(a.cat), a.nom || a.cle, nombre(a.q), String(t.par || '').split(' · ')[0]
+    ]));
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:16},{wch:12},{wch:14},{wch:12},{wch:14},{wch:18},{wch:34},{wch:9},{wch:22}];
+  return ws;
+}
+
 function renderTabs(){
   const tabsEl = document.getElementById('tabs');
   tabsEl.innerHTML = '';
-  allCatKeys().forEach(cat => {
+  const _cles = allCatKeys();
+  const _posListe = _cles.indexOf(CAT_LISTE);
+  _cles.splice(_posListe + 1, 0, TRANSPORT_KEY);   // juste après DÉPART (ou en tête)
+  _cles.forEach(cat => {
     const tab = document.createElement('div');
+    if(estTransport(cat)){
+      tab.className = 'tab tab-transport' + (cat === currentCat ? ' active' : '');
+      tab.innerHTML = '🚚 Transport' + (transportSel.size && currentTeam === transportTeam ? ' <span class="count">' + transportSel.size + '</span>' : '');
+      tab.onclick = () => { currentCat = TRANSPORT_KEY; openIndex = null; reorderMode = false; renderTabs(); renderList(); };
+      tabsEl.appendChild(tab);
+      return;
+    }
     const isSST = cat === 'S.S.T.';
     tab.className = 'tab' + (cat === currentCat ? ' active' : '') + (isSST ? ' tab-sst' : '');
     let countHtml = '';
@@ -4771,6 +5192,16 @@ function montrerArticleNeuf(){
 
 function renderList(){
   renderTeamInfo();
+  // L'onglet Transport a sa propre recherche : on cache celle de l'en-tête.
+  const _sr = document.getElementById('search');
+  if(_sr && _sr.parentElement){ _sr.style.display = estTransport(currentCat) ? 'none' : ''; }
+  if(estTransport(currentCat)){
+    const _sg = document.getElementById('suggestions'); if(_sg) _sg.classList.remove('show');
+    renderTransport();
+    renderFooter();
+    return;
+  }
+  dessinerBarreEnvoi();   // enlève la barre « Envoyer vers » hors de l'onglet
   if(currentTeam === 'TOTAL') renderTotalList();
   else renderTeamList();
   avisListeDepart();
@@ -5814,6 +6245,11 @@ function renderTotalList(){
 
 function renderFooter(){
   const footer = document.getElementById('footer');
+  if(estTransport(currentCat)){
+    footer.innerHTML = '🚚 Coche ce qui part, ajuste la quantité, puis « Envoyer vers : ». ' +
+      (isAdmin ? '' : '<b>Transferts réservés à l\'administrateur.</b>');
+    return;
+  }
   // « Réinitialiser » efface pour de bon l'inventaire d'une équipe, et « Supprimer
   // cette catégorie » celui de TOUTES. Ces deux gestes ne passaient pas par la règle
   // « on ne modifie que sa propre équipe » : n'importe qui pouvait afficher l'Équipe 2
@@ -7378,6 +7814,11 @@ async function exporterExcel(){
       while(wb.SheetNames.indexOf(nom) !== -1){ nom = base.substring(0,27) + ' (' + (n2++) + ')'; }
       XLSX.utils.book_append_sheet(wb, ws, nom);
     });
+
+    try{
+      const _wsT = await feuilleTransferts();
+      if(_wsT){ XLSX.utils.book_append_sheet(wb, _wsT, 'Transferts'); }
+    }catch(e){ console.warn('feuille Transferts', e); }
 
     if(!auMoinsUne && changes.length === 0 && hadBaseline){
       alert("Aucune donnée et aucune modification depuis le dernier export.");
