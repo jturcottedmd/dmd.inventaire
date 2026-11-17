@@ -601,7 +601,7 @@ function moveTile(id, dir){
 // l'appareil affiche bien la dernière version ou une copie gardée par le cache
 // hors ligne. (Avant, on affichait la date du jour : une copie vieille de deux ans
 // affichait donc elle aussi la date du jour, et l'indicateur ne servait à rien.)
-const APP_VERSION = '2026-11-16a';
+const APP_VERSION = '2026-11-17a';
 
 // ================== RENDU ==================
 function render(){
@@ -2540,10 +2540,13 @@ const BASE_CAT_KEYS = CAT_ORDER.filter(k => RAW_DATA[k])
 // Liste de référence des équipes.
 // ⚠ DOIT rester identique à STD_TEAMS de la tuile Infos équipe, sinon les deux
 // tuiles n'affichent pas les mêmes équipes quand inv:teams n'existe pas encore.
+// 17 nov. 2026 : les équipes portent le n° de projet de leur chantier (les détails
+// — contremaître, adresse — restent dans la fiche de l'équipe). Seul le LIBELLÉ
+// change : les id (team_1…) restent la clé partout (inventaires, synchro, Liste Chantier).
 const DEFAULT_TEAMS = [
-  {id:'team_1',label:'Équipe 1'},{id:'team_2',label:'Équipe 2'},{id:'team_3',label:'Équipe 3'},
-  {id:'team_4',label:'Équipe 4'},{id:'team_5',label:'Équipe 5'},{id:'team_6',label:'Équipe 6'},
-  {id:'reno_1',label:'Réno 1'},{id:'reno_2',label:'Réno 2'},
+  {id:'team_1',label:'2027'},{id:'team_2',label:'1859'},{id:'team_3',label:'1956'},
+  {id:'team_4',label:'2007'},{id:'team_5',label:'2081'},{id:'team_6',label:'Équipe 6'},
+  {id:'reno_1',label:'Kim'},{id:'reno_2',label:'Romain'},
   {id:'entrepot',label:'Entrepôt'},{id:'administration',label:'Administration'}
 ];
 const ETATS = ['bon','moyen','mauvais'];
@@ -4747,10 +4750,18 @@ function nonLusTransport(teamId){
   return catsTransport().filter(c => lectureRatee('inv:' + teamId + ':' + c));
 }
 
+// « #2027 · Équipe 1 » ; mais si l'équipe porte déjà son n° de projet comme nom,
+// juste « #2027 » (pas « #2027 · 2027 »).
+function tagChantier(projet, label, equipe){
+  const p = String(projet || '').trim().replace(/^#/, '');
+  const l = String(label || equipe || '').trim();
+  if(!p) return l;
+  if(l.replace(/^#/, '') === p) return '#' + p;
+  return '#' + p + ' · ' + l;
+}
 function chantierLabel(teamId){
   const info = teamInfo[teamId] || {};
-  const p = (info.projet || '').trim();
-  return (p ? '#' + p + ' · ' : '') + teamLabel(teamId);
+  return tagChantier(info.projet, teamLabel(teamId), teamId);
 }
 
 function renderTransport(){
@@ -5037,7 +5048,7 @@ async function dessinerHistoriqueTransport(){
   const lies = v.filter(t => t && t.de && t.vers && (t.de.equipe === currentTeam || t.vers.equipe === currentTeam)).slice(-15).reverse();
   if(!lies.length){ el.innerHTML = ''; return; }
   const fmtD = ms => { const d = new Date(ms); return isNaN(d) ? '' : d.toLocaleString('fr-CA', { dateStyle:'short', timeStyle:'short' }); };
-  const chantierTxt = x => (x.projet ? '#' + x.projet + ' · ' : '') + (x.label || x.equipe);
+  const chantierTxt = x => tagChantier(x.projet, x.label, x.equipe);
   el.innerHTML = '<div class="section-label" style="margin-top:22px;">Derniers transferts — ' + escapeHtml(teamLabel(currentTeam)) + '</div>' +
     lies.map(t => {
       const sortant = t.de.equipe === currentTeam;
@@ -7191,13 +7202,23 @@ function openRenameItemModal(cat, i){
   };
   setTimeout(() => { const el = document.getElementById('renItemName'); if(el) el.select(); }, 50);
 }
+// Titre au-dessus de chaque champ du modal : ce qui identifie l'emplacement sans
+// dépendre de son nom (avant : « Équipe N » selon le rang, faux dès Réno 1).
+function libelleEmplacement(t){
+  const inf = teamInfo[t.id] || {};
+  const bits = [];
+  const p = String(inf.projet || '').trim(), c = String(inf.contremaitre || '').trim();
+  if(p) bits.push('Projet ' + p);
+  if(c) bits.push(c);
+  return bits.length ? bits.join(' · ') : (t.label || t.id);
+}
 function openEditTeamsModal(){
   const box = document.getElementById('modalBox');
   box.innerHTML = `
     <h3>Noms des emplacements</h3>
     ${teams.map((t, idx) => `
       <div class="field">
-        <label>${escapeHtml(t.id === 'entrepot' ? 'Entrepôt' : 'Équipe ' + (idx+1))}</label>
+        <label>${escapeHtml(libelleEmplacement(t))}</label>
         <input type="text" data-team-idx="${idx}" value="${escapeAttr(t.label)}">
       </div>
     `).join('')}
@@ -7467,8 +7488,9 @@ async function exporterExcel(){
     const COLS = ['Catégorie','Article','Qté prévue','Qté réelle','Bon','Moyen','Mauvais','Total évalué',
                   'État (Bon/Retirer)',
                   'Identification','Type','Localisation','Vérif','Huile','Tune-up','État lame','Pression','Commentaire',
-                  'Départ', 'Modifié par'];
-    const WIDTHS = [14,32,10,10,6,7,8,11,18,14,16,16,10,10,10,14,9,34,9,24];
+                  'Départ', 'Modifié par',
+                  'Transport vers :', 'Arrivé de :'];
+    const WIDTHS = [14,32,10,10,6,7,8,11,18,14,16,16,10,10,10,14,9,34,9,24,26,26];
     // Feuilles par équipe : on ne garde que ces colonnes (demande de Jay, 21 oct. 2026).
     // Retirées : C Qté prévue, E Bon, F Moyen, G Mauvais, I État (Bon/Retirer),
     // K Type, L Localisation, M Vérif, N Huile, P État lame, Q Pression.
@@ -7480,8 +7502,12 @@ async function exporterExcel(){
     // chiffre répété deux fois dans la feuille finirait additionné deux fois.
     // C'est une demande, pas un compte : la colonne n'entre dans aucun total.
     // « Modifié par » (26 oct. 2026) : qui a touché l'article en dernier, tout à droite.
-    const GARDER_EQ = [0,1,18,3,7,9,14,17,19];
-    const GAUCHE_EQ = [0,1,8,9,10,11,15,17,19];
+    // « Transport vers : » / « Arrivé de : » (17 nov. 2026) : les envois faits par
+    // l'onglet 🚚 Transport (inv:transferts), juste avant « Modifié par ». Ajoutées
+    // à la FIN de COLS (20, 21) pour ne décaler aucun index existant.
+    const GARDER_EQ = [0,1,18,3,7,9,14,17,20,21,19];
+    const GAUCHE_EQ = [0,1,8,9,10,11,15,17,19,20,21];
+    const MULTILIGNE_EQ = [20,21];   // un transfert par ligne dans la case
     const COLS_EQ   = GARDER_EQ.map(i => COLS[i]);
     const WIDTHS_EQ = GARDER_EQ.map(i => WIDTHS[i]);
     const garderEq  = row => GARDER_EQ.map(i => row[i]);
@@ -7718,6 +7744,26 @@ async function exporterExcel(){
       if(nbArticles > 0) auMoinsUne = true;
     })();
 
+    // === Transferts (onglet 🚚 Transport) par équipe + onglet + clé d'article ===
+    // Lecture seule de inv:transferts (1000 derniers). Si la lecture échoue,
+    // l'export sort quand même, colonnes vides. Plus récent en premier.
+    const transfertsPar = new Map();   // `${equipe}|${cat}|${cle}` -> { vers:[], de:[] }
+    try{
+      const _tv = await chargerTransferts();
+      // Même règle que l'onglet Transport : « #2027 », pas « #2027 · 2027 ».
+      const _tag = (p, label, eq) => tagChantier(p, label, eq) || '?';
+      const _case = k => { let o = transfertsPar.get(k); if(!o){ o = { vers:[], de:[] }; transfertsPar.set(k, o); } return o; };
+      (Array.isArray(_tv) ? _tv : []).slice().reverse().forEach(tr => {
+        if(!tr || !tr.de || !tr.vers || !Array.isArray(tr.articles)) return;
+        tr.articles.forEach(a => {
+          if(!a || !a.cat || a.cle == null) return;
+          const q = fmtQte(nombre(a.q));
+          _case(tr.de.equipe + '|' + a.cat + '|' + a.cle).vers.push(_tag(tr.vers.projet, tr.vers.label, tr.vers.equipe) + ' : ' + q);
+          _case(tr.vers.equipe + '|' + a.cat + '|' + a.cle).de.push(_tag(tr.de.projet, tr.de.label, tr.de.equipe) + ' : ' + q);
+        });
+      });
+    }catch(e){ console.warn('colonnes Transport', e); }
+
     teams.forEach(t => {
       // Rassembler les lignes réellement saisies de cette équipe
       const aoa = [COLS_EQ.slice()];     // 1re ligne = en-têtes
@@ -7736,7 +7782,10 @@ async function exporterExcel(){
           // dans l'inventaire (Qté réelle plus grande que 0). Le reste encombrait
           // chaque feuille de 400 lignes vides.
           const qDepart = (cat === CAT_LISTE && s._liste && s._liste.q > 0) ? s._liste.q : 0;
-          if(!(qDepart > 0 || (!it.noQty && nombre(s.qteReel) > 0))) return;
+          // Un article parti au complet par le Transport (rendu à 0) garde sa ligne :
+          // sinon « Transport vers : » ne paraîtrait jamais (17 nov. 2026).
+          const trA = transfertsPar.get(t.id + '|' + cat + '|' + cleArticleAt(cat, i));
+          if(!(qDepart > 0 || (!it.noQty && nombre(s.qteReel) > 0) || trA)) return;
           const est = etatSummary(s, cat);
           const qp = it.noQty ? null : toNum(s.qte), qr = it.noQty ? null : toNum(s.qteReel);
           const mauvais = ETAT_ACTIF ? (toNum(s.etatMauvais) || 0) : 0, moyen = ETAT_ACTIF ? (toNum(s.etatMoyen) || 0) : 0;
@@ -7759,7 +7808,8 @@ async function exporterExcel(){
               s.ident || '', (Array.isArray(s.opts) ? s.opts.join(' + ') : ''), (it.ext ? (extAssignLabel(it) || 'en stock') : (s.localisation || '')),
               effVerif(s, it) || '', effHuile(s, it) || '', effTuneup(s, it) || '', s.lame || '', s.pression || '', s.comment || '',
               qDepart > 0 ? qDepart : '',
-              s._by || ''
+              s._by || '',
+              trA ? trA.vers.join('\n') : '', trA ? trA.de.join('\n') : ''
             ], couleur
           });
         });
@@ -7798,7 +7848,7 @@ async function exporterExcel(){
           ws[addr].s = {
             fill:{ patternType:'solid', fgColor:{rgb:fill} },
             font:{ name:'Arial', sz: m.header?11:10, bold:bold, color:{rgb:fontColor} },
-            alignment:{ vertical:'center', horizontal:(GAUCHE_EQ.indexOf(GARDER_EQ[c]) !== -1)?'left':'center', wrapText:m.header },
+            alignment:{ vertical:'center', horizontal:(GAUCHE_EQ.indexOf(GARDER_EQ[c]) !== -1)?'left':'center', wrapText:m.header || MULTILIGNE_EQ.indexOf(GARDER_EQ[c]) !== -1 },
             border:{
               top:{style:'thin',color:{rgb:'CCCCCC'}}, bottom:{style:'thin',color:{rgb:'CCCCCC'}},
               left:{style:'thin',color:{rgb:'CCCCCC'}}, right:{style:'thin',color:{rgb:'CCCCCC'}}
@@ -8351,7 +8401,7 @@ const EMBEDDED_CATALOG = [
   {ident:"GU03",nom:"Guillotine grosse",cat:"Divers",gas:false,vf:false}
 ];
 const CATS = ['Lift','Fraco','Mixeur','Scie','Divers'];
-const DEFAULT_TEAMS = [1,2,3,4,5,6].map(n => ({id:'team_'+n, label:'Équipe '+n})).concat([{id:'entrepot', label:'Entrepôt'}]);
+const DEFAULT_TEAMS = [{id:'team_1',label:'2027'},{id:'team_2',label:'1859'},{id:'team_3',label:'1956'},{id:'team_4',label:'2007'},{id:'team_5',label:'2081'},{id:'team_6',label:'Équipe 6'}].concat([{id:'entrepot', label:'Entrepôt'}]);   // libellés = Inventaire (17 nov. 2026)
 
 // ================== CONNEXION SUPABASE (partagée avec les autres apps) ==================
 const SUPABASE_URL = "https://toajegeqsqulnhdwkajm.supabase.co";
@@ -9741,7 +9791,7 @@ let _loadErr=false;        // vrai si une des lectures de démarrage a ÉCHOUÉ 
 let currentTab='machines';
 let curTeamSel=null;
 
-const STD_TEAMS=[{id:'team_1',label:'Équipe 1'},{id:'team_2',label:'Équipe 2'},{id:'team_3',label:'Équipe 3'},{id:'team_4',label:'Équipe 4'},{id:'team_5',label:'Équipe 5'},{id:'team_6',label:'Équipe 6'},{id:'reno_1',label:'Réno 1'},{id:'reno_2',label:'Réno 2'},{id:'entrepot',label:'Entrepôt'},{id:'administration',label:'Administration'}];
+const STD_TEAMS=[{id:'team_1',label:'2027'},{id:'team_2',label:'1859'},{id:'team_3',label:'1956'},{id:'team_4',label:'2007'},{id:'team_5',label:'2081'},{id:'team_6',label:'Équipe 6'},{id:'reno_1',label:'Kim'},{id:'reno_2',label:'Romain'},{id:'entrepot',label:'Entrepôt'},{id:'administration',label:'Administration'}];
 
 async function loadTeams(){
   try{ const r=await storage.get('inv:teams'); if(r&&r.value){ const p=JSON.parse(r.value); if(Array.isArray(p)&&p.length) teams=p; } }catch(e){}
@@ -10828,7 +10878,7 @@ async function setStatutFor(deviceId, nom, statut){
 
 async function loadTeams(){
   try{ const r=await storage.get('inv:teams'); if(r&&r.value){ const p=JSON.parse(r.value); if(Array.isArray(p)&&p.length) teams=p; } }catch(e){}
-  if(!teams.length) teams = [1,2,3,4,5,6].map(n=>({id:'team_'+n,label:'Équipe '+n}));
+  if(!teams.length) teams = [{id:'team_1',label:'2027'},{id:'team_2',label:'1859'},{id:'team_3',label:'1956'},{id:'team_4',label:'2007'},{id:'team_5',label:'2081'},{id:'team_6',label:'Équipe 6'}];
   // On garde uniquement les vraies équipes de chantier ; « Entrepôt » est un type de punch dédié.
   teams = teams.filter(t => t && t.id !== 'entrepot');
 }
@@ -11910,9 +11960,9 @@ const storage = {
 
 // ================== ÉQUIPES / RÔLES ==================
 const STD_TEAMS = [
-  {id:'team_1',label:'Équipe 1'},{id:'team_2',label:'Équipe 2'},{id:'team_3',label:'Équipe 3'},
-  {id:'team_4',label:'Équipe 4'},{id:'team_5',label:'Équipe 5'},{id:'team_6',label:'Équipe 6'},
-  {id:'reno_1',label:'Réno 1'},{id:'reno_2',label:'Réno 2'},
+  {id:'team_1',label:'2027'},{id:'team_2',label:'1859'},{id:'team_3',label:'1956'},
+  {id:'team_4',label:'2007'},{id:'team_5',label:'2081'},{id:'team_6',label:'Équipe 6'},
+  {id:'reno_1',label:'Kim'},{id:'reno_2',label:'Romain'},
   {id:'entrepot',label:'Entrepôt'},{id:'administration',label:'Administration'}
 ];
 const ROLES = [
@@ -14519,7 +14569,7 @@ let _chanGen = 0;
 
 async function loadTeams(){
   try{ const r=await storage.get('inv:teams', true); if(r&&r.value){ const p=JSON.parse(r.value); if(Array.isArray(p)&&p.length) teams=p; } }catch(e){}
-  if(!teams.length) teams = [1,2,3,4,5,6].map(n=>({id:'team_'+n,label:'Équipe '+n})).concat([{id:'entrepot',label:'Entrepôt'}]);
+  if(!teams.length) teams = [{id:'team_1',label:'2027'},{id:'team_2',label:'1859'},{id:'team_3',label:'1956'},{id:'team_4',label:'2007'},{id:'team_5',label:'2081'},{id:'team_6',label:'Équipe 6'}].concat([{id:'entrepot',label:'Entrepôt'}]);
 }
 async function loadChannels(){
   try{ const r=await storage.get('inv:chatChannels', true); if(r&&r.value){ const p=JSON.parse(r.value); if(Array.isArray(p)) customChannels=p; } }catch(e){ customChannels=[]; }
