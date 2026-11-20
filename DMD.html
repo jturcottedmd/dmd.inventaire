@@ -601,7 +601,7 @@ function moveTile(id, dir){
 // l'appareil affiche bien la dernière version ou une copie gardée par le cache
 // hors ligne. (Avant, on affichait la date du jour : une copie vieille de deux ans
 // affichait donc elle aussi la date du jour, et l'indicateur ne servait à rien.)
-const APP_VERSION = '2026-11-20a';
+const APP_VERSION = '2026-11-20b';
 
 // ================== RENDU ==================
 function render(){
@@ -2191,6 +2191,14 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 .tr-dest{ background:var(--asphalt-2); border:2px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:6px; cursor:pointer; }
 .tr-dest:active{ border-color:var(--safety-yellow); }
 .tr-dest-t{ font-weight:700; font-size:15px; }
+/* Achat d'un article neuf (20 nov. 2026) */
+.achat-case{ display:flex; align-items:center; gap:10px; min-height:44px; padding:6px 12px; margin-bottom:10px; border:2px solid var(--safety-yellow); border-radius:8px; color:var(--safety-yellow); font-weight:700; font-size:16px; cursor:pointer; }
+.achat-case input{ width:22px; height:22px; accent-color:var(--safety-yellow); }
+.achat-choisi{ margin-top:6px; font-size:13.5px; color:var(--paper-dim); }
+.achat-choisi:empty{ display:none; }
+.achat-champs .ti-row{ display:flex; gap:10px; }
+.achat-champs .ti-field{ flex:1; min-width:0; }
+.achat-champs input[type="date"]{ width:100%; min-height:44px; padding:10px 12px; font-size:15px; border-radius:6px; border:1.5px solid var(--line); background:var(--asphalt); color:var(--paper); color-scheme:dark; font-family:'Barlow',sans-serif; }
 /* Chantiers archivés (20 nov. 2026) */
 .team-chip.archived{ border-style:dashed; }
 .team-chip.archives{ border-color:var(--paper-dim); color:var(--paper-dim); }
@@ -4931,6 +4939,16 @@ function nonLusTransport(teamId){
   return catsTransport().filter(c => lectureRatee('inv:' + teamId + ':' + c));
 }
 
+// « Modifié par » dans l'Excel : le nom seul. _by vaut « Nom · (tél) · courriel » ;
+// on garde ce qui est avant le premier « · » (20 nov. 2026). Rien n'est changé en base.
+function nomSeul(v){ return String(v == null ? '' : v).split('·')[0].trim(); }
+// Montant au format québécois pour l'Excel : 1 234,50 $
+function fmtArgentXls(n){
+  const x = Number(n);
+  if(!isFinite(x)) return '';
+  const [ent, dec] = Math.abs(x).toFixed(2).split('.');
+  return (x < 0 ? '-' : '') + ent.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ',' + dec + ' $';
+}
 // « #2027 · Équipe 1 » ; mais si l'équipe porte déjà son n° de projet comme nom,
 // juste « #2027 » (pas « #2027 · 2027 »).
 function tagChantier(projet, label, equipe){
@@ -7232,18 +7250,183 @@ function sectionsFor(cat){
   return itemsFor(cat).filter(it => it && it.header).map(it => (it.name || '').replace(/\n/g,' ').trim()).filter(Boolean);
 }
 
+/* ---- Achat d'un article neuf (20 nov. 2026) ----
+   Case « Article neuf ? » du formulaire d'ajout. Inscrit l'achat dans inv:achats
+   (format fixé par le BOSS) et ajoute la quantité à la Qté réelle du chantier.
+   Règle 1 : on relit la case du chantier ET inv:achats du serveur avant d'écrire ;
+   si une lecture échoue, rien n'est écrit. inv:achats n'est jamais tronqué.
+   Format d'une entrée :
+   { id, le:"<ISO saisie>", date:"AAAA-MM-JJ", prix:<nombre, à l'unité>, qte:<nombre>,
+     equipe:"<id>", cat:"<onglet>", cle:"<cleArticleAt>", nom:"<nom affiché>",
+     remisA:"<nom>", par:"<deviceUserLabel()>" } */
+const ACHATS_KEY = 'inv:achats';
+function dateLocaleAujourdhui(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function nombreSaisi(v){
+  const t = String(v == null ? '' : v).replace(/\s|\$/g, '').replace(',', '.');
+  if(!/^\d*\.?\d+$/.test(t)) return NaN;
+  return parseFloat(t);
+}
+function achatNeufPermisIci(){
+  return !!currentTeam && currentTeam !== 'TOTAL' && currentCat !== CAT_LISTE &&
+         !estTransport(currentCat) && !estArchive(currentTeam);
+}
+// Relit inv:achats : tableau (vide si la clé n'existe pas encore), ou null si la
+// lecture a échoué ou si le contenu n'est pas un tableau (on ne l'écrase jamais).
+async function lireAchats(){
+  let r;
+  try{ r = await window.storage.get(ACHATS_KEY, true); }catch(e){ return null; }
+  if(!r || r.value == null) return [];
+  try{ const v = JSON.parse(r.value); return Array.isArray(v) ? v : null; }catch(e){ return null; }
+}
+async function ajouterAchat(entree){
+  const v = await lireAchats();        // relu JUSTE avant d'écrire
+  if(!v) return false;
+  v.push(entree);                      // à la fin, jamais tronqué
+  try{ await window.storage.set(ACHATS_KEY, JSON.stringify(v), true); return true; }
+  catch(e){ console.warn('ajouterAchat', e); return false; }
+}
+// Même création qu'avant (à la FIN de inv:extra:<onglet>, règle 5).
+async function creerArticleExtra(name, section, ident, comment){
+  if(!extraItems[currentCat]) extraItems[currentCat] = [];
+  extraItems[currentCat].push({name, header:false, ident, comment, custom:true, section});
+  if(!(await saveExtraItems(currentCat))){
+    extraItems[currentCat].pop();
+    invaliderCles(currentCat);
+    return false;
+  }
+  await ajouterEtatToutesEquipes(currentCat, {ident, comment});
+  return true;
+}
+function normNomAchat(t){ return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+async function inscrireAchatNeuf(bt, idxChoisi){
+  const champ = id => document.getElementById(id);
+  const name = champ('newItemName').value.trim();
+  const qte = nombreSaisi(champ('achatQte').value);
+  const prix = nombreSaisi(champ('achatPrix').value);
+  const date = champ('achatDate').value;
+  const remisA = champ('achatRemisA').value.trim();
+  if(!(qte > 0)){ alert('Inscris la quantité achetée.'); champ('achatQte').focus(); return; }
+  if(!(prix >= 0) || champ('achatPrix').value.trim() === ''){ alert('Inscris le prix payé, à l\'unité (ex : 149,99).'); champ('achatPrix').focus(); return; }
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ alert('Inscris la date d\'achat.'); champ('achatDate').focus(); return; }
+  if(!remisA){ alert('Inscris à qui l\'article a été remis.'); champ('achatRemisA').focus(); return; }
+  if(!achatNeufPermisIci()){ alert('Un achat ne s\'inscrit pas ici (DÉPART, Total ou chantier archivé).'); return; }
+  // Qui : sur son propre chantier ; l'admin, sur n'importe quel chantier non archivé.
+  if(!isAdmin && !confirmForeignEdit(-1)) return;
+
+  // Un nom tapé qui est exactement celui d'un article de l'onglet = cet article (pas de doublon).
+  let idx = idxChoisi;
+  if(idx === null){
+    const n = normNomAchat(name);
+    const items = itemsFor(currentCat);
+    for(let i = 0; i < items.length; i++){
+      if(items[i].header || isItemHiddenAt(currentCat, i)) continue;
+      if(normNomAchat(nomAffiche(currentCat, i)) === n || normNomAchat(itemNameKey(items[i])) === n){ idx = i; break; }
+    }
+  }
+  if(idx !== null){
+    const it = itemsFor(currentCat)[idx];
+    if(!it || it.header){ alert('Article introuvable. Rien n\'a été écrit.'); return; }
+    if(it.noQty){ alert('Cet article ne se compte pas en quantité : l\'achat ne peut pas s\'y inscrire.'); return; }
+  }
+
+  const libelle = bt.textContent;
+  bt.disabled = true; bt.textContent = 'Inscription…';
+  const RIEN = 'La réception n\'a pas permis de relire l\'inventaire ou la liste des achats.\n\nRien n\'a été écrit — réessaie dans un instant.';
+  try{
+    const equipe = currentTeam, cat = currentCat;
+    // 1) Les deux lectures passent AVANT toute écriture (règle 1).
+    if((await lireAchats()) === null){ alert(RIEN); return; }
+    let frais = await relireFrais(equipe, cat);
+    if(!frais){ alert(RIEN); return; }
+    // 2) Nom inconnu : on crée l'article comme avant, puis on relit la case.
+    let cree = false;
+    if(idx === null){
+      const secEl = champ('newItemSection');
+      if(!(await creerArticleExtra(name, secEl ? secEl.value : '', champ('newItemIdent').value.trim(), champ('newItemComment').value.trim()))) return;
+      cree = true;
+      idx = itemsFor(cat).length - 1;
+      frais = await relireFrais(equipe, cat);
+      if(!frais || !frais[idx]){ alert('L\'article « ' + name + ' » est créé, mais la réception a coupé : l\'achat n\'est PAS inscrit et la quantité n\'a pas bougé.\n\nRefais « Article neuf ? » sur cet article.'); return; }
+    }
+    const s = frais[idx];
+    if(!s){ alert(RIEN); return; }
+    const par = deviceUserLabel();
+    const entree = {
+      id: 'ach_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      le: new Date().toISOString(), date, prix, qte,
+      equipe, cat, cle: cleArticleAt(cat, idx), nom: nomAffiche(cat, idx),
+      remisA, par
+    };
+    // 3) L'achat d'abord (relu juste avant) : s'il ne passe pas, la quantité ne bouge pas.
+    if(!(await ajouterAchat(entree))){
+      alert((cree ? 'L\'article « ' + name + ' » est créé, mais l\'achat' : 'L\'achat') +
+            ' n\'a pas pu être inscrit (réception). La quantité n\'a pas bougé — réessaie dans un instant.');
+      return;
+    }
+    // 4) La quantité du chantier, sur la case relue.
+    s.qteReel = fmtQte(nombre(s.qteReel) + qte);
+    s._by = par; s._at = Date.now();
+    markDirtyIdx(equipe, cat, idx);
+    scheduleSaveTeamCat(equipe, cat);
+    oublierRedCache(equipe);
+
+    closeModal();
+    openIndex = idx;
+    const champRech = document.getElementById('search');
+    if(champRech && champRech.value){ champRech.value = ''; renderSuggestions(); }
+    const it = itemsFor(cat)[idx];
+    if(it && it.section && isSectionCollapsed(cat, it.section)) toggleSection(cat, it.section);
+    articleNeuf = idx;
+    renderTabs();
+    renderList();
+  } finally { bt.disabled = false; bt.textContent = libelle; }
+}
+
 function openAddItemModal(){
   const box = document.getElementById('modalBox');
   const sections = sectionsFor(currentCat);
   // Sous-section proposée par défaut : celle qu'on est en train de regarder,
   // c'est-à-dire la première qui n'est pas repliée.
   const ouverte = sections.find(s => !isSectionCollapsed(currentCat, s)) || sections[0] || '';
+  // « Article neuf ? » (20 nov. 2026) : seulement dans un onglet d'équipe ouvert
+  // en écriture — pas DÉPART, pas la vue Total, pas un chantier archivé.
+  const achatPossible = achatNeufPermisIci();
+  const infoCh = teamInfo[currentTeam] || {};
   box.innerHTML = `
     <h3>Nouvel article — ${escapeHtml(catLabel(currentCat))}</h3>
+    ${achatPossible ? `
+    <label class="achat-case"><input type="checkbox" id="achatNeuf"> <span>Article neuf ?</span></label>` : ''}
     <div class="field">
       <label>Nom de l'article</label>
-      <input type="text" id="newItemName" placeholder="ex: Perceuse à colonne">
+      <input type="text" id="newItemName" placeholder="ex: Perceuse à colonne" autocomplete="off">
+      <div class="suggestions" id="newItemSugg"></div>
+      <div class="achat-choisi" id="achatChoisi"></div>
     </div>
+    ${achatPossible ? `
+    <div id="achatChamps" class="achat-champs" style="display:none;">
+      <div class="ti-row">
+        <div class="field ti-field">
+          <label>Quantité *</label>
+          <input type="text" inputmode="decimal" id="achatQte" placeholder="ex: 2">
+        </div>
+        <div class="field ti-field">
+          <label>Prix payé ($, à l'unité) *</label>
+          <input type="text" inputmode="decimal" id="achatPrix" placeholder="ex: 149,99">
+        </div>
+      </div>
+      <div class="field">
+        <label>Date d'achat *</label>
+        <input type="date" id="achatDate" value="${escapeAttr(dateLocaleAujourdhui())}">
+      </div>
+      <div class="field">
+        <label>Remis à (contremaître) *</label>
+        <input type="text" id="achatRemisA" value="${escapeAttr(String(infoCh.contremaitre || '').trim())}" placeholder="Nom de la personne">
+      </div>
+    </div>` : ''}
+    <div id="creerChamps">
     ${sections.length ? `
     <div class="field">
       <label>Sous-section</label>
@@ -7259,6 +7442,7 @@ function openAddItemModal(){
       <label>Commentaire (optionnel)</label>
       <input type="text" id="newItemComment" placeholder="Note libre...">
     </div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-cancel" id="cancelItem">Annuler</button>
       <button class="btn btn-confirm" id="confirmItem">Ajouter</button>
@@ -7266,6 +7450,44 @@ function openAddItemModal(){
   `;
   document.getElementById('overlay').classList.add('show');
   document.getElementById('cancelItem').onclick = closeModal;
+  // Article choisi dans les suggestions (index dans l'onglet), ou null = nouvel article.
+  let achatIdx = null;
+  const caseAchat = document.getElementById('achatNeuf');
+  const enAchat = () => !!(caseAchat && caseAchat.checked);
+  const majAchat = () => {
+    const ch = document.getElementById('achatChamps');
+    if(ch) ch.style.display = enAchat() ? '' : 'none';
+    // Article existant : rien à créer, donc pas de sous-section / identification / commentaire.
+    document.getElementById('creerChamps').style.display = (enAchat() && achatIdx !== null) ? 'none' : '';
+    const choisi = document.getElementById('achatChoisi');
+    choisi.innerHTML = (enAchat() && achatIdx !== null)
+      ? '✓ Article de la liste : <b>' + escapeHtml(nomAffiche(currentCat, achatIdx)) + '</b> — la quantité s\'ajoutera à ce chantier.'
+      : '';
+    document.getElementById('confirmItem').textContent = enAchat() ? 'Inscrire l\'achat' : 'Ajouter';
+    dessinerSuggAchat();
+  };
+  // Suggestions comme la barre de recherche (même moteur), limitées à CET onglet.
+  const dessinerSuggAchat = () => {
+    const boite = document.getElementById('newItemSugg');
+    const q = document.getElementById('newItemName').value.trim();
+    if(!enAchat() || !q || achatIdx !== null){ boite.classList.remove('show'); boite.innerHTML = ''; return; }
+    const res = buildSuggestions(q).filter(r => r.cat === currentCat).slice(0, 30);
+    boite.innerHTML = res.map(r =>
+      `<div class="suggestion" data-idx="${r.idx}"><span class="suggestion-name">${highlightMatch(r.name, q)}</span></div>`
+    ).join('') + `<div class="suggestion-empty">${res.length ? 'Pas dans la liste ? ' : ''}Nouvel article : « ${escapeHtml(q)} »</div>`;
+    boite.classList.add('show');
+    boite.querySelectorAll('.suggestion').forEach(el => el.addEventListener('click', () => {
+      achatIdx = parseInt(el.dataset.idx, 10);
+      document.getElementById('newItemName').value = nomAffiche(currentCat, achatIdx);
+      majAchat();
+    }));
+  };
+  if(caseAchat) caseAchat.addEventListener('change', majAchat);
+  document.getElementById('newItemName').addEventListener('input', () => {
+    if(!enAchat()) return;
+    achatIdx = null;
+    majAchat();
+  });
   // Verrouillé pendant l'enregistrement : un double-tap ajoutait deux fois le même
   // article — exactement le genre de doublon que cette fenêtre sert à éviter.
   document.getElementById('confirmItem').onclick = async (ev) => {
@@ -7274,6 +7496,7 @@ function openAddItemModal(){
     const nameInput = document.getElementById('newItemName');
     const name = nameInput.value.trim();
     if(!name) { nameInput.focus(); return; }
+    if(enAchat()){ await inscrireAchatNeuf(bt, achatIdx); return; }
     const ident = document.getElementById('newItemIdent').value.trim();
     const comment = document.getElementById('newItemComment').value.trim();
     const secEl = document.getElementById('newItemSection');
@@ -7748,7 +7971,7 @@ async function exporterExcel(){
         sAoa.push(['Aucune modification depuis le dernier export.', '', '', '', '', '']); sMeta.push({note:true});
       }else{
         changes.forEach(c => {
-          sAoa.push([c.team, c.cat, c.article, c.champ, c.avant + '  →  ' + c.apres, c.par || '(non identifié)']);
+          sAoa.push([c.team, c.cat, c.article, c.champ, c.avant + '  →  ' + c.apres, nomSeul(c.par) || '(non identifié)']);
           sMeta.push({row:true, level: c.level || null});
         });
       }
@@ -7950,22 +8173,27 @@ async function exporterExcel(){
 
     // === Transferts (onglet 🚚 Transport) par équipe + onglet + clé d'article ===
     // Lecture seule de inv:transferts (1000 derniers). Si la lecture échoue,
-    // l'export sort quand même, colonnes vides. Plus récent en premier.
-    const transfertsPar = new Map();   // `${equipe}|${cat}|${cle}` -> { vers:[], de:[] }
+    // l'export sort quand même, colonnes vides.
+    // Depuis le 20 nov. 2026 : seulement le DERNIER transfert de l'article, et
+    // seulement le chantier (n° de projet enregistré + nom ACTUEL de l'équipe),
+    // sans quantité. L'historique complet reste dans la feuille « Transferts ».
+    const transfertsPar = new Map();   // `${equipe}|${cat}|${cle}` -> { vers:'', de:'' }
     try{
       const _tv = await chargerTransferts();
-      // Même règle que l'onglet Transport : « #2027 », pas « #2027 · 2027 ».
-      const _tag = (p, label, eq) => tagChantier(p, label, eq) || '?';
-      const _case = k => { let o = transfertsPar.get(k); if(!o){ o = { vers:[], de:[] }; transfertsPar.set(k, o); } return o; };
-      (Array.isArray(_tv) ? _tv : []).slice().reverse().forEach(tr => {
-        if(!tr || !tr.de || !tr.vers || !Array.isArray(tr.articles)) return;
-        tr.articles.forEach(a => {
-          if(!a || !a.cat || a.cle == null) return;
-          const q = fmtQte(nombre(a.q));
-          _case(tr.de.equipe + '|' + a.cat + '|' + a.cle).vers.push(_tag(tr.vers.projet, tr.vers.label, tr.vers.equipe) + ' : ' + q);
-          _case(tr.vers.equipe + '|' + a.cat + '|' + a.cle).de.push(_tag(tr.de.projet, tr.de.label, tr.de.equipe) + ' : ' + q);
+      const _tag = x => tagChantier(x.projet, teamLabel(x.equipe), x.equipe) || '?';
+      const _case = k => { let o = transfertsPar.get(k); if(!o){ o = { vers:'', de:'' }; transfertsPar.set(k, o); } return o; };
+      const _ord = (Array.isArray(_tv) ? _tv : []).filter(tr => tr && tr.de && tr.vers && Array.isArray(tr.articles));
+      // Du plus vieux au plus récent : le dernier écrit gagne. L'historique est déjà
+      // dans l'ordre d'envoi ; le tri (stable) sur la date n'est qu'un filet.
+      _ord.map((tr, n) => ({ tr, n }))
+        .sort((a, b) => ((Number(a.tr.at) || 0) - (Number(b.tr.at) || 0)) || (a.n - b.n))
+        .forEach(({ tr }) => {
+          tr.articles.forEach(a => {
+            if(!a || !a.cat || a.cle == null) return;
+            _case(tr.de.equipe + '|' + a.cat + '|' + a.cle).vers = _tag(tr.vers);
+            _case(tr.vers.equipe + '|' + a.cat + '|' + a.cle).de = _tag(tr.de);
+          });
         });
-      });
     }catch(e){ console.warn('colonnes Transport', e); }
 
     teams.forEach(t => {
@@ -8012,8 +8240,8 @@ async function exporterExcel(){
               s.ident || '', (Array.isArray(s.opts) ? s.opts.join(' + ') : ''), (it.ext ? (extAssignLabel(it) || 'en stock') : (s.localisation || '')),
               effVerif(s, it) || '', effHuile(s, it) || '', effTuneup(s, it) || '', s.lame || '', s.pression || '', s.comment || '',
               qDepart > 0 ? qDepart : '',
-              s._by || '',
-              trA ? trA.vers.join('\n') : '', trA ? trA.de.join('\n') : ''
+              nomSeul(s._by),
+              trA ? trA.vers : '', trA ? trA.de : ''
             ], couleur
           });
         });
@@ -8073,6 +8301,113 @@ async function exporterExcel(){
       const _wsT = await feuilleTransferts();
       if(_wsT){ XLSX.utils.book_append_sheet(wb, _wsT, 'Transferts'); }
     }catch(e){ console.warn('feuille Transferts', e); }
+
+    // === Feuille « Inventaire total » (20 nov. 2026), placée EN PREMIER ===
+    // Ce qui est compté (Qté réelle > 0) dans toute la compagnie : toutes les
+    // équipes de inv:teams, archivées comprises (comme leurs feuilles), Entrepôt et
+    // Trailer compris. Pas DÉPART (c'est du prévu). Une ligne par article
+    // (onglet + clé). Les achats viennent de inv:achats, jumelés par cat + cle.
+    try{
+      // Achats : lecture seule. Lecture ratée ou clé vide → colonnes vides.
+      const achatsPar = new Map();   // `${cat}|${cle}` -> [achat…]
+      try{
+        const ra = await window.storage.get('inv:achats', true);
+        const va = ra && ra.value ? JSON.parse(ra.value) : [];
+        (Array.isArray(va) ? va : []).forEach(a => {
+          if(!a || !a.cat || a.cle == null) return;
+          const k = a.cat + '|' + a.cle;
+          if(!achatsPar.has(k)) achatsPar.set(k, []);
+          achatsPar.get(k).push(a);
+        });
+        // Plus récent en premier : date d'achat, puis moment de la saisie.
+        achatsPar.forEach(l => l.sort((x, y) =>
+          String(y.date || '').localeCompare(String(x.date || '')) || String(y.le || '').localeCompare(String(x.le || ''))));
+      }catch(e){ console.warn('inv:achats illisible', e); achatsPar.clear(); }
+
+      const COLS_TOT = ['Catégorie', 'Article', 'Identification', 'Qté totale', 'Répartition', 'Date d\'achat', 'Prix payé', 'Remis à'];
+      const WIDTHS_TOT = [16, 32, 18, 10, 40, 13, 16, 22];
+      const GAUCHE_TOT = [0, 1, 2, 4, 5, 6, 7];
+      // Ordre de la barre (n° croissants, noms, Entrepôt, Administration), archivés compris.
+      const equipesTot = teams.filter(t => t && t.id).slice().sort(ordreEquipes);
+      const lignesTot = [];
+      const vus = new Set();
+      // Un achat par ligne dans la case, plus récent en premier.
+      const achatCols = liste => (liste && liste.length) ? [
+        liste.map(a => a.date || '').join('\n'),
+        liste.map(a => {
+          const px = (a.prix === '' || a.prix == null) ? '' : fmtArgentXls(a.prix);
+          const q = nombre(a.qte);
+          return px + (q > 0 ? (px ? ' × ' : '× ') + fmtQte(q) : '');
+        }).join('\n'),
+        liste.map(a => a.remisA || '').join('\n')
+      ] : ['', '', ''];
+      allCatKeys().forEach(cat => {
+        if(cat === CAT_LISTE) return;            // DÉPART = du prévu, pas du compté
+        const items = itemsFor(cat);
+        const catNom = catLabel(cat).toUpperCase();
+        items.forEach((it, i) => {
+          if(it.header || it.noQty) return;
+          if(isItemHiddenAt(cat, i)) return;
+          const cle = cleArticleAt(cat, i);
+          let total = 0;
+          const repart = [], idents = [];
+          equipesTot.forEach(t => {
+            const st = (perTeamState[t.id] && perTeamState[t.id][cat]) || [];
+            const s = etatVu(t.id, cat, i, st[i] || {});
+            const q = nombre(s.qteReel);
+            if(!(q > 0)) return;
+            total += q;
+            repart.push(teamLabel(t.id) + ' : ' + fmtQte(q));
+            const id = String(s.ident || '').trim();
+            if(id && idents.indexOf(id) === -1) idents.push(id);
+          });
+          const achats = achatsPar.get(cat + '|' + cle);
+          // Compté quelque part, OU acheté (un achat à 0 garde sa ligne).
+          if(!(total > 0) && !(achats && achats.length)) return;
+          vus.add(cat + '|' + cle);
+          lignesTot.push([catNom, nomAffiche(cat, i), idents.join(' · '), Math.round(total * 100) / 100, repart.join(' · ')]
+            .concat(achatCols(achats)));
+        });
+      });
+      // Achats dont l'article n'est plus dans un onglet (corbeille, onglet retiré) :
+      // montrés quand même, avec le nom enregistré à l'achat.
+      achatsPar.forEach((liste, k) => {
+        if(vus.has(k)) return;
+        const a0 = liste[0];
+        if(a0.cat === CAT_LISTE) return;
+        lignesTot.push([catLabel(a0.cat).toUpperCase(), a0.nom || a0.cle, '', 0, ''].concat(achatCols(liste)));
+      });
+
+      if(lignesTot.length){
+        const aoaT = [COLS_TOT].concat(lignesTot);
+        const wsTot = XLSX.utils.aoa_to_sheet(aoaT);
+        wsTot['!cols'] = WIDTHS_TOT.map(w => ({wch:w}));
+        wsTot['!freeze'] = { xSplit:0, ySplit:1 };
+        wsTot['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:aoaT.length-1, c:COLS_TOT.length-1}}) };
+        for(let r = 0; r < aoaT.length; r++){
+          for(let c = 0; c < COLS_TOT.length; c++){
+            const addr = XLSX.utils.encode_cell({r, c});
+            if(!wsTot[addr]) wsTot[addr] = { t:'s', v:'' };
+            const h = r === 0;
+            wsTot[addr].s = {
+              fill:{ patternType:'solid', fgColor:{rgb: h ? '232221' : 'FFFFFF'} },
+              font:{ name:'Arial', sz: h ? 11 : 10, bold:h, color:{rgb: h ? 'FFFFFF' : '000000'} },
+              alignment:{ vertical:'center', horizontal: GAUCHE_TOT.indexOf(c) !== -1 ? 'left' : 'center', wrapText:true },
+              border:{
+                top:{style:'thin',color:{rgb:'CCCCCC'}}, bottom:{style:'thin',color:{rgb:'CCCCCC'}},
+                left:{style:'thin',color:{rgb:'CCCCCC'}}, right:{style:'thin',color:{rgb:'CCCCCC'}}
+              }
+            };
+          }
+        }
+        let nomTot = 'Inventaire total', n3 = 2;
+        while(wb.SheetNames.indexOf(nomTot) !== -1){ nomTot = 'Inventaire total (' + (n3++) + ')'; }
+        XLSX.utils.book_append_sheet(wb, wsTot, nomTot);
+        wb.SheetNames.splice(wb.SheetNames.indexOf(nomTot), 1);   // en premier dans le classeur
+        wb.SheetNames.unshift(nomTot);
+        auMoinsUne = true;
+      }
+    }catch(e){ console.warn('feuille Inventaire total', e); }
 
     if(!auMoinsUne && changes.length === 0 && hadBaseline){
       alert("Aucune donnée et aucune modification depuis le dernier export.");
