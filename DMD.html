@@ -601,7 +601,7 @@ function moveTile(id, dir){
 // l'appareil affiche bien la dernière version ou une copie gardée par le cache
 // hors ligne. (Avant, on affichait la date du jour : une copie vieille de deux ans
 // affichait donc elle aussi la date du jour, et l'indicateur ne servait à rien.)
-const APP_VERSION = '2026-11-17a';
+const APP_VERSION = '2026-11-20a';
 
 // ================== RENDU ==================
 function render(){
@@ -2191,6 +2191,17 @@ html,body{margin:0;padding:0;background:var(--asphalt);color:var(--paper);font-f
 .tr-dest{ background:var(--asphalt-2); border:2px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:6px; cursor:pointer; }
 .tr-dest:active{ border-color:var(--safety-yellow); }
 .tr-dest-t{ font-weight:700; font-size:15px; }
+/* Chantiers archivés (20 nov. 2026) */
+.team-chip.archived{ border-style:dashed; }
+.team-chip.archives{ border-color:var(--paper-dim); color:var(--paper-dim); }
+.arch-band{ background:var(--asphalt-2); border:2px dashed var(--paper-dim); border-radius:8px; padding:10px 12px; margin:8px 0; font-size:14px; line-height:1.4; }
+.arch-band .btn{ margin-top:8px; }
+.arch-l{ background:var(--asphalt-2); border:2px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+.arch-btns{ display:flex; gap:8px; margin-top:8px; }
+.arch-btns .btn{ flex:1; }
+.emp-ligne{ display:flex; gap:8px; align-items:center; }
+.emp-ligne input{ flex:1; min-width:0; }
+.emp-ligne .emp-arch{ flex:0 0 auto; width:auto; padding:8px 12px; min-height:44px; }
 .tr-route{ text-align:center; font-weight:700; background:var(--asphalt-2); border-radius:8px; padding:10px; margin-bottom:10px; }
 .tr-fleche{ color:var(--safety-yellow); }
 .tr-liste{ max-height:40vh; overflow-y:auto; padding-left:20px; margin:0 0 10px; font-size:14px; }
@@ -2546,7 +2557,7 @@ const BASE_CAT_KEYS = CAT_ORDER.filter(k => RAW_DATA[k])
 const DEFAULT_TEAMS = [
   {id:'team_1',label:'2027'},{id:'team_2',label:'1859'},{id:'team_3',label:'1956'},
   {id:'team_4',label:'2007'},{id:'team_5',label:'2081'},{id:'team_6',label:'Équipe 6'},
-  {id:'reno_1',label:'Kim'},{id:'reno_2',label:'Romain'},
+  {id:'reno_1',label:'Trailer 16pi'},{id:'reno_2',label:'Romain'},
   {id:'entrepot',label:'Entrepôt'},{id:'administration',label:'Administration'}
 ];
 const ETATS = ['bon','moyen','mauvais'];
@@ -3020,8 +3031,9 @@ function fmtQte(n){
    contremaître de l'équipe n'en a demandé, elle vaut 0.
    Les autres articles gardent leur Qté prévue ordinaire, modifiable.
 
-   L'Entrepôt et l'Administration ne sont pas des chantiers : rien ne change pour eux. */
-const EQUIPES_HORS_LISTE = ['entrepot', 'administration'];
+   L'Entrepôt, l'Administration et le Trailer 16pi (reno_1, 20 nov. 2026) ne sont pas
+   des chantiers : rien ne change pour eux. */
+const EQUIPES_HORS_LISTE = ['entrepot', 'administration', 'reno_1'];
 const CAT_LISTE = 'custom_chantier';
 let prevuListe = null;           // contenu de inv:prevu (null = jamais lu)
 
@@ -3424,16 +3436,152 @@ async function loadTeams(){
   // Fusionne les équipes de référence manquantes (Réno 1-2, Entrepôt, Administration…).
   // Même logique que loadTeams() de la tuile Infos équipe : les équipes de référence
   // d'abord, dans l'ordre, puis les équipes ajoutées à la main par un admin.
-  const byId = {}; teams.forEach(t => { if(t && t.id) byId[t.id] = t; });
+  const f = fusionnerEquipesReference(teams);
+  teams = f.liste;
+  if(f.changed){ try{ await saveTeams(); }catch(e){} }
+}
+function fusionnerEquipesReference(liste){
+  const src = Array.isArray(liste) ? liste : [];
+  const byId = {}; src.forEach(t => { if(t && t.id) byId[t.id] = t; });
   let changed = false;
-  DEFAULT_TEAMS.forEach(st => { if(!byId[st.id]){ byId[st.id] = st; changed = true; } });
-  teams = DEFAULT_TEAMS.map(st => byId[st.id])
-    .concat(teams.filter(t => t && t.id && !DEFAULT_TEAMS.some(s => s.id === t.id)))
-    .filter(Boolean);
-  if(changed){ try{ await saveTeams(); }catch(e){} }
+  DEFAULT_TEAMS.forEach(st => { if(!byId[st.id]){ byId[st.id] = Object.assign({}, st); changed = true; } });
+  return {
+    liste: DEFAULT_TEAMS.map(st => byId[st.id])
+      .concat(src.filter(t => t && t.id && !DEFAULT_TEAMS.some(s => s.id === t.id)))
+      .filter(Boolean),
+    changed
+  };
 }
 async function saveTeams(){
   try{ await window.storage.set('inv:teams', JSON.stringify(teams), true); }catch(e){}
+}
+
+/* ---- Ordre d'affichage + chantiers archivés (20 nov. 2026) ----
+   L'ordre de inv:teams ne change PAS en base : loadTeams() le reconstruit dans
+   l'ordre de DEFAULT_TEAMS. On trie seulement à l'affichage (barre d'équipes,
+   « Envoyer vers ») : les numéros en ordre croissant, puis les noms en ordre
+   alphabétique, puis Entrepôt et Administration.
+   Archiver = poser archive:true, archiveLe, archivePar sur l'objet de l'équipe
+   dans inv:teams (jamais le retirer du tableau). Un archivé est caché de la barre
+   et des destinations du Transport ; l'admin le rouvre en lecture seule par
+   « 🗄 Archives » et peut encore en faire PARTIR du matériel. L'Excel n'en tient
+   pas compte : un archivé y sort comme avant. */
+const FIN_DE_BARRE = ['entrepot', 'administration'];   // jamais archivés, toujours au bout
+function equipeDe(t){ return (t && typeof t === 'object') ? t : teams.find(x => x && x.id === t); }
+function estArchive(t){ const o = equipeDe(t); return !!(o && o.archive === true); }
+function ordreEquipes(a, b){
+  const grp = t => FIN_DE_BARRE.indexOf(t.id) !== -1 ? 2 : (/^\d+$/.test(String(t.label || '').trim()) ? 0 : 1);
+  const ga = grp(a), gb = grp(b);
+  if(ga !== gb) return ga - gb;
+  if(ga === 0) return parseInt(String(a.label).trim(), 10) - parseInt(String(b.label).trim(), 10);
+  if(ga === 2) return FIN_DE_BARRE.indexOf(a.id) - FIN_DE_BARRE.indexOf(b.id);
+  return String(a.label || a.id).localeCompare(String(b.label || b.id), 'fr', { sensitivity:'base', numeric:true });
+}
+function equipesVisibles(){ return teams.filter(t => t && t.id && !estArchive(t)).sort(ordreEquipes); }
+function equipesArchivees(){ return teams.filter(t => t && t.id && estArchive(t)).sort(ordreEquipes); }
+// Pour les listes de choix : les visibles, plus l'équipe déjà choisie si elle est archivée.
+function equipesPourChoix(dejaChoisie){
+  const v = equipesVisibles();
+  const o = dejaChoisie ? equipeDe(dejaChoisie) : null;
+  return (o && estArchive(o)) ? v.concat([o]) : v;
+}
+
+// Applique une modification à inv:teams À PARTIR DE LA COPIE SERVEUR relue juste
+// avant (règle 1). Si la lecture échoue ou si la liste en ligne est introuvable,
+// RIEN n'est écrit : loadTeams() retombe sur DEFAULT_TEAMS quand il ne peut pas
+// lire, et réécrire cette copie-là effacerait les archives et les noms.
+// `modif(srv)` change le tableau serveur sur place ; elle renvoie un message pour annuler.
+async function modifierEquipesServeur(modif){
+  let r;
+  try{ r = await window.storage.get('inv:teams', true); }
+  catch(e){ return { ok:false, msg:'La réception n\'a pas permis de relire la liste des équipes.\n\nRien n\'a été changé — réessaie dans un instant.' }; }
+  let srv = null;
+  try{ srv = (r && r.value) ? JSON.parse(r.value) : null; }catch(e){ srv = null; }
+  if(!Array.isArray(srv) || !srv.length) return { ok:false, msg:'La liste des équipes en ligne est introuvable.\n\nRien n\'a été changé.' };
+  const refus = modif(srv);
+  if(refus) return { ok:false, msg:refus };
+  try{ await window.storage.set('inv:teams', JSON.stringify(srv), true); }
+  catch(e){ return { ok:false, msg:'L\'enregistrement n\'est pas passé (réception).\n\nRien n\'a été changé — réessaie dans un instant.' }; }
+  teams = fusionnerEquipesReference(srv).liste;
+  return { ok:true };
+}
+async function archiverEquipe(id, archiver){
+  if(!isAdmin){ alert('Archiver un chantier est réservé à l\'administrateur.'); return false; }
+  if(archiver && FIN_DE_BARRE.indexOf(id) !== -1){ alert('L\'Entrepôt et l\'Administration ne s\'archivent pas.'); return false; }
+  const res = await modifierEquipesServeur(srv => {
+    const o = srv.find(t => t && t.id === id);
+    if(!o) return 'Cette équipe n\'est plus dans la liste en ligne.\n\nRien n\'a été changé.';
+    if(archiver){
+      o.archive = true;
+      o.archiveLe = new Date().toISOString();
+      o.archivePar = deviceUserLabel() || 'Administrateur';
+    } else {
+      delete o.archive; delete o.archiveLe; delete o.archivePar;
+    }
+    return null;
+  });
+  if(!res.ok){ alert(res.msg); return false; }
+  return true;
+}
+// Va sur une équipe (barre, Archives) : même chemin que le clic sur une pastille.
+async function allerAEquipe(id){
+  const ok = await switchToTeam(id);
+  if(!ok){ renderTeamBar(); return; }
+  currentTeam = id;
+  openIndex = null;
+  await loadTeamInfo(id);
+  await rafraichirCatalogue(currentCat);
+  await ensureTeamCatLoaded(currentTeam, currentCat);
+  renderTeamBar(); renderTabs(); renderList();
+}
+function premiereEquipeVisible(){ const v = equipesVisibles(); return (v[0] || teams[0]).id; }
+function fmtDateArchive(iso){ const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('fr-CA', { dateStyle:'medium' }); }
+function texteArchive(t){
+  const o = equipeDe(t) || {};
+  return 'Archivé' + (o.archiveLe ? ' le ' + fmtDateArchive(o.archiveLe) : '') + (o.archivePar ? ' par ' + o.archivePar : '');
+}
+
+function openArchivesModal(){
+  if(!isAdmin) return;
+  const arch = equipesArchivees();
+  const box = document.getElementById('modalBox');
+  box.innerHTML = '<h3>🗄 Archives</h3>' +
+    (arch.length
+      ? '<div class="verif-hint" style="margin-bottom:10px;">Chantiers terminés. On les ouvre en lecture pour revérifier ce qui reste dessus ; le matériel peut encore en partir par l\'onglet 🚚 Transport.</div>' +
+        arch.map(t => '<div class="arch-l" style="border-left:5px solid ' + teamColor(t.id) + '">' +
+          '<div class="tr-dest-t">' + escapeHtml(chantierLabel(t.id)) + '</div>' +
+          '<div class="tr-sub">' + escapeHtml(texteArchive(t)) + '</div>' +
+          '<div class="arch-btns"><button class="btn btn-confirm" data-arch-ouvrir="' + escapeAttr(t.id) + '">Ouvrir</button>' +
+          '<button class="btn btn-cancel" data-arch-desarch="' + escapeAttr(t.id) + '">Désarchiver</button></div></div>').join('')
+      : '<div class="empty-msg">Aucun chantier archivé.</div>') +
+    '<div class="modal-actions"><button class="btn btn-cancel" id="archFermer">Fermer</button></div>';
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('archFermer').onclick = closeModal;
+  box.querySelectorAll('[data-arch-ouvrir]').forEach(b => b.onclick = async () => {
+    closeModal();
+    await allerAEquipe(b.getAttribute('data-arch-ouvrir'));
+  });
+  box.querySelectorAll('[data-arch-desarch]').forEach(b => b.onclick = async () => {
+    const id = b.getAttribute('data-arch-desarch');
+    if(!confirm('Désarchiver « ' + teamLabel(id) + ' » ?\n\nIl revient dans la barre d\'équipes et dans « Envoyer vers ».')) return;
+    b.disabled = true;
+    if(await archiverEquipe(id, false)){ renderTeamBar(); renderList(); }
+    openArchivesModal();
+  });
+}
+async function confirmerArchivage(id){
+  if(!confirm('Archiver « ' + teamLabel(id) + ' » ?\n\n' +
+    'Le chantier disparaît de la barre d\'équipes et de « Envoyer vers ». Rien n\'est effacé :\n' +
+    'son inventaire reste dans l\'Excel, et l\'admin le rouvre par « 🗄 Archives ».')) return false;
+  if(!(await archiverEquipe(id, true))) return false;
+  if(currentTeam === id){
+    currentTeam = premiereEquipeVisible();
+    openIndex = null;
+    await loadTeamInfo(currentTeam);
+    await ensureTeamCatLoaded(currentTeam, currentCat);
+  }
+  renderTeamBar(); renderTabs(); renderList();
+  return true;
 }
 
 /* ---- Infos par équipe (n° projet, adresse, contremaître) ---- */
@@ -3472,6 +3620,9 @@ function renderTeamInfo(){
     <div class="team-band" style="background:${teamColor(currentTeam)}">
       <span class="tb-dot"></span> ${escapeHtml(teamLabel(currentTeam))}
     </div>
+    ${estArchive(currentTeam) ? `<div class="arch-band">🗄 <b>Chantier archivé</b> — ${escapeHtml(texteArchive(currentTeam).replace(/^Archivé ?/, ''))}<br>
+      Lecture seule. Le matériel qui reste peut partir par l'onglet 🚚 Transport.
+      ${isAdmin ? '<button class="btn btn-cancel" id="archDesarchBand">Désarchiver</button>' : ''}</div>` : ''}
     <div class="team-info-title">Infos du chantier — ${escapeHtml(teamLabel(currentTeam))}</div>
     <div class="ti-row">
       <div class="ti-field">
@@ -3492,6 +3643,13 @@ function renderTeamInfo(){
     <div class="ti-note">🔒 Ces infos se modifient dans la tuile <b>Infos équipe</b>.</div>
   `;
   box.classList.add('show');
+  const _db = document.getElementById('archDesarchBand');
+  if(_db) _db.onclick = async () => {
+    const id = currentTeam;
+    if(!confirm('Désarchiver « ' + teamLabel(id) + ' » ?\n\nIl revient dans la barre d\'équipes et dans « Envoyer vers ».')) return;
+    _db.disabled = true;
+    if(await archiverEquipe(id, false)){ renderTeamBar(); renderList(); } else { _db.disabled = false; }
+  };
 }
 
 async function loadCustomCats(){
@@ -4009,6 +4167,17 @@ let _foreignBlockAlerted = false;
 function confirmForeignEdit(i){
   // Vue Total : lecture seule
   if(currentTeam === 'TOTAL') return false;
+  // Chantier archivé : lecture seule pour tout le monde. Seul le Transport peut
+  // encore en faire partir du matériel (il ne passe pas par ici).
+  if(estArchive(currentTeam)){
+    if(!_foreignBlockAlerted){
+      _foreignBlockAlerted = true;
+      alert('Ce chantier est archivé : son inventaire est en lecture seule.\n\n' +
+            'Pour déplacer ce qui reste dessus, utilise l\'onglet 🚚 Transport.');
+      setTimeout(() => { _foreignBlockAlerted = false; }, 5000);
+    }
+    return false;
+  }
   // Mon équipe = équipe affichée -> autorisé
   if(myTeam && currentTeam === myTeam) return true;
   // Aucune équipe définie sur cet appareil -> déclarer son équipe d'abord
@@ -4630,25 +4799,24 @@ function showTeamContextMenu(chip, teamId){
 function renderTeamBar(){
   const bar = document.getElementById('teamBar');
   bar.innerHTML = '';
-  teams.forEach(t => {
+  // Ordre d'affichage (20 nov. 2026) ; un archivé n'y paraît que s'il est ouvert
+  // depuis « 🗄 Archives », marqué comme tel.
+  const _vis = equipesVisibles();
+  const _liste = (currentTeam !== 'TOTAL' && estArchive(currentTeam)) ? _vis.concat([equipeDe(currentTeam)]) : _vis;
+  _liste.forEach(t => {
+    const _arch = estArchive(t);
     const chip = document.createElement('div');
-    chip.className = 'team-chip' + (currentTeam === t.id ? ' active' : '');
+    chip.className = 'team-chip' + (currentTeam === t.id ? ' active' : '') + (_arch ? ' archived' : '');
     const _col = teamColor(t.id);
     chip.style.borderLeft = '5px solid ' + _col;
     if(currentTeam === t.id){ chip.style.background = _col; chip.style.borderColor = _col; chip.style.color = '#fff'; }
-    chip.innerHTML = '<span class="team-color-dot" style="background:' + _col + '"></span>' + escapeHtml(t.label) +
+    chip.innerHTML = '<span class="team-color-dot" style="background:' + _col + '"></span>' + (_arch ? '🗄 ' : '') + escapeHtml(t.label) +
       (myTeam === t.id ? '<span class="my-team-badge" title="Mon équipe">🔨</span>' : '') +
       (teamHasRed(t.id) ? '<span class="alert-dot" title="Article(s) en rouge"></span>' : '');
     chip.onclick = async () => {
       if(chip._lpFired){ chip._lpFired = false; return; } // ignore le clic si un appui long vient de se déclencher
       if(currentTeam === t.id) return; // déjà dessus
-      const ok = await switchToTeam(t.id);
-      if(!ok){ renderTeamBar(); return; } // annulé : on ne change pas
-      currentTeam = t.id;
-      openIndex = null;
-      await rafraichirCatalogue(currentCat);
-      await ensureTeamCatLoaded(currentTeam, currentCat);
-      renderTeamBar(); renderTabs(); renderList();
+      await allerAEquipe(t.id);
     };
     // Appui long -> menu "Définir comme mon équipe"
     let lpTimer = null;
@@ -4679,6 +4847,19 @@ function renderTeamBar(){
     renderTeamBar(); renderTabs(); renderList();
   };
   bar.appendChild(totalChip);
+
+  // Archives : admin seulement, et seulement s'il y en a.
+  const _nbArch = equipesArchivees().length;
+  if(isAdmin && _nbArch){
+    const archChip = document.createElement('div');
+    archChip.className = 'team-chip archives';
+    archChip.textContent = '🗄 Archives (' + _nbArch + ')';
+    archChip.onclick = async () => {
+      await Promise.all(equipesArchivees().map(t => loadTeamInfo(t.id)));
+      openArchivesModal();
+    };
+    bar.appendChild(archChip);
+  }
 
   const editBtn = document.createElement('div');
   editBtn.className = 'team-edit-btn';
@@ -4919,7 +5100,7 @@ async function openEnvoyerVersModal(){
   await Promise.all(teams.map(t => loadTeamInfo(t.id)));
   const src = currentTeam;
   const box = document.getElementById('modalBox');
-  const choix = teams.filter(t => t.id !== src).map(t => {
+  const choix = equipesVisibles().filter(t => t.id !== src).map(t => {   // jamais vers un archivé
     const info = teamInfo[t.id] || {};
     const det = [info.contremaitre, formatAdresse(info.adresse)].filter(v => v && String(v).trim() && String(v).trim() !== '---').map(v => escapeHtml(String(v).trim())).join(' · ');
     return '<div class="tr-dest" data-dest="' + escapeAttr(t.id) + '" style="border-left:5px solid ' + teamColor(t.id) + '">' +
@@ -4974,6 +5155,7 @@ async function relireFrais(teamId, cat){
 
 async function executerTransfert(src, dst, lignes){
   if(!isAdmin) return { ok:false, msg:'Réservé à l\'administrateur.' };
+  if(estArchive(dst)) return { ok:false, msg:'« ' + teamLabel(dst) + ' » est archivé : on ne peut pas y envoyer de matériel.' };
   const cats = [...new Set(lignes.map(l => l.cat))];
   const frais = {};
   for(const cat of cats){
@@ -6912,7 +7094,7 @@ function openIdentityModal(force, returnToDir){
       <label>Ou : tablette de chantier — de quelle équipe ?</label>
       <select id="idChantierTeam" style="width:100%;padding:10px 12px;font-size:15px;border-radius:6px;border:1.5px solid var(--line);background:var(--asphalt);color:var(--paper);font-family:'Barlow',sans-serif;">
         <option value="">— Choisir l'équipe —</option>
-        ${teams.map(t => `<option value="${escapeAttr(t.id)}" ${(u.chantier && u.equipe === t.id) ? 'selected' : ''}>${escapeHtml(t.label)}</option>`).join('')}
+        ${equipesPourChoix(u.chantier ? u.equipe : null).map(t => `<option value="${escapeAttr(t.id)}" ${(u.chantier && u.equipe === t.id) ? 'selected' : ''}>${escapeHtml(t.label)}</option>`).join('')}
       </select>
       <div style="font-size:12px;color:var(--paper-dim);margin-top:4px;line-height:1.35;">
         Sans équipe, toutes les tablettes signent « Tablette de chantier » et on ne peut pas savoir laquelle a modifié quoi.
@@ -7216,17 +7398,20 @@ function openEditTeamsModal(){
   const box = document.getElementById('modalBox');
   box.innerHTML = `
     <h3>Noms des emplacements</h3>
-    ${teams.map((t, idx) => `
+    ${equipesVisibles().map(t => `
       <div class="field">
         <label>${escapeHtml(libelleEmplacement(t))}</label>
-        <input type="text" data-team-idx="${idx}" value="${escapeAttr(t.label)}">
+        <div class="emp-ligne">
+          <input type="text" data-team-id="${escapeAttr(t.id)}" data-orig="${escapeAttr(t.label)}" value="${escapeAttr(t.label)}">
+          ${(isAdmin && FIN_DE_BARRE.indexOf(t.id) === -1) ? `<button type="button" class="btn btn-cancel emp-arch" data-archiver="${escapeAttr(t.id)}" title="Archiver ce chantier">🗄</button>` : ''}
+        </div>
       </div>
     `).join('')}
     <div class="field" style="border-top:1px solid var(--line); padding-top:12px; margin-top:4px;">
       <label>🔨 Mon équipe (sur cet appareil)</label>
       <select id="myTeamSelect" style="width:100%; padding:10px 12px; font-size:15px; border-radius:8px; border:2px solid var(--line); background:var(--asphalt-2); color:var(--paper);">
         <option value="">— Aucune (juste consultation) —</option>
-        ${teams.map(t => `<option value="${escapeAttr(t.id)}" ${myTeam === t.id ? 'selected' : ''}>${escapeHtml(t.label)}</option>`).join('')}
+        ${equipesPourChoix(myTeam).map(t => `<option value="${escapeAttr(t.id)}" ${myTeam === t.id ? 'selected' : ''}>${escapeHtml(t.label)}</option>`).join('')}
       </select>
       <div style="font-size:12px; color:var(--paper-dim); margin-top:6px;">Si tu ouvres l'inventaire d'une autre équipe, un avertissement s'affichera.</div>
     </div>
@@ -7237,12 +7422,31 @@ function openEditTeamsModal(){
   `;
   document.getElementById('overlay').classList.add('show');
   document.getElementById('cancelTeams').onclick = closeModal;
-  document.getElementById('confirmTeams').onclick = async () => {
-    box.querySelectorAll('[data-team-idx]').forEach(inp => {
-      const idx = parseInt(inp.dataset.teamIdx, 10);
+  box.querySelectorAll('[data-archiver]').forEach(b => b.onclick = async () => {
+    const id = b.getAttribute('data-archiver');
+    closeModal();
+    await confirmerArchivage(id);
+  });
+  document.getElementById('confirmTeams').onclick = async (ev) => {
+    const bt = ev.currentTarget;
+    if(bt.disabled) return;
+    // Seulement les noms vraiment changés ici, posés sur la copie SERVEUR relue
+    // juste avant (20 nov. 2026). Avant, tout le tableau de ce téléphone était
+    // réécrit : un archivage ou un renommage fait ailleurs pouvait s'effacer.
+    const changes = {};
+    box.querySelectorAll('[data-team-id]').forEach(inp => {
       const val = inp.value.trim();
-      if(val) teams[idx].label = val;
+      if(val && val !== inp.dataset.orig) changes[inp.dataset.teamId] = val;
     });
+    if(Object.keys(changes).length){
+      bt.disabled = true;
+      const res = await modifierEquipesServeur(srv => {
+        srv.forEach(t => { if(t && t.id && changes[t.id]) t.label = changes[t.id]; });
+        return null;
+      });
+      bt.disabled = false;
+      if(!res.ok){ alert(res.msg); return; }
+    }
     const sel = document.getElementById('myTeamSelect');
     const chosen = sel ? sel.value : '';
     myTeam = chosen || null;
@@ -7250,9 +7454,9 @@ function openEditTeamsModal(){
       if(chosen) await window.storage.set('inv:myTeam', chosen, false);
       else await window.storage.delete('inv:myTeam', false);
     }catch(e){}
-    await saveTeams();
     closeModal();
     renderTeamBar();
+    renderTeamInfo();
     renderFooter();
   };
 }
@@ -7907,6 +8111,8 @@ async function init(){
   document.getElementById('list').innerHTML = '<div class="empty-msg">Chargement...</div>';
   // 1) Réglages de base — en parallèle (indépendants les uns des autres)
   await loadTeams();
+  // Un chantier archivé (ou disparu) ne s'ouvre pas au démarrage : premier de la barre.
+  if(currentTeam !== 'TOTAL' && (!equipeDe(currentTeam) || estArchive(currentTeam))) currentTeam = premiereEquipeVisible();
   await Promise.all([
     loadCustomCats(),
     loadHiddenItems(),
@@ -9791,7 +9997,7 @@ let _loadErr=false;        // vrai si une des lectures de démarrage a ÉCHOUÉ 
 let currentTab='machines';
 let curTeamSel=null;
 
-const STD_TEAMS=[{id:'team_1',label:'2027'},{id:'team_2',label:'1859'},{id:'team_3',label:'1956'},{id:'team_4',label:'2007'},{id:'team_5',label:'2081'},{id:'team_6',label:'Équipe 6'},{id:'reno_1',label:'Kim'},{id:'reno_2',label:'Romain'},{id:'entrepot',label:'Entrepôt'},{id:'administration',label:'Administration'}];
+const STD_TEAMS=[{id:'team_1',label:'2027'},{id:'team_2',label:'1859'},{id:'team_3',label:'1956'},{id:'team_4',label:'2007'},{id:'team_5',label:'2081'},{id:'team_6',label:'Équipe 6'},{id:'reno_1',label:'Trailer 16pi'},{id:'reno_2',label:'Romain'},{id:'entrepot',label:'Entrepôt'},{id:'administration',label:'Administration'}];
 
 async function loadTeams(){
   try{ const r=await storage.get('inv:teams'); if(r&&r.value){ const p=JSON.parse(r.value); if(Array.isArray(p)&&p.length) teams=p; } }catch(e){}
@@ -9893,7 +10099,7 @@ function renderMachines(){
   const wrap=document.getElementById('wrap');
   if(curTeamSel==null) curTeamSel = myTeamId || (teams[0]&&teams[0].id);
   let html='';
-  html+='<div class="teamsel"><label>Équipe</label><select id="teamSel">'+teams.map(t=>'<option value="'+escapeAttr(t.id)+'"'+(t.id===curTeamSel?' selected':'')+'>'+escapeHtml(t.label)+(t.id===myTeamId?' — mon équipe':'')+'</option>').join('')+'</select></div>';
+  html+='<div class="teamsel"><label>Équipe</label><select id="teamSel">'+teams.filter(t=>!t.archive||t.id===curTeamSel).map(t=>'<option value="'+escapeAttr(t.id)+'"'+(t.id===curTeamSel?' selected':'')+'>'+escapeHtml(t.label)+(t.id===myTeamId?' — mon équipe':'')+'</option>').join('')+'</select></div>';
   const canFill=canFillTeam(curTeamSel);
   if(!canFill) html+='<div class="ro-note">🔒 Lecture seule — tu peux remplir uniquement les inspections des machines de ton équipe'+(myTeamId?(' ('+escapeHtml(teamLabel(myTeamId))+')'):'')+'.</div>';
   // Une liste vide parce que le réseau a lâché n'a rien à voir avec une équipe sans machine :
@@ -11321,8 +11527,10 @@ function chooseAssignment(){
     const box = document.getElementById('modalBox');
     let html = '<h3>⏱ Ton affectation</h3>';
     html += '<div class="grp-lbl">Chantier — choisis ton équipe</div>';
-    if(teams.length){
-      teams.forEach(t => {
+    // 20 nov. 2026 : pas de punch sur un chantier archivé ni sur le Trailer 16pi (reno_1, emplacement).
+    const choixPunch = teams.filter(t => t && !t.archive && t.id !== 'reno_1');
+    if(choixPunch.length){
+      choixPunch.forEach(t => {
         const info = teamInfo[t.id]||{};
         const bits=[]; if(info.projet) bits.push('Projet '+info.projet); if(info.adresse) bits.push(formatAdresse(info.adresse));
         html += '<button class="choice" data-team="'+escapeAttr(t.id)+'"><span class="ci">🏗</span><span class="ct"><b>'+escapeHtml(t.label)+'</b><span>'+(bits.length?escapeHtml(bits.join(' — ')):'Chantier non renseigné (inventaire)')+'</span></span></button>';
@@ -11962,7 +12170,7 @@ const storage = {
 const STD_TEAMS = [
   {id:'team_1',label:'2027'},{id:'team_2',label:'1859'},{id:'team_3',label:'1956'},
   {id:'team_4',label:'2007'},{id:'team_5',label:'2081'},{id:'team_6',label:'Équipe 6'},
-  {id:'reno_1',label:'Kim'},{id:'reno_2',label:'Romain'},
+  {id:'reno_1',label:'Trailer 16pi'},{id:'reno_2',label:'Romain'},
   {id:'entrepot',label:'Entrepôt'},{id:'administration',label:'Administration'}
 ];
 const ROLES = [
@@ -12138,7 +12346,7 @@ function countTeam(id){ return members.filter(m=>m.teamId===id).length; }
 
 function renderTabs(){
   document.getElementById('tabs').innerHTML = teams.map(t =>
-    '<button class="tab'+(t.id===currentTeam?' active':'')+'" data-team="'+escapeAttr(t.id)+'">'+escapeHtml(t.label)+'<span class="tc">'+countTeam(t.id)+'</span></button>'
+    '<button class="tab'+(t.id===currentTeam?' active':'')+'" data-team="'+escapeAttr(t.id)+'">'+(t.archive?'🗄 ':'')+escapeHtml(t.label)+'<span class="tc">'+countTeam(t.id)+'</span></button>'
   ).join('');
   document.querySelectorAll('#tabs .tab').forEach(b => b.onclick = ()=>{ flushInfoSave(); currentTeam=b.getAttribute('data-team'); renderTabs(); renderTeam(); });
 }
@@ -14580,7 +14788,7 @@ async function setAdmin(on){ isAdmin=!!on; try{ await storage.set('inv:isAdmin',
 
 function allChannels(){
   const base = [{id:'general', label:'Général', icon:'📢'}];
-  const eq = teams.map(t => ({ id:'eq_'+t.id, label:t.label, icon:'👷' }));
+  const eq = teams.filter(t => t && !t.archive).map(t => ({ id:'eq_'+t.id, label:t.label, icon:'👷' }));   // archivés : pas de canal (20 nov. 2026)
   const cus = customChannels.map(c => ({ id:c.id, label:c.label, icon:'#', custom:true }));
   return base.concat(eq).concat(cus);
 }
